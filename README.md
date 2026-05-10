@@ -386,5 +386,5 @@ For substantial changes, include reproducible validation steps and feature-flag 
 
 ## License
 
-Licensed under the [Apache License 2.0](LICENSE).
+Licensed under the [GPL License 3.0](LICENSE).
 Upstream license continuity is preserved where applicable.

@@ -386,5 +386,5 @@ alephant-ai-gateway/
 
 ## 许可
 
-基于 [Apache License 2.0](LICENSE) 授权。
+基于 [GPL License 3.0](LICENSE) 授权。
 在适用情况下保留上游许可连续性。
