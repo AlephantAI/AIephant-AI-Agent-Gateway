@@ -1,0 +1,12 @@
+# AI Gateway 项目配置
+gateway: ai-gateway
+
+api_bin_info:
+  - bin: ai-gateway
+    client: 通用
+    nacos: none
+    k8s: none
+    prefix: /api/v1
+
+job_bin_info: []
+consumer_bin_info: []

@@ -82,4 +82,6 @@ pub enum InitError {
     PolicyGrpcConnect(String),
     /// `compat_mode` requires alephant.features to be `none`: {0}
     CompatModeAlephantFeatures(String),
+    /// Security plugin configuration error: {0}
+    SecurityPluginConfig(String),
 }

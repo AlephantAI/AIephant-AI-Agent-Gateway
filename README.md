@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-Apache%202.0-blue.svg?style=flat-square" /></a>
+  <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-GPL%20v3-blue.svg?style=flat-square" /></a>
   <img alt="Edition" src="https://img.shields.io/badge/build-external%20%7C%20internal-black?style=flat-square" />
   <img alt="Version" src="https://img.shields.io/badge/version-0.2.0--beta.30-orange?style=flat-square" />
   <img alt="Providers" src="https://img.shields.io/badge/providers-50%2B-teal?style=flat-square" />
@@ -38,11 +38,12 @@
   <a href="#quickstart">Quickstart</a> ·
   <a href="https://alephant.io/">Website</a> ·
   <a href="#features">Features</a> ·
+  <a href="#ide-integration">IDE</a> ·
   <a href="#architecture">Architecture</a> ·
   <a href="#screenshots">Screenshots</a> ·
   <a href="#comparison">Comparison</a> ·
   <a href="#community">Community</a> ·
-  <a href="https://api.alephant.io/">Docs</a>
+  <a href="https://developers.alephant.io/">Docs</a>
 </p>
 
 <p align="center">
@@ -92,7 +93,8 @@ The goal is simple: make AI traffic observable, governable, and reliable without
 | Provider and model coverage | 50+ providers, 320+ models, local runtimes, OpenRouter-style catalogs, and custom/private backends |
 | Provider adaptation | Request, tool, streaming, error, usage, finish-reason, and response normalization across provider APIs |
 | Routing and resilience | Direct provider paths, policy routers, retries, fallback, health checks, provider 429 handling, and fail-open cache paths |
-| Agent client compatibility | OpenAI-compatible formats for Cursor, Codex, opencode, Antigravity workflows, and other agentic coding clients |
+| Agent client compatibility | OpenAI-compatible formats for Cursor, Codex, opencode, and Antigravity workflows |
+| IDE integration | Cursor-ready with architecture rules, workflow guides, implementation skills, and task management; opencode, Codex, and Claude Code adapters in progress |
 | Policy and key control | Virtual keys, master key resolution, model policy, workspace provider allowlists, and concurrency controls |
 | Caching | Gateway-side LLM KV cache and semantic cache to avoid repeated upstream calls |
 | Observability | Request logs, traces, metrics, usage metadata, optional body archival, and downstream log delivery |
@@ -149,6 +151,19 @@ Instead of listing every model in the README, this section focuses on the contra
     </tr>
   </table>
 </blockquote>
+
+<a id="ide-integration"></a>
+
+## IDE integration
+
+Alephant AI Gateway ships repository-level tooling for AI-assisted development inside supported IDEs.
+
+| IDE / Agent Client | Status | What's included |
+| --- | --- | --- |
+| Cursor | Ready | Project architecture & code-convention rules, development & API workflow guides, gated-module-implementation skill (Skill), file-based task management (Task Magic) — see the `.cursor` directory; also configure the gateway in Agent Settings → Models |
+| opencode | In progress | Adapter and configuration under development |
+| Codex | In progress | Adapter and configuration under development |
+| Claude Code | In progress | Adapter and configuration under development |
 
 <a id="quickstart"></a>
 
@@ -220,7 +235,7 @@ Self-hosting is useful when you need the gateway inside your own network, want f
 | S3-compatible storage | Optional | Large request/response body archival |
 
 Build `ai-gateway` with exactly one of `--features external` or `--features internal`.
- 
+
 ### Build
 
 ```bash
@@ -326,7 +341,7 @@ Portkey, Alephant, and LiteLLM are excellent projects, but they start from diffe
 | Project | Best known for | Best fit |
 | --- | --- | --- |
 | Portkey | Enterprise AI gateway controls, guardrails, and managed policy workflows | Teams that want a managed AI control plane |
-| Alephant | LLM observability, request analytics, sessions, and cost visibility | Teams whose primary need is tracing and analytics |
+| Helicone | LLM observability, request analytics, sessions, and cost visibility | Teams whose primary need is tracing and analytics |
 | LiteLLM | Broad Python proxy/SDK ecosystem for many providers | Teams that want maximum provider breadth through a Python stack |
 | Alephant AI Gateway | Agent development infrastructure, cost control, governance, provider routing, and SaaS + self-host deployment | Teams building production agents that need cost guardrails, request traceability, BYO keys, and multi-provider control |
 
@@ -366,7 +381,7 @@ alephant-ai-gateway/
 ## Community
 
 - Website: [alephant.io](https://alephant.io/)
-- Docs: [api.alephant.io](https://api.alephant.io/)
+- Docs: [developers.alephant.io](https://developers.alephant.io/)
 - Discord: [discord.gg/tRQghcXhaH](https://discord.gg/tRQghcXhaH)
 - Telegram: [t.me/alephantai](https://t.me/alephantai)
 - X: [x.com/alephantai](https://x.com/alephantai)
@@ -388,3 +403,13 @@ For substantial changes, include reproducible validation steps and feature-flag 
 
 Licensed under the [GPL License 3.0](LICENSE).
 Upstream license continuity is preserved where applicable.
+
+## Star History
+
+<a href="https://www.star-history.com/?repos=AlephantAI%2FAIephant-AI-Gateway&type=date&legend=top-left">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=AlephantAI/AIephant-AI-Gateway&type=date&theme=dark&legend=top-left" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=AlephantAI/AIephant-AI-Gateway&type=date&legend=top-left" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=AlephantAI/AIephant-AI-Gateway&type=date&legend=top-left" />
+ </picture>
+</a>

@@ -37,7 +37,8 @@ use crate::{
     error::{init::InitError, runtime::RuntimeError},
     logger::service::AlephantHttpClient,
     metrics::{self, attribute_extractor::AttributeExtractor},
-    middleware::response_headers::ResponseHeaderLayer,
+    middleware::{response_headers::ResponseHeaderLayer, security::SecurityLayer},
+    plugin::PluginLoader,
     router::meta::MetaRouter,
     semantic_cache::{
         EmbeddingBaseUrlResolver, OpenAiEmbedderClient, QdrantStore, SemanticCacheService,
@@ -412,6 +413,28 @@ impl App {
             crate::middleware::gateway_in_flight_limit::GatewayInFlightLimitLayer::new(&app_state)
                 .await?;
 
+        // Security config can be in global or unified_api section.
+        // Global takes precedence; unified_api is the fallback.
+        let security_config = app_state.config().global.security.as_ref().or(app_state
+            .config()
+            .unified_api
+            .security
+            .as_ref());
+
+        let security_layer = match security_config {
+            Some(config) => match config.to_loader_config() {
+                Some(loader_config) => {
+                    let loader = PluginLoader::from_config(&loader_config)
+                        .map_err(|e| InitError::SecurityPluginConfig(e.to_string()))?;
+                    let plugin_names = loader.plugin_names();
+                    info!(plugins = ?plugin_names, "security plugins loaded");
+                    SecurityLayer::new(loader)
+                }
+                None => SecurityLayer::disabled(),
+            },
+            None => SecurityLayer::disabled(),
+        };
+
         let compression_layer = CompressionLayer::new()
             .gzip(true)
             .br(true)
@@ -454,6 +477,7 @@ impl App {
             .layer(ResponseHeaderLayer::new(
                 app_state.response_headers_config(),
             ))
+            .layer(security_layer)
             .map_err(crate::error::internal::InternalError::BufferError)
             .layer(BufferLayer::new(APP_BUFFER_SIZE))
             .layer(ErrorHandlerLayer::new(app_state.clone()))

@@ -1,0 +1,17 @@
+telemetry:
+  level: "info"
+  exporter: stdout
+
+server:
+  address: "0.0.0.0"
+  port: 8088
+
+alephant:
+  base-url: "http://localhost:8585"
+  features: none
+
+cloudflare-kv:
+  api-base: "https://api.cloudflare.com/client/v4"
+  account-id: "placeholder"
+  namespace-id: "placeholder"
+  api-token: "placeholder"

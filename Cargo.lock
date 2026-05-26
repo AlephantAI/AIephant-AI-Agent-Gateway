@@ -79,6 +79,7 @@ dependencies = [
  "aes-gcm",
  "alephant-llm-kv-cache",
  "anthropic-ai-sdk",
+ "arc-swap",
  "async-openai",
  "async-trait",
  "aws-credential-types 1.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -123,6 +124,7 @@ dependencies = [
  "meltdown",
  "mime",
  "nonempty-collections",
+ "once_cell",
  "opentelemetry",
  "opentelemetry-system-metrics",
  "opentelemetry_sdk",
@@ -154,6 +156,7 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tokio-util",
+ "toml",
  "tonic 0.12.3",
  "tonic-build 0.12.3",
  "tower 0.5.2",
@@ -572,9 +575,9 @@ dependencies = [
 [[package]]
 name = "aws-credential-types"
 version = "1.2.3"
-source = "git+https://github.com/hcharlie1201/aws-sdk-rust.git#b02ed2bb506efc9feb2ac44abb36637b84de9db9"
+source = "git+https://github.com/awslabs/aws-sdk-rust.git#b02ed2bb506efc9feb2ac44abb36637b84de9db9"
 dependencies = [
- "aws-smithy-async 1.2.5 (git+https://github.com/hcharlie1201/aws-sdk-rust.git)",
+ "aws-smithy-async 1.2.5 (git+https://github.com/awslabs/aws-sdk-rust.git)",
  "aws-smithy-runtime-api 1.8.0",
  "aws-smithy-types 1.3.1",
  "zeroize",
@@ -606,13 +609,13 @@ dependencies = [
 [[package]]
 name = "aws-runtime"
 version = "1.5.7"
-source = "git+https://github.com/hcharlie1201/aws-sdk-rust.git#b02ed2bb506efc9feb2ac44abb36637b84de9db9"
+source = "git+https://github.com/awslabs/aws-sdk-rust.git#b02ed2bb506efc9feb2ac44abb36637b84de9db9"
 dependencies = [
- "aws-credential-types 1.2.3 (git+https://github.com/hcharlie1201/aws-sdk-rust.git)",
+ "aws-credential-types 1.2.3 (git+https://github.com/awslabs/aws-sdk-rust.git)",
  "aws-sigv4 1.3.2",
- "aws-smithy-async 1.2.5 (git+https://github.com/hcharlie1201/aws-sdk-rust.git)",
+ "aws-smithy-async 1.2.5 (git+https://github.com/awslabs/aws-sdk-rust.git)",
  "aws-smithy-eventstream",
- "aws-smithy-http 0.62.1 (git+https://github.com/hcharlie1201/aws-sdk-rust.git)",
+ "aws-smithy-http 0.62.1 (git+https://github.com/awslabs/aws-sdk-rust.git)",
  "aws-smithy-runtime",
  "aws-smithy-runtime-api 1.8.0",
  "aws-smithy-types 1.3.1",
@@ -630,14 +633,14 @@ dependencies = [
 [[package]]
 name = "aws-sdk-bedrockruntime"
 version = "1.92.0"
-source = "git+https://github.com/hcharlie1201/aws-sdk-rust.git#b02ed2bb506efc9feb2ac44abb36637b84de9db9"
+source = "git+https://github.com/awslabs/aws-sdk-rust.git#b02ed2bb506efc9feb2ac44abb36637b84de9db9"
 dependencies = [
- "aws-credential-types 1.2.3 (git+https://github.com/hcharlie1201/aws-sdk-rust.git)",
+ "aws-credential-types 1.2.3 (git+https://github.com/awslabs/aws-sdk-rust.git)",
  "aws-runtime",
  "aws-sigv4 1.3.2",
- "aws-smithy-async 1.2.5 (git+https://github.com/hcharlie1201/aws-sdk-rust.git)",
+ "aws-smithy-async 1.2.5 (git+https://github.com/awslabs/aws-sdk-rust.git)",
  "aws-smithy-eventstream",
- "aws-smithy-http 0.62.1 (git+https://github.com/hcharlie1201/aws-sdk-rust.git)",
+ "aws-smithy-http 0.62.1 (git+https://github.com/awslabs/aws-sdk-rust.git)",
  "aws-smithy-json",
  "aws-smithy-runtime",
  "aws-smithy-runtime-api 1.8.0",
@@ -655,11 +658,11 @@ dependencies = [
 [[package]]
 name = "aws-sigv4"
 version = "1.3.2"
-source = "git+https://github.com/hcharlie1201/aws-sdk-rust.git#b02ed2bb506efc9feb2ac44abb36637b84de9db9"
+source = "git+https://github.com/awslabs/aws-sdk-rust.git#b02ed2bb506efc9feb2ac44abb36637b84de9db9"
 dependencies = [
- "aws-credential-types 1.2.3 (git+https://github.com/hcharlie1201/aws-sdk-rust.git)",
+ "aws-credential-types 1.2.3 (git+https://github.com/awslabs/aws-sdk-rust.git)",
  "aws-smithy-eventstream",
- "aws-smithy-http 0.62.1 (git+https://github.com/hcharlie1201/aws-sdk-rust.git)",
+ "aws-smithy-http 0.62.1 (git+https://github.com/awslabs/aws-sdk-rust.git)",
  "aws-smithy-runtime-api 1.8.0",
  "aws-smithy-types 1.3.1",
  "bytes",
@@ -710,7 +713,7 @@ dependencies = [
 [[package]]
 name = "aws-smithy-async"
 version = "1.2.5"
-source = "git+https://github.com/hcharlie1201/aws-sdk-rust.git#b02ed2bb506efc9feb2ac44abb36637b84de9db9"
+source = "git+https://github.com/awslabs/aws-sdk-rust.git#b02ed2bb506efc9feb2ac44abb36637b84de9db9"
 dependencies = [
  "futures-util",
  "pin-project-lite",
@@ -720,7 +723,7 @@ dependencies = [
 [[package]]
 name = "aws-smithy-eventstream"
 version = "0.60.8"
-source = "git+https://github.com/hcharlie1201/aws-sdk-rust.git#b02ed2bb506efc9feb2ac44abb36637b84de9db9"
+source = "git+https://github.com/awslabs/aws-sdk-rust.git#b02ed2bb506efc9feb2ac44abb36637b84de9db9"
 dependencies = [
  "aws-smithy-types 1.3.1",
  "bytes",
@@ -750,7 +753,7 @@ dependencies = [
 [[package]]
 name = "aws-smithy-http"
 version = "0.62.1"
-source = "git+https://github.com/hcharlie1201/aws-sdk-rust.git#b02ed2bb506efc9feb2ac44abb36637b84de9db9"
+source = "git+https://github.com/awslabs/aws-sdk-rust.git#b02ed2bb506efc9feb2ac44abb36637b84de9db9"
 dependencies = [
  "aws-smithy-eventstream",
  "aws-smithy-runtime-api 1.8.0",
@@ -770,9 +773,9 @@ dependencies = [
 [[package]]
 name = "aws-smithy-http-client"
 version = "1.0.3"
-source = "git+https://github.com/hcharlie1201/aws-sdk-rust.git#b02ed2bb506efc9feb2ac44abb36637b84de9db9"
+source = "git+https://github.com/awslabs/aws-sdk-rust.git#b02ed2bb506efc9feb2ac44abb36637b84de9db9"
 dependencies = [
- "aws-smithy-async 1.2.5 (git+https://github.com/hcharlie1201/aws-sdk-rust.git)",
+ "aws-smithy-async 1.2.5 (git+https://github.com/awslabs/aws-sdk-rust.git)",
  "aws-smithy-runtime-api 1.8.0",
  "aws-smithy-types 1.3.1",
  "h2 0.3.26",
@@ -798,7 +801,7 @@ dependencies = [
 [[package]]
 name = "aws-smithy-json"
 version = "0.61.3"
-source = "git+https://github.com/hcharlie1201/aws-sdk-rust.git#b02ed2bb506efc9feb2ac44abb36637b84de9db9"
+source = "git+https://github.com/awslabs/aws-sdk-rust.git#b02ed2bb506efc9feb2ac44abb36637b84de9db9"
 dependencies = [
  "aws-smithy-types 1.3.1",
 ]
@@ -806,7 +809,7 @@ dependencies = [
 [[package]]
 name = "aws-smithy-observability"
 version = "0.1.3"
-source = "git+https://github.com/hcharlie1201/aws-sdk-rust.git#b02ed2bb506efc9feb2ac44abb36637b84de9db9"
+source = "git+https://github.com/awslabs/aws-sdk-rust.git#b02ed2bb506efc9feb2ac44abb36637b84de9db9"
 dependencies = [
  "aws-smithy-runtime-api 1.8.0",
 ]
@@ -814,10 +817,10 @@ dependencies = [
 [[package]]
 name = "aws-smithy-runtime"
 version = "1.8.3"
-source = "git+https://github.com/hcharlie1201/aws-sdk-rust.git#b02ed2bb506efc9feb2ac44abb36637b84de9db9"
+source = "git+https://github.com/awslabs/aws-sdk-rust.git#b02ed2bb506efc9feb2ac44abb36637b84de9db9"
 dependencies = [
- "aws-smithy-async 1.2.5 (git+https://github.com/hcharlie1201/aws-sdk-rust.git)",
- "aws-smithy-http 0.62.1 (git+https://github.com/hcharlie1201/aws-sdk-rust.git)",
+ "aws-smithy-async 1.2.5 (git+https://github.com/awslabs/aws-sdk-rust.git)",
+ "aws-smithy-http 0.62.1 (git+https://github.com/awslabs/aws-sdk-rust.git)",
  "aws-smithy-http-client",
  "aws-smithy-observability",
  "aws-smithy-runtime-api 1.8.0",
@@ -837,9 +840,9 @@ dependencies = [
 [[package]]
 name = "aws-smithy-runtime-api"
 version = "1.8.0"
-source = "git+https://github.com/hcharlie1201/aws-sdk-rust.git#b02ed2bb506efc9feb2ac44abb36637b84de9db9"
+source = "git+https://github.com/awslabs/aws-sdk-rust.git#b02ed2bb506efc9feb2ac44abb36637b84de9db9"
 dependencies = [
- "aws-smithy-async 1.2.5 (git+https://github.com/hcharlie1201/aws-sdk-rust.git)",
+ "aws-smithy-async 1.2.5 (git+https://github.com/awslabs/aws-sdk-rust.git)",
  "aws-smithy-types 1.3.1",
  "bytes",
  "http 0.2.12",
@@ -870,7 +873,7 @@ dependencies = [
 [[package]]
 name = "aws-smithy-types"
 version = "1.3.1"
-source = "git+https://github.com/hcharlie1201/aws-sdk-rust.git#b02ed2bb506efc9feb2ac44abb36637b84de9db9"
+source = "git+https://github.com/awslabs/aws-sdk-rust.git#b02ed2bb506efc9feb2ac44abb36637b84de9db9"
 dependencies = [
  "base64-simd",
  "bytes",
@@ -915,10 +918,10 @@ dependencies = [
 [[package]]
 name = "aws-types"
 version = "1.3.7"
-source = "git+https://github.com/hcharlie1201/aws-sdk-rust.git#b02ed2bb506efc9feb2ac44abb36637b84de9db9"
+source = "git+https://github.com/awslabs/aws-sdk-rust.git#b02ed2bb506efc9feb2ac44abb36637b84de9db9"
 dependencies = [
- "aws-credential-types 1.2.3 (git+https://github.com/hcharlie1201/aws-sdk-rust.git)",
- "aws-smithy-async 1.2.5 (git+https://github.com/hcharlie1201/aws-sdk-rust.git)",
+ "aws-credential-types 1.2.3 (git+https://github.com/awslabs/aws-sdk-rust.git)",
+ "aws-smithy-async 1.2.5 (git+https://github.com/awslabs/aws-sdk-rust.git)",
  "aws-smithy-runtime-api 1.8.0",
  "aws-smithy-types 1.3.1",
  "rustc_version",
@@ -6330,8 +6333,15 @@ dependencies = [
  "serde",
  "serde_spanned",
  "toml_datetime",
+ "toml_write",
  "winnow",
 ]
+
+[[package]]
+name = "toml_write"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5d99f8c9a7727884afe522e9bd5edbfc91a3312b36a77b5fb8926e4c31a41801"
 
 [[package]]
 name = "tonic"

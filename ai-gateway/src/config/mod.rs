@@ -20,6 +20,7 @@ pub mod response_headers;
 pub mod retry;
 pub mod router;
 pub mod s3;
+pub mod security_plugin;
 pub mod semantic_cache;
 pub mod server;
 pub mod tikv_kv;
@@ -62,7 +63,7 @@ pub enum Error {
     InvalidS3UrlStyle(String),
 }
 
-#[derive(Debug, Default, Deserialize, Serialize, PartialEq, Eq, Hash)]
+#[derive(Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct MiddlewareConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -73,6 +74,9 @@ pub struct MiddlewareConfig {
     pub gateway_in_flight_limit: Option<self::gateway_in_flight_limit::GatewayInFlightLimitConfig>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub health_event_broadcast: Option<HealthEventBroadcastConfig>,
+    /// Security plugin configuration.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub security: Option<self::security_plugin::SecurityPluginConfiguration>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq, Hash, Default)]
@@ -94,7 +98,7 @@ fn default_dedup_window_secs() -> u64 {
     10
 }
 
-#[derive(Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[derive(Debug, Default, Deserialize, Serialize)]
 #[serde(default, deny_unknown_fields, rename_all = "kebab-case")]
 pub struct Config {
     pub telemetry: telemetry::Config,

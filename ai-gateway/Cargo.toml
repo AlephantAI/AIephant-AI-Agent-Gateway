@@ -99,6 +99,9 @@ weighted-balance = { workspace = true }
 workspace_root = { workspace = true, optional = true }
 alephant-llm-kv-cache = { workspace = true, default-features = false }
 tiktoken-rs = "0.11.0"
+once_cell = "1.20"
+arc-swap = "1.5"
+toml = "0.8"
 
 [build-dependencies]
 tonic-build = { workspace = true }

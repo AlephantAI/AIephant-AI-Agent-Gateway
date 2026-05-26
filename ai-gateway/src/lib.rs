@@ -27,6 +27,7 @@ pub mod llm_kv_cache;
 pub mod logger;
 pub mod metrics;
 pub mod middleware;
+pub mod plugin;
 pub(crate) mod router;
 pub mod semantic_cache;
 pub mod session_headers;

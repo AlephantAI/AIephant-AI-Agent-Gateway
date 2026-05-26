@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-Apache%202.0-blue.svg?style=flat-square" /></a>
+  <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-GPL%20v3-blue.svg?style=flat-square" /></a>
   <img alt="Edition" src="https://img.shields.io/badge/build-external%20%7C%20internal-black?style=flat-square" />
   <img alt="Version" src="https://img.shields.io/badge/version-0.2.0--beta.30-orange?style=flat-square" />
   <img alt="Providers" src="https://img.shields.io/badge/providers-50%2B-teal?style=flat-square" />
@@ -38,6 +38,7 @@
   <a href="#quickstart">快速开始</a> ·
   <a href="https://alephant.io/">官网</a> ·
   <a href="#features">功能</a> ·
+  <a href="#ide-integration">IDE</a> ·
   <a href="#architecture">架构</a> ·
   <a href="#screenshots">截图</a> ·
   <a href="#comparison">对比</a> ·
@@ -93,6 +94,7 @@ Alephant AI Gateway 将上述能力收敛到一套 OpenAI 兼容 API 之后：�
 | 提供商适配 | 跨各家 API 统一请求、工具、流式、错误、用量、结束原因与响应形态 |
 | 路由与韧性 | 直连路径、策略路由器、重试、回退、健康检查、提供商 429 处理与失败放行缓存路径 |
 | Agent 客户端兼容 | 面向 Cursor、Codex、opencode、Antigravity 等流程的 OpenAI 兼容格式 |
+| IDE 适配 | 已为 Cursor 配备架构规则、工作流指南、实现技能与任务管理；opencode、Codex、Claude Code 适配进行中 |
 | 策略与密钥控制 | 虚拟密钥、主密钥解析、模型策略、工作区提供商白名单与并发控制 |
 | 缓存 | 网关侧 LLM KV 缓存与语义缓存，减少重复上游调用 |
 | 可观测性 | 请求日志、链路、指标、用量元数据、可选正文归档与下游日志投递 |
@@ -149,6 +151,19 @@ README 不枚举全部模型，本节强调契约：**一种请求进，一种�
     </tr>
   </table>
 </blockquote>
+
+<a id="ide-integration"></a>
+
+## IDE 适配
+
+Alephant AI Gateway 在仓库内为支持 AI 辅助开发的 IDE 提供工程化配置。
+
+| IDE / Agent 客户端 | 状态 | 包含内容 |
+| --- | --- | --- |
+| Cursor | 已就绪 | 项目架构与代码规范规则、开发与 API 工作流指南、分阶段模块实现技能（Skill）、文件式任务管理（Task Magic）可参考.cursor目录，同时在Agent Settings - Models配置网关 |
+| opencode | 适配中 | 适配器与配置开发进行中 |
+| Codex | 适配中 | 适配器与配置开发进行中 |
+| Claude Code | 适配中 | 适配器与配置开发进行中 |
 
 <a id="quickstart"></a>
 

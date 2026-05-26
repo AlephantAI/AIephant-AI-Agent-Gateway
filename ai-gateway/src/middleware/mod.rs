@@ -12,4 +12,5 @@ pub mod prompts;
 pub mod request_context;
 pub mod response_headers;
 pub mod routing_precheck;
+pub mod security;
 pub mod workspace_concurrency;

@@ -34,7 +34,6 @@ test-artifacts/runs/
 # Local developer noise
 .claude/settings.local.json
 .kiro/
-google
 scripts/provider_mock/.runtime/
 scripts/provider_mock/__pycache__/
 scripts/provider_mock/tests/__pycache__/
