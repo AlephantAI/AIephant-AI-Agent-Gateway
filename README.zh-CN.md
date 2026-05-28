@@ -94,7 +94,7 @@ Alephant AI Gateway 将上述能力收敛到一套 OpenAI 兼容 API 之后：�
 | 提供商适配 | 跨各家 API 统一请求、工具、流式、错误、用量、结束原因与响应形态 |
 | 路由与韧性 | 直连路径、策略路由器、重试、回退、健康检查、提供商 429 处理与失败放行缓存路径 |
 | Agent 客户端兼容 | 面向 Cursor、Codex、opencode、Antigravity 等流程的 OpenAI 兼容格式 |
-| IDE 适配 | 已为 Cursor 配备架构规则、工作流指南、实现技能与任务管理；opencode、Codex、Claude Code 适配进行中 |
+| IDE 适配 | 已适配 Cursor、opencode 与 Codex，提供 Agent 客户端适配、工作流指南、实现技能与任务管理；Claude Code 适配进行中 |
 | 策略与密钥控制 | 虚拟密钥、主密钥解析、模型策略、工作区提供商白名单与并发控制 |
 | 缓存 | 网关侧 LLM KV 缓存与语义缓存，减少重复上游调用 |
 | 可观测性 | 请求日志、链路、指标、用量元数据、可选正文归档与下游日志投递 |
@@ -161,8 +161,8 @@ Alephant AI Gateway 在仓库内为支持 AI 辅助开发的 IDE 提供工程化
 | IDE / Agent 客户端 | 状态 | 包含内容 |
 | --- | --- | --- |
 | Cursor | 已就绪 | 项目架构与代码规范规则、开发与 API 工作流指南、分阶段模块实现技能（Skill）、文件式任务管理（Task Magic）可参考.cursor目录，同时在Agent Settings - Models配置网关 |
-| opencode | 适配中 | 适配器与配置开发进行中 |
-| Codex | 适配中 | 适配器与配置开发进行中 |
+| opencode | 已就绪 | OpenAI 兼容 Agent 客户端适配与网关配置支持 |
+| Codex | 已就绪 | Codex CLI / VS Code 客户端识别、Responses API 适配与网关配置支持 |
 | Claude Code | 适配中 | 适配器与配置开发进行中 |
 
 <a id="quickstart"></a>

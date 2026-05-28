@@ -94,7 +94,7 @@ The goal is simple: make AI traffic observable, governable, and reliable without
 | Provider adaptation | Request, tool, streaming, error, usage, finish-reason, and response normalization across provider APIs |
 | Routing and resilience | Direct provider paths, policy routers, retries, fallback, health checks, provider 429 handling, and fail-open cache paths |
 | Agent client compatibility | OpenAI-compatible formats for Cursor, Codex, opencode, and Antigravity workflows |
-| IDE integration | Cursor-ready with architecture rules, workflow guides, implementation skills, and task management; opencode, Codex, and Claude Code adapters in progress |
+| IDE integration | Cursor, opencode, and Codex-ready with agent client adaptation, workflow guides, implementation skills, and task management; Claude Code adapter in progress |
 | Policy and key control | Virtual keys, master key resolution, model policy, workspace provider allowlists, and concurrency controls |
 | Caching | Gateway-side LLM KV cache and semantic cache to avoid repeated upstream calls |
 | Observability | Request logs, traces, metrics, usage metadata, optional body archival, and downstream log delivery |
@@ -161,8 +161,8 @@ Alephant AI Gateway ships repository-level tooling for AI-assisted development i
 | IDE / Agent Client | Status | What's included |
 | --- | --- | --- |
 | Cursor | Ready | Project architecture & code-convention rules, development & API workflow guides, gated-module-implementation skill (Skill), file-based task management (Task Magic) — see the `.cursor` directory; also configure the gateway in Agent Settings → Models |
-| opencode | In progress | Adapter and configuration under development |
-| Codex | In progress | Adapter and configuration under development |
+| opencode | Ready | OpenAI-compatible agent client adaptation and gateway configuration support |
+| Codex | Ready | Codex CLI / VS Code client detection, Responses API adaptation, and gateway configuration support |
 | Claude Code | In progress | Adapter and configuration under development |
 
 <a id="quickstart"></a>
