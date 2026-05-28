@@ -23,6 +23,7 @@ pub(crate) mod dispatcher;
 pub mod endpoints;
 pub mod error;
 pub mod fallback;
+pub mod ide_adapation;
 pub mod llm_kv_cache;
 pub mod logger;
 pub mod metrics;

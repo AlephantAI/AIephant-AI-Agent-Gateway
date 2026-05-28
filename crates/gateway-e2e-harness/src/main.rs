@@ -25,11 +25,11 @@ use serde::Serialize;
 use crate::{
     assert::assert_response,
     captured::CapturedResponse,
-    case::{CaseFile, case_matches_profile},
+    case::{CaseFile, ChPoll, case_matches_profile},
     ch::{ChClient, run_ch_spec},
     curl_run::{
-        expand_placeholders, extract_request_body, extract_request_headers, redact_expanded_curl,
-        run_curl_shell,
+        expand_placeholders, extract_request_body, extract_request_headers,
+        inject_request_id_header, redact_expanded_curl, run_curl_shell,
     },
 };
 
@@ -78,12 +78,26 @@ struct Cli {
         value_parser = BoolishValueParser::new()
     )]
     header_print: Option<bool>,
+    /// After each authenticated request, query ClickHouse
+    /// `request_response_rmt` by the auto-generated `request_id` and include
+    /// the row in the report. Requires `CLICKHOUSE_URL` (or
+    /// `CLICKHOUSE_HTTP_URL`) to be set.
+    #[arg(
+        long = "ch-lookup",
+        num_args = 0..=1,
+        default_missing_value = "true",
+        value_parser = BoolishValueParser::new()
+    )]
+    ch_lookup: Option<bool>,
 }
 
 /// One case result; same shape in `e2e-report.json` and `e2e-failures.json`.
 #[derive(Serialize)]
 struct E2eReportEntry {
     case_id: String,
+    /// Auto-generated UUID v7 injected as `X-Request-Id` into the curl
+    /// request. `None` when the case was skipped.
+    request_id: Option<String>,
     passed: bool,
     /// `true` when the case was not executed because a declared prerequisite
     /// was missing.
@@ -105,25 +119,34 @@ struct E2eReportDocument {
 fn parse_kv_list(vars: &[String]) -> anyhow::Result<Vec<(String, String)>> {
     let mut out = Vec::new();
     for s in vars {
-        let (k, v) = s
-            .split_once('=')
-            .ok_or_else(|| anyhow::anyhow!("--var must be KEY=VAL, got {s:?}"))?;
+        let (k, v) = s.split_once('=').ok_or_else(|| {
+            anyhow::anyhow!("--var must be KEY=VAL, got {s:?}")
+        })?;
         out.push((k.to_string(), v.to_string()));
     }
     Ok(out)
 }
 
-fn missing_required_env(required_env: &[String], vars: &HashMap<String, String>) -> Vec<String> {
+fn missing_required_env(
+    required_env: &[String],
+    vars: &HashMap<String, String>,
+) -> Vec<String> {
     required_env
         .iter()
-        .filter(|key| vars.get(*key).is_none_or(|value| value.trim().is_empty()))
+        .filter(|key| {
+            vars.get(*key).is_none_or(|value| value.trim().is_empty())
+        })
         .cloned()
         .collect()
 }
 
-fn skipped_required_env_entry(case: &CaseFile, missing_env: Vec<String>) -> E2eReportEntry {
+fn skipped_required_env_entry(
+    case: &CaseFile,
+    missing_env: Vec<String>,
+) -> E2eReportEntry {
     E2eReportEntry {
         case_id: case.case_id.clone(),
+        request_id: None,
         passed: true,
         skipped: true,
         failure_reason: None,
@@ -160,8 +183,9 @@ async fn main() -> anyhow::Result<()> {
 async fn run() -> anyhow::Result<()> {
     let cli = Cli::parse();
     if cli.dotenv_path.exists() {
-        dotenvy::from_path(&cli.dotenv_path)
-            .with_context(|| format!("load dotenv {}", cli.dotenv_path.display()))?;
+        dotenvy::from_path(&cli.dotenv_path).with_context(|| {
+            format!("load dotenv {}", cli.dotenv_path.display())
+        })?;
     }
     let extra = parse_kv_list(&cli.vars)?;
     let mut vars: HashMap<String, String> = std::env::vars().collect();
@@ -171,10 +195,9 @@ async fn run() -> anyhow::Result<()> {
 
     let ch_client = ChClient::from_env()?;
 
-    let run_id = cli
-        .run_id
-        .clone()
-        .unwrap_or_else(|| format!("{}-e2e", Utc::now().format("%Y%m%dT%H%M%SZ")));
+    let run_id = cli.run_id.clone().unwrap_or_else(|| {
+        format!("{}-e2e", Utc::now().format("%Y%m%dT%H%M%SZ"))
+    });
     // Default for `$HARNESS_E2E_RUN_TOKEN` in case curl templates (e.g. KV-004)
     // so multi-step cache assertions start from a cold key per run unless
     // pinned via env or `--var`.
@@ -192,6 +215,7 @@ async fn run() -> anyhow::Result<()> {
 
     let profile_key = cli.profile.as_key();
     let print_failure_headers = cli.header_print.unwrap_or(false);
+    let ch_lookup = cli.ch_lookup.unwrap_or(false);
     let mut any_failed = false;
     let mut passed_cases: Vec<E2eReportEntry> = Vec::new();
     let mut failed_cases: Vec<E2eReportEntry> = Vec::new();
@@ -211,13 +235,20 @@ async fn run() -> anyhow::Result<()> {
             continue;
         }
 
-        let (passed, failure_reason, record) = run_one_case(&case, &vars, ch_client.as_ref()).await;
+        let (passed, failure_reason, request_id, record) =
+            run_one_case(&case, &vars, ch_client.as_ref(), ch_lookup).await;
         if !passed {
             any_failed = true;
-            eprint_failure_bodies(&case.case_id, &record, &vars, print_failure_headers);
+            eprint_failure_bodies(
+                &case.case_id,
+                &record,
+                &vars,
+                print_failure_headers,
+            );
         }
         let entry = E2eReportEntry {
             case_id: case.case_id.clone(),
+            request_id: Some(request_id),
             passed,
             skipped: false,
             failure_reason: failure_reason.clone(),
@@ -254,8 +285,9 @@ async fn run() -> anyhow::Result<()> {
     .with_context(|| format!("write {}", report_path.display()))?;
     fs::write(
         &failures_path,
-        serde_json::to_string_pretty(&doc_failed)
-            .with_context(|| format!("serialize {}", failures_path.display()))?,
+        serde_json::to_string_pretty(&doc_failed).with_context(|| {
+            format!("serialize {}", failures_path.display())
+        })?,
     )
     .with_context(|| format!("write {}", failures_path.display()))?;
 
@@ -268,12 +300,20 @@ async fn run() -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Whether the HTTP response indicates successful authentication (i.e. the
+/// gateway did **not** reject with 401 or 403).
+fn is_authenticated(status: u16) -> bool {
+    status != 401 && status != 403
+}
+
 async fn run_one_case(
     case: &CaseFile,
     vars: &HashMap<String, String>,
     ch_client: Option<&ChClient>,
-) -> (bool, Option<String>, serde_json::Value) {
+    ch_lookup: bool,
+) -> (bool, Option<String>, String, serde_json::Value) {
     let mut failure: Option<String> = None;
+    let request_id = uuid::Uuid::now_v7().to_string();
 
     if let Some(ref steps) = case.curl_prelude {
         for (idx, prelude) in steps.iter().enumerate() {
@@ -283,6 +323,7 @@ async fn run_one_case(
                     return (
                         false,
                         Some(format!("expand prelude[{idx}]: {e:#}")),
+                        request_id,
                         serde_json::json!({
                             "case": case,
                             "error": format!("{e:#}"),
@@ -295,6 +336,7 @@ async fn run_one_case(
                 return (
                     false,
                     Some(format!("curl prelude[{idx}]: {e:#}")),
+                    request_id,
                     serde_json::json!({
                         "case": case,
                         "execution": {
@@ -314,10 +356,13 @@ async fn run_one_case(
             return (
                 false,
                 Some(format!("expand: {e:#}")),
+                request_id,
                 serde_json::json!({ "case": case, "error": format!("{e:#}") }),
             );
         }
     };
+
+    let expanded = inject_request_id_header(&expanded, &request_id);
 
     let captured = match run_curl_shell(&expanded) {
         Ok(c) => c,
@@ -325,6 +370,7 @@ async fn run_one_case(
             return (
                 false,
                 Some(format!("curl: {e:#}")),
+                request_id,
                 serde_json::json!({
                     "case": case,
                     "execution": { "curlExpanded": redact_expanded_curl(&expanded, vars), "error": format!("{e:#}") },
@@ -340,9 +386,35 @@ async fn run_one_case(
     let ch_json = if let Some(ref chspec) = case.ch {
         if failure.is_none() {
             match run_ch_spec(ch_client, chspec, Some(&captured)).await {
-                Ok(out) => Some(serde_json::json!({ "rowsSample": out.last_rows })),
+                Ok(out) => {
+                    Some(serde_json::json!({ "rowsSample": out.last_rows }))
+                }
                 Err(e) => {
                     failure = Some(format!("{e:#}"));
+                    None
+                }
+            }
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    let ch_row = if ch_lookup && is_authenticated(captured.status) {
+        if let Some(ch) = ch_client {
+            let poll = ChPoll {
+                max_attempts: 20,
+                backoff_ms: 500,
+            };
+            match ch.lookup_request_row(&request_id, &poll).await {
+                Ok(row) => row,
+                Err(e) => {
+                    eprintln!(
+                        "  [warn] {}: CH lookup for request_id={request_id} \
+                         failed: {e:#}",
+                        case.case_id
+                    );
                     None
                 }
             }
@@ -360,10 +432,11 @@ async fn run_one_case(
             "curlExpanded": redact_expanded_curl(&expanded, vars),
             "response": captured_to_json(&captured),
             "ch": ch_json,
+            "chRow": ch_row,
         },
     });
 
-    (passed, failure, record)
+    (passed, failure, request_id, record)
 }
 
 fn captured_to_json(cap: &CapturedResponse) -> serde_json::Value {
@@ -495,7 +568,10 @@ mod tests {
     #[test]
     fn skipped_required_env_entry_has_expected_report_shape() {
         let case = sample_case();
-        let entry = skipped_required_env_entry(&case, vec!["OPENAI_API_KEY".to_string()]);
+        let entry = skipped_required_env_entry(
+            &case,
+            vec!["OPENAI_API_KEY".to_string()],
+        );
 
         assert_eq!(entry.case_id, "env1");
         assert!(entry.passed);
@@ -515,6 +591,7 @@ mod tests {
     fn normal_report_entry_serializes_skipped_false() {
         let entry = E2eReportEntry {
             case_id: "ok1".to_string(),
+            request_id: Some("test-rid".to_string()),
             passed: true,
             skipped: false,
             failure_reason: None,
@@ -523,6 +600,7 @@ mod tests {
 
         let value = serde_json::to_value(entry).unwrap();
         assert_eq!(value["case_id"], "ok1");
+        assert_eq!(value["request_id"], "test-rid");
         assert_eq!(value["passed"], true);
         assert_eq!(value["skipped"], false);
         assert!(value["failure_reason"].is_null());

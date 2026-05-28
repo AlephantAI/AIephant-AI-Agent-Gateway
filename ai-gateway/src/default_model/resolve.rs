@@ -31,10 +31,9 @@ pub fn model_ids_from_config_json(v: &Value) -> Option<Vec<String>> {
         .get("allowedModels")
         .or_else(|| v.get("allowed_models"))
         .cloned()
+        && let Some(list) = non_empty_string_ids(x)
     {
-        if let Some(list) = non_empty_string_ids(x) {
-            return Some(list);
-        }
+        return Some(list);
     }
     let doc: ModelListDoc = serde_json::from_value(v.clone()).ok()?;
     first_non_empty_list(doc.allowed_models, None, None)
@@ -42,21 +41,20 @@ pub fn model_ids_from_config_json(v: &Value) -> Option<Vec<String>> {
 
 /// Strict pick-one-of-three: first **non-empty** `Some(list)` where `list` is
 /// non-empty after trim.
+#[must_use]
 pub fn first_non_empty_list(
     a: Option<Vec<String>>,
     b: Option<Vec<String>>,
     c: Option<Vec<String>>,
 ) -> Option<Vec<String>> {
-    for opt in [a, b, c] {
-        if let Some(list) = opt {
-            let v: Vec<String> = list
-                .into_iter()
-                .map(|s| s.trim().to_string())
-                .filter(|s| !s.is_empty())
-                .collect();
-            if !v.is_empty() {
-                return Some(v);
-            }
+    for list in [a, b, c].into_iter().flatten() {
+        let v: Vec<String> = list
+            .into_iter()
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect();
+        if !v.is_empty() {
+            return Some(v);
         }
     }
     None
@@ -66,24 +64,23 @@ pub fn first_non_empty_list(
 #[must_use]
 pub fn model_ids_from_policy_overrides_json(v: &Value) -> Option<Vec<String>> {
     for ptr in ["/modelWhitelist/models", "/model_whitelist/models"] {
-        if let Some(node) = v.pointer(ptr) {
-            if let Some(list) = non_empty_string_ids(node.clone()) {
-                return Some(list);
-            }
+        if let Some(node) = v.pointer(ptr)
+            && let Some(list) = non_empty_string_ids(node.clone())
+        {
+            return Some(list);
         }
     }
-    if let Some(whitelist) = v.get("modelWhitelist").or_else(|| v.get("model_whitelist")) {
-        if let Some(m) = whitelist.get("models") {
-            if let Some(list) = non_empty_string_ids(m.clone()) {
-                return Some(list);
-            }
-        }
+    if let Some(whitelist) =
+        v.get("modelWhitelist").or_else(|| v.get("model_whitelist"))
+        && let Some(m) = whitelist.get("models")
+        && let Some(list) = non_empty_string_ids(m.clone())
+    {
+        return Some(list);
     }
     if let Some(ids) = model_ids_from_config_json(v) {
         return Some(ids);
     }
-    v.get("model_access")
-        .and_then(|inner| model_ids_from_config_json(inner))
+    v.get("model_access").and_then(model_ids_from_config_json)
 }
 
 /// Legacy alias: same as [`model_ids_from_policy_overrides_json`].
@@ -119,7 +116,11 @@ mod local_tests {
 
     #[test]
     fn first_non_empty_respects_order() {
-        let r = first_non_empty_list(None, Some(vec!["b".into()]), Some(vec!["a".into()]));
+        let r = first_non_empty_list(
+            None,
+            Some(vec!["b".into()]),
+            Some(vec!["a".into()]),
+        );
         assert_eq!(r, Some(vec!["b".to_string()]));
     }
 

@@ -1,7 +1,7 @@
 {
   "caseId": "CFG-004",
   "tier": "L2",
-  "intent": "End-to-end success; alephant.base_url for logging is not assertable via HTTP alone",
+  "intent": "End-to-end success; alephant.log_collector_url for logging is not assertable via HTTP alone",
   "curl": "curl -X POST \"$GATEWAY_BASE\"/v1/chat/completions -H \"Authorization: Bearer legend\" -H \"Content-Type: application/json\" -d '{\"model\":\"openai/gpt-4o-mini\",\"messages\":[{\"role\":\"user\",\"content\":\"cfg-004\"}],\"max_tokens\":4}'",
   "assertions": {
     "httpStatus": 200,

@@ -2,7 +2,7 @@
   "caseId": "OBS-001",
   "tier": "L2",
   "intent": "Observability HTTP smoke: when enabled, request logging may emit downstream telemetry; this JSON does not include a ch block",
-  "curl": "curl -X POST \"$GATEWAY_BASE\"/v1/chat/completions -H \"Authorization: Bearer legend\" -H \"Content-Type: application/json\" -d '{\"model\":\"openai/gpt-4o-mini\",\"messages\":[{\"role\":\"user\",\"content\":\"obs-001\"}],\"max_tokens\":4}'",
+  "curl": "curl -X POST \"$GATEWAY_BASE\"/v1/chat/completions -H \"Authorization: Bearer $ALEPHANT_CONTROL_OPENROUTER_API_KEY\" -H \"Content-Type: application/json\" -d '{\"model\":\"openai/gpt-4o-mini\",\"messages\":[{\"role\":\"user\",\"content\":\"obs-001\"}],\"max_tokens\":4}'",
   "assertions": {
     "httpStatus": 200,
     "json": {

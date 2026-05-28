@@ -38,6 +38,12 @@ pub struct Metrics {
     /// 1 = rate-limit layer has fallen back to in-memory; 0 = using Redis.
     /// Labels: `layer` ∈ {"client_ip", "in_flight"}
     pub rate_limit_redis_degraded_gauge: Gauge<u64>,
+    /// Labels: `profile`, `explicit` ∈ {`true`,`false`}
+    pub mapper_client_profile_resolved: Counter<u64>,
+    /// Labels: `passthrough` ∈ {`true`,`false`}
+    pub mapper_native_semantic_passthrough: Counter<u64>,
+    /// Labels: `profile`, `applied` ∈ {`true`,`false`}
+    pub mapper_ide_ingress_adjust_total: Counter<u64>,
     pub routers: RouterMetrics,
     pub vk: VkMetrics,
 }
@@ -115,13 +121,34 @@ impl Metrics {
             .build();
         let gateway_in_flight_redis_degraded = meter
             .u64_counter("gateway_in_flight_redis_degraded_total")
-            .with_description("Whole-gateway in-flight: Redis error, used memory fallback")
+            .with_description(
+                "Whole-gateway in-flight: Redis error, used memory fallback",
+            )
             .build();
         let rate_limit_redis_degraded_gauge = meter
             .u64_gauge("ai_gateway_rate_limit_redis_degraded")
             .with_description(
                 "1 when rate-limit layer is using in-memory fallback instead \
                  of Redis",
+            )
+            .build();
+        let mapper_client_profile_resolved = meter
+            .u64_counter("mapper_client_profile_resolved_total")
+            .with_description(
+                "Mapper: client profile resolution (header + heuristic)",
+            )
+            .build();
+        let mapper_native_semantic_passthrough = meter
+            .u64_counter("mapper_native_semantic_passthrough_total")
+            .with_description(
+                "Mapper: native semantic passthrough decision per request",
+            )
+            .build();
+        let mapper_ide_ingress_adjust_total = meter
+            .u64_counter("mapper_ide_ingress_adjust_total")
+            .with_description(
+                "Mapper: IDE ingress preprocessing invocations by profile and \
+                 applied flag",
             )
             .build();
         let routers = RouterMetrics::new(meter);
@@ -145,6 +172,9 @@ impl Metrics {
             gateway_in_flight_rejected,
             gateway_in_flight_redis_degraded,
             rate_limit_redis_degraded_gauge,
+            mapper_client_profile_resolved,
+            mapper_native_semantic_passthrough,
+            mapper_ide_ingress_adjust_total,
             routers,
             vk,
         }
@@ -184,7 +214,9 @@ impl VkMetrics {
     pub fn new(meter: &Meter) -> Self {
         let model_denied = meter
             .u64_counter("vk_model_denied")
-            .with_description("Requests blocked by virtual key model access policy")
+            .with_description(
+                "Requests blocked by virtual key model access policy",
+            )
             .build();
         let content_filter_allowed = meter
             .u64_counter("content_filter_allowed")
@@ -196,11 +228,15 @@ impl VkMetrics {
             .build();
         let content_filter_unavailable = meter
             .u64_counter("content_filter_unavailable")
-            .with_description("Content filter unavailable or error when evaluating")
+            .with_description(
+                "Content filter unavailable or error when evaluating",
+            )
             .build();
         let policy_piicache_request_body = meter
             .u64_counter("policy_piicache_request_body")
-            .with_description("Policy Evaluate body attachment driven by Redis piicache flag")
+            .with_description(
+                "Policy Evaluate body attachment driven by Redis piicache flag",
+            )
             .build();
         let policy_prompt_cache_messages = meter
             .u64_counter("policy_prompt_cache_messages")
@@ -211,11 +247,15 @@ impl VkMetrics {
             .build();
         let pg_fallback_heal = meter
             .u64_counter("vk_pg_fallback_heal_total")
-            .with_description("Virtual key auth: PG fallback found row and upserted cache")
+            .with_description(
+                "Virtual key auth: PG fallback found row and upserted cache",
+            )
             .build();
         let pg_fallback_db_errors = meter
             .u64_counter("vk_pg_fallback_db_errors_total")
-            .with_description("Virtual key auth: PG fallback query error (auth still 401)")
+            .with_description(
+                "Virtual key auth: PG fallback query error (auth still 401)",
+            )
             .build();
         Self {
             model_denied,

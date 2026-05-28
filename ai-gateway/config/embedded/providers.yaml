@@ -16,22 +16,12 @@ alibaba:
     - "tongyi-deepresearch-30b-a3b"
   base-url: https://dashscope-intl.aliyuncs.com/compatible-mode/v1/
 
-bedrock:
-  models:
-    - "amazon.nova-2-lite-v1:0"
-    - "amazon.nova-lite-v1:0"
-    - "amazon.nova-micro-v1:0"
-    - "amazon.nova-premier-v1:0"
-    - "amazon.nova-pro-v1:0"
-  base-url: https://bedrock-runtime.us-east-1.amazonaws.com/
-
 anthropic:
   models:
+    - "claude-3-haiku"
     - "claude-3.5-haiku"
-    - "claude-3-5-sonnet-20241022"
     - "claude-3.7-sonnet"
     - "claude-3.7-sonnet:thinking"
-    - "claude-3-haiku"
     - "claude-haiku-4.5"
     - "claude-haiku-latest"
     - "claude-opus-4"
@@ -40,6 +30,7 @@ anthropic:
     - "claude-opus-4.6"
     - "claude-opus-4.6-fast"
     - "claude-opus-4.7"
+    - "claude-opus-4.7-fast"
     - "claude-opus-latest"
     - "claude-sonnet-4"
     - "claude-sonnet-4.5"
@@ -66,7 +57,18 @@ baidu:
     - "ernie-4.5-300b-a47b"
     - "ernie-4.5-vl-28b-a3b"
     - "ernie-4.5-vl-424b-a47b"
+    - "qianfan-ocr-fast"
   base-url: https://qianfan.baidubce.com/v2/
+
+bedrock:
+  models:
+    - "amazon.nova-2-lite-v1:0"
+    - "amazon.nova-lite-v1:0"
+    - "amazon.nova-micro-v1:0"
+    - "amazon.nova-premier-v1:0"
+    - "amazon.nova-pro-v1:0"
+    - "anthropic.claude-3-5-sonnet-20240620-v1:0"
+  base-url: https://bedrock-runtime.us-east-1.amazonaws.com/
 
 bytedance:
   models:
@@ -89,18 +91,19 @@ cohere:
   models:
     - "command-a"
     - "command-r-08-2024"
-    - "command-r7b-12-2024"
     - "command-r-plus-08-2024"
+    - "command-r7b-12-2024"
   base-url: https://api.cohere.com/
 
 deepcogito:
   models:
     - "cogito-v2.1-671b"
-  base-url: https://openrouter.ai/api/v1/
+  base-url: https://api.together.xyz/v1
 
 deepseek:
   models:
     - "deepseek-chat"
+    - "deepseek-reasoner"
     - "deepseek-chat-v3-0324"
     - "deepseek-chat-v3.1"
     - "deepseek-r1"
@@ -123,6 +126,7 @@ essentialai:
 gemini:
   models:
     - "gemini-2.0-flash-001"
+    - "gemini-2.0-flash"
     - "gemini-2.0-flash-lite-001"
     - "gemini-2.5-flash"
     - "gemini-2.5-flash-image"
@@ -131,13 +135,14 @@ gemini:
     - "gemini-2.5-pro"
     - "gemini-2.5-pro-preview"
     - "gemini-2.5-pro-preview-05-06"
+    - "gemini-3-flash-preview"
+    - "gemini-3-pro-image-preview"
     - "gemini-3.1-flash-image-preview"
     - "gemini-3.1-flash-lite"
     - "gemini-3.1-flash-lite-preview"
     - "gemini-3.1-pro-preview"
     - "gemini-3.1-pro-preview-customtools"
-    - "gemini-3-flash-preview"
-    - "gemini-3-pro-image-preview"
+    - "gemini-3.5-flash"
     - "gemini-flash-latest"
     - "gemini-pro-latest"
     - "gemma-2-27b-it"
@@ -181,16 +186,20 @@ mancer:
     - "weaver"
   base-url: https://api.mancer.xyz/v1
 
+meituan:
+  models: []
+  base-url: https://api.longcat.chat/openai/v1/
+
 meta-llama:
   models:
+    - "llama-3-70b-instruct"
+    - "llama-3-8b-instruct"
     - "llama-3.1-70b-instruct"
     - "llama-3.1-8b-instruct"
     - "llama-3.2-11b-vision-instruct"
     - "llama-3.2-1b-instruct"
     - "llama-3.2-3b-instruct"
     - "llama-3.3-70b-instruct"
-    - "llama-3-70b-instruct"
-    - "llama-3-8b-instruct"
     - "llama-4-maverick"
     - "llama-4-scout"
     - "llama-guard-3-8b"
@@ -209,11 +218,26 @@ minimax:
     - "minimax-01"
     - "minimax-m1"
     - "minimax-m2"
+    - "minimax-m2-her"
     - "minimax-m2.1"
     - "minimax-m2.5"
     - "minimax-m2.7"
-    - "minimax-m2-her"
   base-url: https://api.minimax.io/v1/
+
+minimax-cn:
+  models:
+    - "minimax-01"
+    - "minimax-m1"
+    - "minimax-m2"
+    - "minimax-m2-her"
+    - "minimax-m2.1"
+    - "minimax-m2.5"
+    - "minimax-m2.7"
+  base-url: https://api.minimaxi.com/v1
+
+mistral:
+  models: []
+  base-url: https://api.mistral.ai/
 
 mistralai:
   models:
@@ -230,8 +254,8 @@ mistralai:
     - "mistral-large-2411"
     - "mistral-large-2512"
     - "mistral-medium-3"
-    - "mistral-medium-3.1"
     - "mistral-medium-3-5"
+    - "mistral-medium-3.1"
     - "mistral-nemo"
     - "mistral-saba"
     - "mistral-small-24b-instruct-2501"
@@ -248,9 +272,9 @@ moonshotai:
   models:
     - "kimi-k2"
     - "kimi-k2-0905"
+    - "kimi-k2-thinking"
     - "kimi-k2.5"
     - "kimi-k2.6"
-    - "kimi-k2-thinking"
     - "kimi-latest"
   base-url: https://api.moonshot.ai/v1/
 
@@ -292,8 +316,10 @@ openai:
     - "gpt-3.5-turbo-instruct"
     - "gpt-4"
     - "gpt-4-0314"
-    - "gpt-4.1"
     - "gpt-4-1106-preview"
+    - "gpt-4-turbo"
+    - "gpt-4-turbo-preview"
+    - "gpt-4.1"
     - "gpt-4.1-mini"
     - "gpt-4.1-nano"
     - "gpt-4o"
@@ -305,9 +331,14 @@ openai:
     - "gpt-4o-mini-2024-07-18"
     - "gpt-4o-mini-search-preview"
     - "gpt-4o-search-preview"
-    - "gpt-4-turbo"
-    - "gpt-4-turbo-preview"
     - "gpt-5"
+    - "gpt-5-chat"
+    - "gpt-5-codex"
+    - "gpt-5-image"
+    - "gpt-5-image-mini"
+    - "gpt-5-mini"
+    - "gpt-5-nano"
+    - "gpt-5-pro"
     - "gpt-5.1"
     - "gpt-5.1-chat"
     - "gpt-5.1-codex"
@@ -326,13 +357,6 @@ openai:
     - "gpt-5.4-pro"
     - "gpt-5.5"
     - "gpt-5.5-pro"
-    - "gpt-5-chat"
-    - "gpt-5-codex"
-    - "gpt-5-image"
-    - "gpt-5-image-mini"
-    - "gpt-5-mini"
-    - "gpt-5-nano"
-    - "gpt-5-pro"
     - "gpt-audio"
     - "gpt-audio-mini"
     - "gpt-chat-latest"
@@ -353,9 +377,22 @@ openai:
     - "o4-mini-high"
   base-url: https://api.openai.com/v1
 
+opencode-go:
+  models: []
+  base-url: https://opencode.ai/zen/go/v1
+
+opencode-zen:
+  models: []
+  base-url: https://opencode.ai/zen/v1
+
 openrouter:
   models: []
   base-url: https://openrouter.ai/api/v1
+
+perceptron:
+  models:
+    - "perceptron-mk1"
+  base-url: https://api.perceptron.inc/v1
 
 perplexity:
   models:
@@ -376,6 +413,13 @@ qwen:
     - "qwen-2.5-72b-instruct"
     - "qwen-2.5-7b-instruct"
     - "qwen-2.5-coder-32b-instruct"
+    - "qwen-max"
+    - "qwen-plus"
+    - "qwen-plus-2025-07-28"
+    - "qwen-plus-2025-07-28:thinking"
+    - "qwen-turbo"
+    - "qwen-vl-max"
+    - "qwen-vl-plus"
     - "qwen2.5-vl-72b-instruct"
     - "qwen3-14b"
     - "qwen3-235b-a22b"
@@ -385,19 +429,6 @@ qwen:
     - "qwen3-30b-a3b-instruct-2507"
     - "qwen3-30b-a3b-thinking-2507"
     - "qwen3-32b"
-    - "qwen3.5-122b-a10b"
-    - "qwen3.5-27b"
-    - "qwen3.5-35b-a3b"
-    - "qwen3.5-397b-a17b"
-    - "qwen3.5-9b"
-    - "qwen3.5-flash-02-23"
-    - "qwen3.5-plus-02-15"
-    - "qwen3.5-plus-20260420"
-    - "qwen3.6-27b"
-    - "qwen3.6-35b-a3b"
-    - "qwen3.6-flash"
-    - "qwen3.6-max-preview"
-    - "qwen3.6-plus"
     - "qwen3-8b"
     - "qwen3-coder"
     - "qwen3-coder-30b-a3b-instruct"
@@ -415,14 +446,125 @@ qwen:
     - "qwen3-vl-32b-instruct"
     - "qwen3-vl-8b-instruct"
     - "qwen3-vl-8b-thinking"
-    - "qwen-max"
+    - "qwen3.5-122b-a10b"
+    - "qwen3.5-27b"
+    - "qwen3.5-35b-a3b"
+    - "qwen3.5-397b-a17b"
+    - "qwen3.5-9b"
+    - "qwen3.5-flash-02-23"
+    - "qwen3.5-plus-02-15"
+    - "qwen3.5-plus-20260420"
+    - "qwen3.6-27b"
+    - "qwen3.6-35b-a3b"
+    - "qwen3.6-flash"
+    - "qwen3.6-max-preview"
+    - "qwen3.6-plus"
+    - "qwen3.7-max"
+  base-url: https://dashscope-intl.aliyuncs.com/compatible-mode/v1/
+
+qwen-beijing:
+  models:
+    - "qwen-2.5-72b-instruct"
+    - "qwen-2.5-7b-instruct"
+    - "qwen-2.5-coder-32b-instruct"
     - "qwen-plus"
     - "qwen-plus-2025-07-28"
     - "qwen-plus-2025-07-28:thinking"
-    - "qwen-turbo"
-    - "qwen-vl-max"
-    - "qwen-vl-plus"
-  base-url: https://dashscope-intl.aliyuncs.com/compatible-mode/v1/
+    - "qwen2.5-vl-72b-instruct"
+    - "qwen3-14b"
+    - "qwen3-235b-a22b"
+    - "qwen3-235b-a22b-2507"
+    - "qwen3-235b-a22b-thinking-2507"
+    - "qwen3-30b-a3b"
+    - "qwen3-30b-a3b-instruct-2507"
+    - "qwen3-30b-a3b-thinking-2507"
+    - "qwen3-32b"
+    - "qwen3-8b"
+    - "qwen3-coder"
+    - "qwen3-coder-30b-a3b-instruct"
+    - "qwen3-coder-flash"
+    - "qwen3-coder-next"
+    - "qwen3-coder-plus"
+    - "qwen3-max"
+    - "qwen3-max-thinking"
+    - "qwen3-next-80b-a3b-instruct"
+    - "qwen3-next-80b-a3b-thinking"
+    - "qwen3-vl-235b-a22b-instruct"
+    - "qwen3-vl-235b-a22b-thinking"
+    - "qwen3-vl-30b-a3b-instruct"
+    - "qwen3-vl-30b-a3b-thinking"
+    - "qwen3-vl-32b-instruct"
+    - "qwen3-vl-8b-instruct"
+    - "qwen3-vl-8b-thinking"
+    - "qwen3.5-122b-a10b"
+    - "qwen3.5-27b"
+    - "qwen3.5-35b-a3b"
+    - "qwen3.5-397b-a17b"
+    - "qwen3.5-9b"
+    - "qwen3.5-flash-02-23"
+    - "qwen3.5-plus-02-15"
+    - "qwen3.5-plus-20260420"
+    - "qwen3.6-27b"
+    - "qwen3.6-35b-a3b"
+    - "qwen3.6-flash"
+    - "qwen3.6-max-preview"
+    - "qwen3.6-plus"
+    - "qwen3.7-max"
+  base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
+
+qwen-us:
+  models:
+    - "qwen-2.5-72b-instruct"
+    - "qwen-2.5-7b-instruct"
+    - "qwen-2.5-coder-32b-instruct"
+    - "qwen-plus"
+    - "qwen-plus-2025-07-28"
+    - "qwen-plus-2025-07-28:thinking"
+    - "qwen2.5-vl-72b-instruct"
+    - "qwen3-14b"
+    - "qwen3-235b-a22b"
+    - "qwen3-235b-a22b-2507"
+    - "qwen3-235b-a22b-thinking-2507"
+    - "qwen3-30b-a3b"
+    - "qwen3-30b-a3b-instruct-2507"
+    - "qwen3-30b-a3b-thinking-2507"
+    - "qwen3-32b"
+    - "qwen3-8b"
+    - "qwen3-coder"
+    - "qwen3-coder-30b-a3b-instruct"
+    - "qwen3-coder-flash"
+    - "qwen3-coder-next"
+    - "qwen3-coder-plus"
+    - "qwen3-max"
+    - "qwen3-max-thinking"
+    - "qwen3-next-80b-a3b-instruct"
+    - "qwen3-next-80b-a3b-thinking"
+    - "qwen3-vl-235b-a22b-instruct"
+    - "qwen3-vl-235b-a22b-thinking"
+    - "qwen3-vl-30b-a3b-instruct"
+    - "qwen3-vl-30b-a3b-thinking"
+    - "qwen3-vl-32b-instruct"
+    - "qwen3-vl-8b-instruct"
+    - "qwen3-vl-8b-thinking"
+    - "qwen3.5-122b-a10b"
+    - "qwen3.5-27b"
+    - "qwen3.5-35b-a3b"
+    - "qwen3.5-397b-a17b"
+    - "qwen3.5-9b"
+    - "qwen3.5-flash-02-23"
+    - "qwen3.5-plus-02-15"
+    - "qwen3.5-plus-20260420"
+    - "qwen3.6-27b"
+    - "qwen3.6-35b-a3b"
+    - "qwen3.6-flash"
+    - "qwen3.6-max-preview"
+    - "qwen3.6-plus"
+    - "qwen3.7-max"
+  base-url: https://dashscope-us.aliyuncs.com/compatible-mode/v1
+
+reka:
+  models: []
+  base-url: https://api.reka.ai/v1/
 
 rekaai:
   models:
@@ -464,21 +606,22 @@ x-ai:
     - "grok-3-mini"
     - "grok-3-mini-beta"
     - "grok-4"
+    - "grok-4-fast"
     - "grok-4.1-fast"
     - "grok-4.20"
     - "grok-4.20-multi-agent"
     - "grok-4.3"
-    - "grok-4-fast"
+    - "grok-build-0.1"
     - "grok-code-fast-1"
   base-url: https://api.x.ai/
 
 xiaomi:
   models:
-    - "mimo-v2.5"
-    - "mimo-v2.5-pro"
     - "mimo-v2-flash"
     - "mimo-v2-omni"
     - "mimo-v2-pro"
+    - "mimo-v2.5"
+    - "mimo-v2.5-pro"
   base-url: https://api.xiaomimimo.com/v1
   upstream-auth: api-key
 
@@ -493,7 +636,39 @@ z-ai:
     - "glm-4.7"
     - "glm-4.7-flash"
     - "glm-5"
-    - "glm-5.1"
     - "glm-5-turbo"
+    - "glm-5.1"
+    - "glm-5v-turbo"
+  base-url: https://api.z.ai/api/paas/v4/
+
+z-ai-cn:
+  models:
+    - "glm-4-32b"
+    - "glm-4.5"
+    - "glm-4.5-air"
+    - "glm-4.5v"
+    - "glm-4.6"
+    - "glm-4.6v"
+    - "glm-4.7"
+    - "glm-4.7-flash"
+    - "glm-5"
+    - "glm-5-turbo"
+    - "glm-5.1"
     - "glm-5v-turbo"
   base-url: https://open.bigmodel.cn/api/paas/v4
+
+z-ai-coding-cn:
+  models:
+    - "glm-4-32b"
+    - "glm-4.5"
+    - "glm-4.5-air"
+    - "glm-4.5v"
+    - "glm-4.6"
+    - "glm-4.6v"
+    - "glm-4.7"
+    - "glm-4.7-flash"
+    - "glm-5"
+    - "glm-5-turbo"
+    - "glm-5.1"
+    - "glm-5v-turbo"
+  base-url: https://open.bigmodel.cn/api/coding/paas/v4

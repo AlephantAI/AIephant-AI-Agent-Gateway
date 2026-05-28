@@ -12,7 +12,8 @@ use serde_json::json;
 use tower::Service;
 
 const MASTER_KEY_ENCRYPTION_KEY_ENV: &str = "MASTER_KEY_ENCRYPTION_KEY";
-const TEST_MASTER_KEY_ENCRYPTION_KEY_B64: &str = "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=";
+const TEST_MASTER_KEY_ENCRYPTION_KEY_B64: &str =
+    "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=";
 
 struct MasterKeyGuard {
     previous: Option<String>,
@@ -67,15 +68,16 @@ async fn unauthorized() {
 
     let request = Request::builder()
         .method(Method::POST)
-        .uri("http://router.alephant.test/ai/chat/completions")
+        .uri("http://router.alephant.test/v1/chat/completions")
         .body(axum_core::body::Body::empty())
         .unwrap();
 
     let response = harness.call(request).await.unwrap();
     assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     let response_body = response.into_body().collect().await.unwrap();
-    let response_body =
-        serde_json::from_slice::<async_openai::error::WrappedError>(&response_body.to_bytes());
+    let response_body = serde_json::from_slice::<
+        async_openai::error::WrappedError,
+    >(&response_body.to_bytes());
     assert!(
         response_body.is_ok(),
         "should be able to deserialize error json into openai error format"
@@ -114,15 +116,16 @@ async fn invalid_request_body() {
 
     let request = Request::builder()
         .method(Method::POST)
-        .uri("http://router.alephant.test/ai/chat/completions")
+        .uri("http://router.alephant.test/v1/chat/completions")
         .body(axum_core::body::Body::empty())
         .unwrap();
 
     let response = harness.call(request).await.unwrap();
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     let response_body = response.into_body().collect().await.unwrap();
-    let response_body =
-        serde_json::from_slice::<async_openai::error::WrappedError>(&response_body.to_bytes());
+    let response_body = serde_json::from_slice::<
+        async_openai::error::WrappedError,
+    >(&response_body.to_bytes());
     assert!(
         response_body.is_ok(),
         "should be able to deserialize error json into openai error format"
@@ -158,7 +161,7 @@ async fn unsupported_model_keeps_openai_error_shape() {
 
     let request = Request::builder()
         .method(Method::POST)
-        .uri("http://router.alephant.test/ai/chat/completions")
+        .uri("http://router.alephant.test/v1/chat/completions")
         .header("content-type", "application/json")
         .body(axum_core::body::Body::from(
             serde_json::to_vec(&json!({
@@ -177,8 +180,9 @@ async fn unsupported_model_keeps_openai_error_shape() {
     let response = harness.call(request).await.unwrap();
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     let response_body = response.into_body().collect().await.unwrap();
-    let response_body =
-        serde_json::from_slice::<async_openai::error::WrappedError>(&response_body.to_bytes());
+    let response_body = serde_json::from_slice::<
+        async_openai::error::WrappedError,
+    >(&response_body.to_bytes());
     assert!(
         response_body.is_ok(),
         "should be able to deserialize unsupported model response into openai \

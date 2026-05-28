@@ -2,7 +2,7 @@
   "caseId": "KV-008",
   "tier": "L4",
   "intent": "Cache seed isolation",
-  "curl": "curl -X POST \"$GATEWAY_BASE\"/v1/chat/completions -H \"Authorization: Bearer legend\" -H \"Alephant-Cache-Enabled: true\" -H \"Alephant-Cache-Seed: seed-a\" -H \"Content-Type: application/json\" -d '{\"model\":\"openai/gpt-4o-mini\",\"messages\":[{\"role\":\"user\",\"content\":\"kv-008\"}],\"max_tokens\":4}'",
+  "curl": "curl -X POST \"$GATEWAY_BASE\"/v1/chat/completions -H \"Authorization: Bearer $ALEPHANT_CONTROL_OPENROUTER_API_KEY\" -H \"Alephant-Cache-Enabled: true\" -H \"Alephant-Cache-Seed: seed-a\" -H \"Content-Type: application/json\" -d '{\"model\":\"openai/gpt-4o-mini\",\"messages\":[{\"role\":\"user\",\"content\":\"kv-008\"}],\"max_tokens\":4}'",
   "assertions": {
     "httpStatus": 200
   },

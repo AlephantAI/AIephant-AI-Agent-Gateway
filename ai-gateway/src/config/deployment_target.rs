@@ -5,7 +5,9 @@ use serde::{Deserialize, Serialize};
 /// Controls how the dispatcher resolves master keys in Cloud mode.
 ///
 /// Default for Cloud: `PrimaryThenWorkspaceFallback`.
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, Hash)]
+#[derive(
+    Debug, Default, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, Hash,
+)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub enum MasterKeyResolution {
     /// Only use the master key directly linked to the virtual key.
@@ -24,7 +26,9 @@ impl MasterKeyResolution {
     }
 }
 
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, Hash)]
+#[derive(
+    Debug, Default, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, Hash,
+)]
 #[serde(rename_all = "kebab-case")]
 enum DeploymentTargetType {
     #[default]
@@ -115,7 +119,10 @@ mod tests {
             serde_json::from_str(json).expect("deserialize cloud target");
 
         assert_eq!(target.db_poll_interval, Duration::from_secs(30));
-        assert_eq!(target.listener_reconnect_interval, Duration::from_secs(300));
+        assert_eq!(
+            target.listener_reconnect_interval,
+            Duration::from_secs(300)
+        );
         assert!(target.master_key_fallback_enabled());
     }
 

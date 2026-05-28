@@ -2,7 +2,7 @@
   "caseId": "KV-005",
   "tier": "L2",
   "intent": "Invalid bucket size 0 -> 5xx",
-  "curl": "curl -X POST \"$GATEWAY_BASE\"/v1/chat/completions -H \"Authorization: Bearer legend\" -H \"Alephant-Cache-Bucket-Max-Size: 0\" -H \"Content-Type: application/json\" -d '{\"model\":\"openai/gpt-4o-mini\",\"messages\":[{\"role\":\"user\",\"content\":\"kv-005\"}],\"max_tokens\":4}'",
+  "curl": "curl -X POST \"$GATEWAY_BASE\"/v1/chat/completions -H \"Authorization: Bearer $ALEPHANT_CONTROL_OPENROUTER_API_KEY\" -H \"Alephant-Cache-Bucket-Max-Size: 0\" -H \"Content-Type: application/json\" -d '{\"model\":\"openai/gpt-4o-mini\",\"messages\":[{\"role\":\"user\",\"content\":\"kv-005\"}],\"max_tokens\":4}'",
   "assertions": {
     "httpStatus": {
       "in": [

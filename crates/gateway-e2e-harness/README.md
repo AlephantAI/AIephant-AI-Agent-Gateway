@@ -16,7 +16,7 @@ runs `curl`, and writes **pretty-printed JSON** (`serde_json::to_string_pretty`)
 
 Aligned with `docs/plans/2026-05-07-multi-model-mock-service-implementation-plan.md` and `multi_model_service`:
 
-- **`tc-mm-p-*.json` (`MM-P-001` …)**: For each vendor in **`provider_model_seed`** from `docs/sql/migrations/20260414_seed_provider_catalog_starter_models.sql`, generates **one** Unified `POST …/ai/chat/completions` case with Bearer **`legend_{providers.code}`** (matches `multi_model_service` seed); `amazon` rows use unified model prefix **`bedrock/…`** (matches gateway `ModelId`). Regenerate (deletes old `tc-mm-p-*.json` first):
+- **`tc-mm-p-*.json` (`MM-P-001` …)**: For each vendor in **`provider_model_seed`** from `docs/sql/migrations/20260414_seed_provider_catalog_starter_models.sql`, generates **one** Unified `POST …/v1/chat/completions` case with Bearer **`legend_{providers.code}`** (matches `multi_model_service` seed); `amazon` rows use unified model prefix **`bedrock/…`** (matches gateway `ModelId`). Regenerate (deletes old `tc-mm-p-*.json` first):
 
   ```bash
   python3 crates/gateway-e2e-harness/scripts/sync_multi_model_mock_cases.py
@@ -81,7 +81,7 @@ These cases are placeholders or need **special setups** (auth disabled, rate lim
 
 ## Unified API conventions (current cases)
 
-- **Path**: `POST $GATEWAY_BASE/ai/chat/completions` (matches multi-model docs).
+- **Path**: `POST $GATEWAY_BASE/v1/chat/completions` (matches multi-model docs).
 - **`model`**: Must be **`{provider}/{model_id}`** (e.g. `openai/gpt-4o-mini`, `anthropic/claude-3-haiku`). Bare model names do not satisfy Unified parsing.
 - If **`compat_mode`** is enabled, Unified may pin to the OpenAI vendor, conflicting with `provider/model` routing; confirm compat is off before `full` (per real `config`).
 
@@ -120,7 +120,7 @@ Matches [design spec](../../docs/superpowers/specs/2026-04-27-gateway-e2e-harnes
 
 Both declare `requiredEnv: ["OPENAI_API_KEY", "EMBEDDING_MODEL_NAME"]`; missing either skips per `requiredEnv` instead of reporting missing embeddings as a business failure.
 
-`SC-001` is C-probe: checks semantic-cache headers and Unified `/ai/chat/completions` are accepted; no HIT required. `SC-002` is a strict HIT probe under seeded Qdrant/cache: `curlPrelude` warms cache; main request uses a paraphrased prompt and asserts `alephant-cache: HIT`. Note: `alephant-cache: HIT` alone proves a cache hit, not uniquely semantic vs exact KV.
+`SC-001` is C-probe: checks semantic-cache headers and Unified `/v1/chat/completions` are accepted; no HIT required. `SC-002` is a strict HIT probe under seeded Qdrant/cache: `curlPrelude` warms cache; main request uses a paraphrased prompt and asserts `alephant-cache: HIT`. Note: `alephant-cache: HIT` alone proves a cache hit, not uniquely semantic vs exact KV.
 
 ### Default-model manual cases
 

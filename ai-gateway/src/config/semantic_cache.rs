@@ -27,20 +27,11 @@ impl SemanticCacheConfig {
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(default, deny_unknown_fields, rename_all = "kebab-case")]
+#[derive(Default)]
 pub struct QdrantConfig {
     pub url: String,
     /// Deprecated: semantic cache now derives final Qdrant collection names
     /// from embedding provider, model, and vector dimension at runtime.
     pub collection: Option<String>,
     pub api_key: Option<String>,
-}
-
-impl Default for QdrantConfig {
-    fn default() -> Self {
-        Self {
-            url: String::new(),
-            collection: None,
-            api_key: None,
-        }
-    }
 }

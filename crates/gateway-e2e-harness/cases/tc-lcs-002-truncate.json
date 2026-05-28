@@ -2,7 +2,7 @@
   "caseId": "LCS-002",
   "tier": "L2",
   "intent": "truncate",
-  "curl": "curl -X POST \"$GATEWAY_BASE\"/v1/chat/completions -H \"Authorization: Bearer legend\" -H \"Alephant-Token-Limit-Exception-Handler: truncate\" -H \"Content-Type: application/json\" -d '{\"model\":\"openai/gpt-4o-mini\",\"messages\":[{\"role\":\"user\",\"content\":\"lcs-002\"}],\"max_tokens\":8}'",
+  "curl": "curl -X POST \"$GATEWAY_BASE\"/v1/chat/completions -H \"Authorization: Bearer $ALEPHANT_CONTROL_OPENROUTER_API_KEY\" -H \"Alephant-Token-Limit-Exception-Handler: truncate\" -H \"Content-Type: application/json\" -d '{\"model\":\"openai/gpt-4o-mini\",\"messages\":[{\"role\":\"user\",\"content\":\"lcs-002\"}],\"max_tokens\":8}'",
   "assertions": {
     "httpStatus": {
       "in": [

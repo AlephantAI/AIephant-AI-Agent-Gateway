@@ -18,15 +18,15 @@ use uuid::Uuid;
 
 use crate::{
     config::{
-        Config, providers::ProvidersConfig, response_headers::ResponseHeadersConfig,
-        router::RouterConfig,
+        Config, providers::ProvidersConfig,
+        response_headers::ResponseHeadersConfig, router::RouterConfig,
     },
     content_filter::ContentFilterClientHolder,
     crypto::master_key::MASTER_KEY_ENCRYPTION_KEY_LEN,
     discover::{
         monitor::{
-            health::provider::HealthMonitorMap, metrics::EndpointMetricsRegistry,
-            rate_limit::RateLimitMonitorMap,
+            health::provider::HealthMonitorMap,
+            metrics::EndpointMetricsRegistry, rate_limit::RateLimitMonitorMap,
         },
         router::BareModelExpandIndex,
     },
@@ -43,7 +43,9 @@ use crate::{
     types::{
         org::OrgId,
         provider::{InferenceProvider, ProviderKeyMap, ProviderKeys},
-        rate_limit::{RateLimitEvent, RateLimitEventReceivers, RateLimitEventSenders},
+        rate_limit::{
+            RateLimitEvent, RateLimitEventReceivers, RateLimitEventSenders,
+        },
         router::RouterId,
     },
     virtual_key::legacy_key::Key,
@@ -55,7 +57,8 @@ use crate::{
 /// An absent key means the workspace has no `provider_configs` rows, and all
 /// providers are allowed (compat behaviour).  An empty `HashSet`
 /// value is treated the same way (defensive, should not occur in practice).
-pub type WorkspaceProviderAllowlist = FxHashMap<Uuid, HashSet<InferenceProvider>>;
+pub type WorkspaceProviderAllowlist =
+    FxHashMap<Uuid, HashSet<InferenceProvider>>;
 
 #[derive(Debug, Clone)]
 pub struct AppState(pub Arc<InnerAppState>);
@@ -84,7 +87,10 @@ impl AppState {
     }
 
     #[must_use]
-    pub fn llm_kv(&self) -> &std::sync::Arc<dyn alephant_llm_kv_cache::LlmKvBackend + Send + Sync> {
+    pub fn llm_kv(
+        &self,
+    ) -> &std::sync::Arc<dyn alephant_llm_kv_cache::LlmKvBackend + Send + Sync>
+    {
         &self.0.llm_kv
     }
 
@@ -104,6 +110,28 @@ impl AppState {
     pub fn mark_cache_warmed(&self) {
         self.0.cache_warmed.store(true, Ordering::Release);
         tracing::info!("cache_warmed: readiness gate open");
+    }
+
+    /// Returns the provider bootstrap DB fingerprint recorded by initial
+    /// provider discovery.
+    #[must_use]
+    pub fn provider_bootstrap_fingerprint(&self) -> Option<String> {
+        self.0
+            .provider_bootstrap_fingerprint
+            .read()
+            .expect("provider_bootstrap_fingerprint lock poisoned")
+            .clone()
+    }
+
+    /// Records the provider bootstrap DB fingerprint for initial provider
+    /// discovery.
+    pub fn mark_providers_bootstrapped(&self, fingerprint: String) {
+        *self
+            .0
+            .provider_bootstrap_fingerprint
+            .write()
+            .expect("provider_bootstrap_fingerprint lock poisoned") =
+            Some(fingerprint);
     }
 
     pub async fn content_filter_client(
@@ -167,7 +195,9 @@ impl AppState {
 
     /// Returns a snapshot of the workspace → provider allowlist (F-10).
     #[must_use]
-    pub fn get_workspace_provider_allowlist(&self) -> WorkspaceProviderAllowlist {
+    pub fn get_workspace_provider_allowlist(
+        &self,
+    ) -> WorkspaceProviderAllowlist {
         self.0
             .workspace_provider_allowlist
             .read()
@@ -179,7 +209,10 @@ impl AppState {
     ///
     /// Called by `ProviderDbDiscovery` at startup and by `db_listener`
     /// whenever `provider_configs` changes.
-    pub fn set_workspace_provider_allowlist(&self, allowlist: WorkspaceProviderAllowlist) {
+    pub fn set_workspace_provider_allowlist(
+        &self,
+        allowlist: WorkspaceProviderAllowlist,
+    ) {
         *self
             .0
             .workspace_provider_allowlist
@@ -242,7 +275,10 @@ impl AppState {
     /// When the snapshot is empty (no Cloud DB seed path), only `openrouter`
     /// matches — same as historic YAML-only behaviour.
     #[must_use]
-    pub fn provider_skips_model_mapping_catalog(&self, provider: &InferenceProvider) -> bool {
+    pub fn provider_skips_model_mapping_catalog(
+        &self,
+        provider: &InferenceProvider,
+    ) -> bool {
         let InferenceProvider::Named(code) = provider else {
             return false;
         };
@@ -261,7 +297,8 @@ pub struct InnerAppState {
     pub s3: BaseS3Client,
     pub router_store: Option<RouterStore>,
     pub alephant_http_client: AlephantHttpClient,
-    pub request_log_transport: std::sync::Arc<dyn crate::logger::transport::LogTransport>,
+    pub request_log_transport:
+        std::sync::Arc<dyn crate::logger::transport::LogTransport>,
     /// Mirrors `request_log.log_queue_redis_url`; `None` when unset.
     pub redis: Option<std::sync::Arc<crate::app_redis::AppRedis>>,
     /// Top level metrics which are exported to OpenTelemetry.
@@ -281,11 +318,16 @@ pub struct InnerAppState {
     pub router_organization_map: RwLock<HashMap<RouterId, OrgId>>,
     /// AES-256 master key encryption key for decrypting
     /// `master_keys.key_ciphertext`.
-    pub master_key_encryption_key: Option<Arc<[u8; MASTER_KEY_ENCRYPTION_KEY_LEN]>>,
+    pub master_key_encryption_key:
+        Option<Arc<[u8; MASTER_KEY_ENCRYPTION_KEY_LEN]>>,
     /// In-memory cache of active virtual keys, keyed by `key_hash`.
     pub virtual_keys_cache: RwLock<Option<HashMap<String, DbVirtualKey>>>,
     /// LRU cache of decrypted master keys.
     pub master_key_cache: Option<MasterKeyCache>,
+    /// Learned regional endpoint cache used when Redis is unavailable.
+    #[debug(skip)]
+    pub regional_endpoint_cache:
+        crate::dispatcher::regional_endpoint::RegionalEndpointCache,
     /// Hot-updatable provider configuration.
     ///
     /// Populated from `providers` / `provider_models` DB tables at startup
@@ -301,6 +343,10 @@ pub struct InnerAppState {
     /// [`Self::providers_config`](InnerAppState::providers_config).
     pub bare_model_expand_index: std::sync::RwLock<BareModelExpandIndex>,
 
+    /// Fingerprint recorded before initial DB provider discovery reads
+    /// provider state and builds the initial provider-derived router set.
+    pub provider_bootstrap_fingerprint: std::sync::RwLock<Option<String>>,
+
     /// gRPC client for `policy.v1.PolicyService` when `policy.enabled`.
     pub content_filter: ContentFilterClientHolder,
 
@@ -310,13 +356,15 @@ pub struct InnerAppState {
     /// by `db_listener` whenever `provider_configs` changes.
     ///
     /// Uses `std::sync::RwLock` for the same reason as `providers_config`.
-    pub workspace_provider_allowlist: std::sync::RwLock<WorkspaceProviderAllowlist>,
+    pub workspace_provider_allowlist:
+        std::sync::RwLock<WorkspaceProviderAllowlist>,
     /// `providers.code` → DB `is_router`; refreshed with
     /// [`Self::providers_config`].
     pub provider_is_router_flags: std::sync::RwLock<FxHashMap<String, bool>>,
     /// LLM response KV cache backend (Cloudflare, TiKV, or stub).
     #[debug(skip)]
-    pub llm_kv: std::sync::Arc<dyn alephant_llm_kv_cache::LlmKvBackend + Send + Sync>,
+    pub llm_kv:
+        std::sync::Arc<dyn alephant_llm_kv_cache::LlmKvBackend + Send + Sync>,
     /// Semantic cache service (Qdrant + embeddings), optional.
     pub semantic_cache: Option<Arc<SemanticCacheService>>,
     /// Set to `true` after the first `poll_database` attempt completes
@@ -331,9 +379,10 @@ impl AppState {
         router_id: &RouterId,
     ) -> Result<Sender<RateLimitEvent>, InitError> {
         let rate_limit_channels = self.0.rate_limit_senders.read().await;
-        let rate_limit_tx = rate_limit_channels
-            .get(router_id)
-            .ok_or_else(|| InitError::RateLimitChannelsNotInitialized(router_id.clone()))?;
+        let rate_limit_tx =
+            rate_limit_channels.get(router_id).ok_or_else(|| {
+                InitError::RateLimitChannelsNotInitialized(router_id.clone())
+            })?;
         Ok(rate_limit_tx.clone())
     }
 
@@ -355,7 +404,9 @@ impl AppState {
         rate_limit_channels.insert(router_id, rate_limit_rx);
     }
 
-    pub async fn get_router_tx(&self) -> Option<Sender<Change<RouterId, Router>>> {
+    pub async fn get_router_tx(
+        &self,
+    ) -> Option<Sender<Change<RouterId, Router>>> {
         let router_tx = self.0.router_tx.read().await;
         router_tx.clone()
     }
@@ -365,7 +416,10 @@ impl AppState {
         *router_tx = Some(tx);
     }
 
-    pub async fn check_alephant_api_key(&self, api_key_hash: &str) -> Option<Key> {
+    pub async fn check_alephant_api_key(
+        &self,
+        api_key_hash: &str,
+    ) -> Option<Key> {
         let alephant_api_keys = self.0.alephant_api_keys.read().await;
         alephant_api_keys
             .as_ref()?
@@ -381,7 +435,10 @@ impl AppState {
     /// Look up a virtual key by its `key_hash`.
     /// Returns `None` if the cache is not initialised or the key is not
     /// found.
-    pub async fn check_virtual_key(&self, key_hash: &str) -> Option<DbVirtualKey> {
+    pub async fn check_virtual_key(
+        &self,
+        key_hash: &str,
+    ) -> Option<DbVirtualKey> {
         self.0
             .virtual_keys_cache
             .read()
@@ -396,7 +453,10 @@ impl AppState {
     ///
     /// On PG errors, logs, increments `vk_pg_fallback_db_errors_total`, and
     /// returns `None` (caller treats as invalid credentials).
-    pub async fn resolve_virtual_key_for_auth(&self, key_hash: &str) -> Option<DbVirtualKey> {
+    pub async fn resolve_virtual_key_for_auth(
+        &self,
+        key_hash: &str,
+    ) -> Option<DbVirtualKey> {
         if let Some(vk) = self.check_virtual_key(key_hash).await {
             return Some(vk);
         }
@@ -476,18 +536,31 @@ impl AppState {
         Ok(alephant_api_keys.clone())
     }
 
-    pub async fn set_router_organization_map(&self, map: HashMap<RouterId, OrgId>) {
-        let mut router_organization_map = self.0.router_organization_map.write().await;
+    pub async fn set_router_organization_map(
+        &self,
+        map: HashMap<RouterId, OrgId>,
+    ) {
+        let mut router_organization_map =
+            self.0.router_organization_map.write().await;
         router_organization_map.clone_from(&map);
     }
 
-    pub async fn set_router_organization(&self, router_id: RouterId, organization_id: OrgId) {
-        let mut router_organization_map = self.0.router_organization_map.write().await;
+    pub async fn set_router_organization(
+        &self,
+        router_id: RouterId,
+        organization_id: OrgId,
+    ) {
+        let mut router_organization_map =
+            self.0.router_organization_map.write().await;
         router_organization_map.insert(router_id, organization_id);
     }
 
-    pub async fn get_router_organization(&self, router_id: &RouterId) -> Option<OrgId> {
-        let router_organization_map = self.0.router_organization_map.read().await;
+    pub async fn get_router_organization(
+        &self,
+        router_id: &RouterId,
+    ) -> Option<OrgId> {
+        let router_organization_map =
+            self.0.router_organization_map.read().await;
         router_organization_map.get(router_id).copied()
     }
 
@@ -514,8 +587,14 @@ impl AppState {
                 &[
                     KeyValue::new("organization_id", org_id.clone()),
                     KeyValue::new("router_id", router_id.to_string()),
-                    KeyValue::new("endpoint_type", endpoint_type.as_ref().to_string()),
-                    KeyValue::new("balance_config", balance_config.as_ref().to_string()),
+                    KeyValue::new(
+                        "endpoint_type",
+                        endpoint_type.as_ref().to_string(),
+                    ),
+                    KeyValue::new(
+                        "balance_config",
+                        balance_config.as_ref().to_string(),
+                    ),
                 ],
             );
         }
@@ -556,8 +635,14 @@ impl AppState {
                 &[
                     KeyValue::new("organization_id", org_id.clone()),
                     KeyValue::new("router_id", router_id.to_string()),
-                    KeyValue::new("endpoint_type", endpoint_type.as_ref().to_string()),
-                    KeyValue::new("balance_config", balance_config.as_ref().to_string()),
+                    KeyValue::new(
+                        "endpoint_type",
+                        endpoint_type.as_ref().to_string(),
+                    ),
+                    KeyValue::new(
+                        "balance_config",
+                        balance_config.as_ref().to_string(),
+                    ),
                 ],
             );
         }
@@ -575,7 +660,10 @@ impl AppState {
         }
     }
 
-    pub async fn set_all_provider_keys(&self, provider_keys: HashMap<OrgId, ProviderKeyMap>) {
+    pub async fn set_all_provider_keys(
+        &self,
+        provider_keys: HashMap<OrgId, ProviderKeyMap>,
+    ) {
         let num_keys = provider_keys.values().map(|m| m.len()).sum::<usize>();
         self.0
             .metrics
@@ -588,7 +676,11 @@ impl AppState {
             .await;
     }
 
-    pub async fn set_org_provider_keys(&self, org_id: OrgId, provider_keys: ProviderKeyMap) {
+    pub async fn set_org_provider_keys(
+        &self,
+        org_id: OrgId,
+        provider_keys: ProviderKeyMap,
+    ) {
         let num_keys = provider_keys.len();
         self.0
             .metrics
@@ -602,11 +694,17 @@ impl AppState {
     }
 }
 
-fn upsert_virtual_key_entry(map: &mut HashMap<String, DbVirtualKey>, vk: DbVirtualKey) -> bool {
+fn upsert_virtual_key_entry(
+    map: &mut HashMap<String, DbVirtualKey>,
+    vk: DbVirtualKey,
+) -> bool {
     map.insert(vk.key_hash.clone(), vk).is_none()
 }
 
-fn remove_virtual_key_entry(map: &mut HashMap<String, DbVirtualKey>, key_hash: &str) -> bool {
+fn remove_virtual_key_entry(
+    map: &mut HashMap<String, DbVirtualKey>,
+    key_hash: &str,
+) -> bool {
     map.remove(key_hash).is_some()
 }
 
@@ -685,7 +783,10 @@ mod tests {
         let mut map = HashMap::default();
         let workspace_id = Uuid::new_v4();
         let vk = DbVirtualKey {
-            allowed_models: Some(vec!["GPT-4".to_string(), "claude-3".to_string()]),
+            allowed_models: Some(vec![
+                "GPT-4".to_string(),
+                "claude-3".to_string(),
+            ]),
             blocked_models: Some(vec!["gpt-3.5-turbo".to_string()]),
             ..sample_vk("kh-mp", workspace_id)
         };
@@ -716,7 +817,10 @@ mod tests {
 
         let updated = DbVirtualKey {
             rate_limit_rpm: Some(120),
-            allowed_models: Some(vec!["gpt-4".to_string(), "claude-3-opus".to_string()]),
+            allowed_models: Some(vec![
+                "gpt-4".to_string(),
+                "claude-3-opus".to_string(),
+            ]),
             ..sample_vk("kh-upd", workspace_id)
         };
         // Second upsert should overwrite (returns false = key existed).
@@ -794,6 +898,32 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn provider_bootstrap_fingerprint_is_empty_by_default() {
+        let app = build_test_app(Config::default()).await.expect("build app");
+
+        assert_eq!(app.state.provider_bootstrap_fingerprint(), None);
+    }
+
+    #[tokio::test]
+    async fn mark_providers_bootstrapped_records_latest_fingerprint() {
+        let app = build_test_app(Config::default()).await.expect("build app");
+
+        app.state
+            .mark_providers_bootstrapped("fingerprint-a".to_string());
+        assert_eq!(
+            app.state.provider_bootstrap_fingerprint(),
+            Some("fingerprint-a".to_string())
+        );
+
+        app.state
+            .mark_providers_bootstrapped("fingerprint-b".to_string());
+        assert_eq!(
+            app.state.provider_bootstrap_fingerprint(),
+            Some("fingerprint-b".to_string())
+        );
+    }
+
+    #[tokio::test]
     async fn providers_config_initializes_from_config_snapshot() {
         let config = Config::default();
         let expected = config.providers.clone();
@@ -809,7 +939,8 @@ mod tests {
         let openai_cfg = updated
             .get_mut(&crate::types::provider::InferenceProvider::OpenAI)
             .expect("openai provider exists");
-        openai_cfg.base_url = url::Url::parse("https://runtime.override.test").expect("valid url");
+        openai_cfg.base_url = url::Url::parse("https://runtime.override.test")
+            .expect("valid url");
 
         let original_static = app.state.config().providers.clone();
         app.state.set_providers_config(updated.clone());
@@ -828,7 +959,8 @@ mod tests {
         local
             .get_mut(&crate::types::provider::InferenceProvider::OpenAI)
             .expect("openai provider exists")
-            .base_url = url::Url::parse("https://local-only-change.test").expect("valid url");
+            .base_url = url::Url::parse("https://local-only-change.test")
+            .expect("valid url");
 
         // Caller mutations on a returned snapshot must never mutate app state.
         assert_eq!(app.state.get_providers_config(), before);

@@ -6,10 +6,10 @@
     "full"
   ],
   "requiredEnv": [
-    "ALEPHANT_CONTROL_PLANE_API_KEY",
+    "ALEPHANT_CONTROL_OPENROUTER_API_KEY",
     "ALL_MODELS_E2E_ENABLE"
   ],
-  "curl": "curl -X POST \"$GATEWAY_BASE/v1/chat/completions\" -H \"Authorization: Bearer $ALEPHANT_CONTROL_PLANE_API_KEY\" -H \"Content-Type: application/json\" -d '{\"model\":\"x-ai/grok-3\",\"messages\":[{\"role\":\"user\",\"content\":\"Hello\"}]}'",
+  "curl": "curl -X POST \"$GATEWAY_BASE/v1/chat/completions\" -H \"Authorization: Bearer $ALEPHANT_CONTROL_OPENROUTER_API_KEY\" -H \"Content-Type: application/json\" -d '{\"model\":\"x-ai/grok-3\",\"messages\":[{\"role\":\"user\",\"content\":\"Hello\"}]}'",
   "assertions": {
     "httpStatus": 200
   }

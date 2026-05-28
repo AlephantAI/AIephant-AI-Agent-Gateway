@@ -2,8 +2,8 @@
   "caseId": "ROUTE-014",
   "tier": "L2",
   "intent": "Unified POST /v1/responses (OpenAI Responses API shape)",
-  "requiredEnv": ["ALEPHANT_CONTROL_PLANE_API_KEY"],
-  "curl": "curl -X POST \"$GATEWAY_BASE\"/v1/responses -H \"Authorization: Bearer $ALEPHANT_CONTROL_PLANE_API_KEY\" -H \"Content-Type: application/json\" -d '{\"model\":\"openai/gpt-4o-mini\",\"input\":\"route-014\",\"max_output_tokens\":16}'",
+  "requiredEnv": ["ALEPHANT_CONTROL_OPENROUTER_API_KEY"],
+  "curl": "curl -X POST \"$GATEWAY_BASE\"/v1/responses -H \"Authorization: Bearer $ALEPHANT_CONTROL_OPENROUTER_API_KEY\" -H \"Content-Type: application/json\" -d '{\"model\":\"openai/gpt-4o-mini\",\"input\":\"route-014\",\"max_output_tokens\":16}'",
   "assertions": {
     "httpStatus": {
       "in": [

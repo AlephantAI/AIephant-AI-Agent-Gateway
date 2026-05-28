@@ -2,7 +2,7 @@
   "caseId": "UNI-011",
   "tier": "L2",
   "intent": "Named provider deepseek",
-  "curl": "curl -X POST \"$GATEWAY_BASE\"/v1/chat/completions -H \"Authorization: Bearer legend\" -H \"Content-Type: application/json\" -d '{\"model\":\"deepseek/deepseek-chat\",\"messages\":[{\"role\":\"user\",\"content\":\"uni-011a\"}],\"max_tokens\":8}'",
+  "curl": "curl -X POST \"$GATEWAY_BASE\"/v1/chat/completions -H \"Authorization: Bearer $ALEPHANT_CONTROL_OPENROUTER_API_KEY\" -H \"Content-Type: application/json\" -d '{\"model\":\"deepseek/deepseek-chat\",\"messages\":[{\"role\":\"user\",\"content\":\"uni-011a\"}],\"max_tokens\":8}'",
   "assertions": {
     "httpStatus": {
       "in": [

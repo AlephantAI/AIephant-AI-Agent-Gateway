@@ -12,7 +12,9 @@ use ai_gateway::{
     config::{
         Config,
         alephant::AlephantFeatures,
-        balance::{BalanceConfig, BalanceConfigInner, WeightedModel, WeightedProvider},
+        balance::{
+            BalanceConfig, BalanceConfigInner, WeightedModel, WeightedProvider,
+        },
         router::{RouterConfig, RouterConfigs},
     },
     endpoints::EndpointType,
@@ -99,7 +101,9 @@ async fn weighted_balancer_anthropic_preferred() {
         let request = Request::builder()
             .method(Method::POST)
             // default router
-            .uri("http://router.alephant.test/router/my-router/chat/completions")
+            .uri(
+                "http://router.alephant.test/router/my-router/chat/completions",
+            )
             .body(request_body)
             .unwrap();
         let response = harness.call(request).await.unwrap();
@@ -185,7 +189,9 @@ async fn weighted_balancer_openai_preferred() {
         let request = Request::builder()
             .method(Method::POST)
             // default router
-            .uri("http://router.alephant.test/router/my-router/chat/completions")
+            .uri(
+                "http://router.alephant.test/router/my-router/chat/completions",
+            )
             .body(request_body)
             .unwrap();
         let response = harness.call(request).await.unwrap();
@@ -233,12 +239,15 @@ async fn weighted_balancer_anthropic_heavily_preferred() {
     let tolerance = num_requests as f64 * 0.20;
     let expected_openai_midpt = num_requests as f64 * 0.05;
     let expected_anthropic_midpt = num_requests as f64 * 0.95;
-    let openai_range_lower = (expected_openai_midpt - tolerance).max(0.0).floor() as u64;
+    let openai_range_lower =
+        (expected_openai_midpt - tolerance).max(0.0).floor() as u64;
     let openai_range_upper = (expected_openai_midpt + tolerance).ceil() as u64;
     let openai_range = openai_range_lower..openai_range_upper;
-    let anthropic_range_lower = (expected_anthropic_midpt - tolerance).floor() as u64;
-    let anthropic_range_upper =
-        ((expected_anthropic_midpt + tolerance).ceil() as u64).min(num_requests as u64);
+    let anthropic_range_lower =
+        (expected_anthropic_midpt - tolerance).floor() as u64;
+    let anthropic_range_upper = ((expected_anthropic_midpt + tolerance).ceil()
+        as u64)
+        .min(num_requests as u64);
     let anthropic_range = anthropic_range_lower..anthropic_range_upper;
     let mock_args = MockArgs::builder()
         .stubs(HashMap::from([
@@ -274,7 +283,9 @@ async fn weighted_balancer_anthropic_heavily_preferred() {
         let request = Request::builder()
             .method(Method::POST)
             // default router
-            .uri("http://router.alephant.test/router/my-router/chat/completions")
+            .uri(
+                "http://router.alephant.test/router/my-router/chat/completions",
+            )
             .body(request_body)
             .unwrap();
         let response = harness.call(request).await.unwrap();
@@ -371,7 +382,9 @@ async fn weighted_balancer_equal_four_providers() {
         let request = Request::builder()
             .method(Method::POST)
             // default router
-            .uri("http://router.alephant.test/router/my-router/chat/completions")
+            .uri(
+                "http://router.alephant.test/router/my-router/chat/completions",
+            )
             .body(request_body)
             .unwrap();
         let response = harness.call(request).await.unwrap();
@@ -468,7 +481,9 @@ async fn weighted_balancer_bedrock() {
         let request = Request::builder()
             .method(Method::POST)
             // default router
-            .uri("http://router.alephant.test/router/my-router/chat/completions")
+            .uri(
+                "http://router.alephant.test/router/my-router/chat/completions",
+            )
             .body(request_body)
             .unwrap();
         let response = harness.call(request).await.unwrap();
@@ -497,7 +512,10 @@ async fn model_weighted() {
                     weight: Decimal::try_from(0.25).unwrap(),
                 },
                 WeightedModel {
-                    model: ModelId::from_str("anthropic/claude-3-haiku-20240307").unwrap(),
+                    model: ModelId::from_str(
+                        "anthropic/claude-3-haiku-20240307"
+                    )
+                    .unwrap(),
                     weight: Decimal::try_from(0.75).unwrap(),
                 },
             ],
@@ -555,7 +573,9 @@ async fn model_weighted() {
         let request_body = axum_core::body::Body::from(body_bytes.clone());
         let request = Request::builder()
             .method(Method::POST)
-            .uri("http://router.alephant.test/router/my-router/chat/completions")
+            .uri(
+                "http://router.alephant.test/router/my-router/chat/completions",
+            )
             .body(request_body)
             .unwrap();
         let response = harness.call(request).await.unwrap();

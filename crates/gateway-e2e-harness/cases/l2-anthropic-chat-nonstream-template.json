@@ -3,7 +3,7 @@
   "tier": "L2",
   "intent": "Unified API anthropic non-stream template; expect 200 once anthropic provider model and key are configured",
   "profile": ["full"],
-  "curl": "curl -X POST \"$GATEWAY_BASE/v1/chat/completions\" -H \"Authorization: Bearer $ALEPHANT_CONTROL_PLANE_API_KEY\" -H \"Content-Type: application/json\" -d '{\"model\":\"anthropic/claude-3-haiku\",\"messages\":[{\"role\":\"user\",\"content\":\"anthropic-nonstream-template\"}],\"max_tokens\":16}'",
+  "curl": "curl -X POST \"$GATEWAY_BASE/v1/chat/completions\" -H \"Authorization: Bearer $ALEPHANT_CONTROL_OPENROUTER_API_KEY\" -H \"Content-Type: application/json\" -d '{\"model\":\"anthropic/claude-3-haiku\",\"messages\":[{\"role\":\"user\",\"content\":\"anthropic-nonstream-template\"}],\"max_tokens\":16}'",
   "assertions": {
     "httpStatus": { "in": [200, 400, 401, 403, 404, 422, 429, 500, 502, 503] }
   }

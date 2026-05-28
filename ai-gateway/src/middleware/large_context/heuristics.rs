@@ -20,6 +20,7 @@ fn tokens_per_char(model: &str) -> f32 {
     }
 }
 
+#[must_use]
 pub fn normalize_text(text: &str) -> String {
     text.split_whitespace().collect::<Vec<_>>().join(" ")
 }
@@ -41,8 +42,9 @@ fn total_message_chars(payload: &ChatCompletionsPayload) -> usize {
 }
 
 fn budget_chars(input_budget_tokens: u32, primary_model: &str) -> usize {
-    ((input_budget_tokens as f32 / tokens_per_char(primary_model)) * TRUNCATE_CHAR_RATIO).floor()
-        as usize
+    ((input_budget_tokens as f32 / tokens_per_char(primary_model))
+        * TRUNCATE_CHAR_RATIO)
+        .floor() as usize
 }
 
 fn proportional_char_budgets(
@@ -65,11 +67,13 @@ fn proportional_char_budgets(
         } else if remaining_source_chars == 0 {
             0
         } else {
-            message_chars.saturating_mul(remaining_chars) / remaining_source_chars
+            message_chars.saturating_mul(remaining_chars)
+                / remaining_source_chars
         };
         budgets.push(message_budget);
         remaining_chars = remaining_chars.saturating_sub(message_budget);
-        remaining_source_chars = remaining_source_chars.saturating_sub(message_chars);
+        remaining_source_chars =
+            remaining_source_chars.saturating_sub(message_chars);
     }
 
     budgets
@@ -134,6 +138,7 @@ fn middle_out_text_to_limit(text: &str, max_chars: usize) -> String {
     format!("{head}{ELLIPSIS}{tail}")
 }
 
+#[must_use]
 pub fn resolve_primary_model(
     body_model: Option<&str>,
     header_model_override: Option<&str>,
@@ -153,6 +158,7 @@ pub fn extract_fallback_model_candidates(model: &str) -> Vec<String> {
         .collect()
 }
 
+#[must_use]
 pub fn estimate_input_tokens(
     payload: &ChatCompletionsPayload,
     primary_model: &str,
@@ -165,12 +171,13 @@ pub fn estimate_input_tokens(
     )
 }
 
+#[must_use]
 pub fn compute_input_budget_tokens(
     model_context_limit: u32,
     requested_completion_tokens: Option<u32>,
 ) -> u32 {
-    let reserved_completion_tokens =
-        requested_completion_tokens.unwrap_or_else(|| (model_context_limit / 10).max(1));
+    let reserved_completion_tokens = requested_completion_tokens
+        .unwrap_or_else(|| (model_context_limit / 10).max(1));
     model_context_limit.saturating_sub(reserved_completion_tokens)
 }
 
@@ -193,14 +200,16 @@ pub fn apply_truncate(
     }
 
     let mut cloned = value_with_model(&payload.raw, primary_model);
-    let messages_array = cloned.get_mut("messages").and_then(Value::as_array_mut)?;
+    let messages_array =
+        cloned.get_mut("messages").and_then(Value::as_array_mut)?;
     for (message, message_budget) in payload
         .messages
         .iter()
         .zip(proportional_char_budgets(payload, total_budget_chars))
     {
-        messages_array[message.index]["content"] =
-            Value::String(truncate_text_to_limit(&message.content, message_budget));
+        messages_array[message.index]["content"] = Value::String(
+            truncate_text_to_limit(&message.content, message_budget),
+        );
     }
     Some(cloned)
 }
@@ -224,18 +233,21 @@ pub fn apply_middle_out(
     }
 
     let mut cloned = value_with_model(&payload.raw, primary_model);
-    let messages_array = cloned.get_mut("messages").and_then(Value::as_array_mut)?;
+    let messages_array =
+        cloned.get_mut("messages").and_then(Value::as_array_mut)?;
     for (message, message_budget) in payload
         .messages
         .iter()
         .zip(proportional_char_budgets(payload, total_budget_chars))
     {
-        messages_array[message.index]["content"] =
-            Value::String(middle_out_text_to_limit(&message.content, message_budget));
+        messages_array[message.index]["content"] = Value::String(
+            middle_out_text_to_limit(&message.content, message_budget),
+        );
     }
     Some(cloned)
 }
 
+#[must_use]
 pub fn apply_fallback(
     payload: &ChatCompletionsPayload,
     model_source: &str,
@@ -261,8 +273,9 @@ mod tests {
     use serde_json::json;
 
     use super::{
-        apply_fallback, apply_middle_out, apply_truncate, compute_input_budget_tokens,
-        estimate_input_tokens, extract_fallback_model_candidates, resolve_primary_model,
+        apply_fallback, apply_middle_out, apply_truncate,
+        compute_input_budget_tokens, estimate_input_tokens,
+        extract_fallback_model_candidates, resolve_primary_model,
     };
     use crate::middleware::large_context::parse::parse_chat_completions_payload;
 
@@ -298,7 +311,9 @@ mod tests {
     #[test]
     fn splits_fallback_candidates() {
         assert_eq!(
-            extract_fallback_model_candidates(" openai/gpt-4o-mini , openai/gpt-4o "),
+            extract_fallback_model_candidates(
+                " openai/gpt-4o-mini , openai/gpt-4o "
+            ),
             vec!["openai/gpt-4o-mini", "openai/gpt-4o"]
         );
     }
@@ -311,16 +326,25 @@ mod tests {
     #[test]
     fn fallback_can_apply_without_budget() {
         let payload = payload_with_text("hello");
-        let transformed = apply_fallback(&payload, "openai/gpt-4o-mini,openai/gpt-4o", None, None)
-            .expect("fallback should apply");
+        let transformed = apply_fallback(
+            &payload,
+            "openai/gpt-4o-mini,openai/gpt-4o",
+            None,
+            None,
+        )
+        .expect("fallback should apply");
         assert_eq!(transformed["model"], "openai/gpt-4o");
     }
 
     #[test]
     fn fallback_without_second_candidate_returns_none() {
         let payload = payload_with_text("hello");
-        let transformed =
-            apply_fallback(&payload, "openai/gpt-4o-mini", Some(120_000), Some(115_200));
+        let transformed = apply_fallback(
+            &payload,
+            "openai/gpt-4o-mini",
+            Some(120_000),
+            Some(115_200),
+        );
 
         assert!(transformed.is_none());
     }
@@ -328,8 +352,8 @@ mod tests {
     #[test]
     fn truncate_shortens_text() {
         let payload = payload_with_text(&"hello world ".repeat(50));
-        let transformed =
-            apply_truncate(&payload, "openai/gpt-4o-mini", 20).expect("truncate should apply");
+        let transformed = apply_truncate(&payload, "openai/gpt-4o-mini", 20)
+            .expect("truncate should apply");
         let content = transformed["messages"][0]["content"]
             .as_str()
             .expect("content should be text");
@@ -339,10 +363,11 @@ mod tests {
 
     #[test]
     fn middle_out_preserves_edges() {
-        let payload =
-            payload_with_text("HEAD:abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz:TAIL");
-        let transformed =
-            apply_middle_out(&payload, "openai/gpt-4o-mini", 10).expect("middle-out should apply");
+        let payload = payload_with_text(
+            "HEAD:abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz:TAIL",
+        );
+        let transformed = apply_middle_out(&payload, "openai/gpt-4o-mini", 10)
+            .expect("middle-out should apply");
         let content = transformed["messages"][0]["content"]
             .as_str()
             .expect("content should be text");
@@ -353,8 +378,8 @@ mod tests {
     #[test]
     fn middle_out_handles_long_unbroken_string() {
         let payload = payload_with_text(&"x".repeat(20_000));
-        let transformed =
-            apply_middle_out(&payload, "openai/gpt-4o-mini", 100).expect("middle-out should apply");
+        let transformed = apply_middle_out(&payload, "openai/gpt-4o-mini", 100)
+            .expect("middle-out should apply");
         let content = transformed["messages"][0]["content"]
             .as_str()
             .expect("content should be text");

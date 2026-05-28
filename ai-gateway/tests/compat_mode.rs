@@ -41,7 +41,7 @@ impl Drop for OpenAiKeyGuard {
 }
 
 /// Without Postgres: `compat_mode` + `features=none` can start and complete one
-/// `/ai/chat/completions`; when the body uses an Anthropic model name it should
+/// `/v1/chat/completions`; when the body uses an Anthropic model name it should
 /// still hit the OpenAI mock (forced OpenAI).
 #[tokio::test]
 #[serial_test::serial(default_mock)]
@@ -77,7 +77,7 @@ async fn compat_mode_starts_and_routes_unified_api_to_openai() {
 
     let request = Request::builder()
         .method(Method::POST)
-        .uri("http://router.alephant.test/ai/chat/completions")
+        .uri("http://router.alephant.test/v1/chat/completions")
         .header("content-type", "application/json")
         .body(request_body)
         .unwrap();

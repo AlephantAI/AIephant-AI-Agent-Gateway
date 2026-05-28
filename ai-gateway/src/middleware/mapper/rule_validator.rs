@@ -3,7 +3,9 @@ use std::fmt;
 use super::{
     capabilities::ProviderCapabilities,
     families::ProviderProtocolFamily,
-    rules::{ProviderRuleSet, ReasoningMode, ResponseFormatMode, ToolChoiceMode},
+    rules::{
+        ProviderRuleSet, ReasoningMode, ResponseFormatMode, ToolChoiceMode,
+    },
 };
 use crate::types::provider::InferenceProvider;
 
@@ -123,12 +125,17 @@ pub fn validate_provider_rules(
     }
 
     if !capabilities.supports_tool_choice
-        && !matches!(rules.request.tool_choice_mode, ToolChoiceMode::Unsupported)
+        && !matches!(
+            rules.request.tool_choice_mode,
+            ToolChoiceMode::Unsupported
+        )
     {
-        return Err(ProviderRuleValidationError::ToolChoiceCapabilityMismatch {
-            provider: capabilities.provider.clone(),
-            tool_choice_mode: rules.request.tool_choice_mode,
-        });
+        return Err(
+            ProviderRuleValidationError::ToolChoiceCapabilityMismatch {
+                provider: capabilities.provider.clone(),
+                tool_choice_mode: rules.request.tool_choice_mode,
+            },
+        );
     }
 
     Ok(())
@@ -142,8 +149,9 @@ mod tests {
             families::ProviderProtocolFamily,
             rules::{
                 FinishReasonMapping, MultimodalMode, ProviderRequestRuleSet,
-                ProviderResponseRuleSet, ProviderRuleSet, ProviderStreamRuleSet, ReasoningMode,
-                ResponseFormatMode, StreamMode, SystemHandling, ToolCallMapping, ToolChoiceMode,
+                ProviderResponseRuleSet, ProviderRuleSet,
+                ProviderStreamRuleSet, ReasoningMode, ResponseFormatMode,
+                StreamMode, SystemHandling, ToolCallMapping, ToolChoiceMode,
                 UsageMapping,
             },
         },
@@ -181,7 +189,8 @@ mod tests {
             },
         };
 
-        let err = super::validate_provider_rules(&capabilities, &rules).expect_err("must fail");
+        let err = super::validate_provider_rules(&capabilities, &rules)
+            .expect_err("must fail");
 
         assert!(matches!(
             err,
@@ -190,7 +199,8 @@ mod tests {
     }
 
     #[test]
-    fn provider_rule_validator_rejects_response_format_mode_without_capability() {
+    fn provider_rule_validator_rejects_response_format_mode_without_capability()
+    {
         let capabilities = ProviderCapabilities {
             provider: InferenceProvider::Anthropic,
             openai_compatible: false,
@@ -220,7 +230,8 @@ mod tests {
             },
         };
 
-        let err = super::validate_provider_rules(&capabilities, &rules).expect_err("must fail");
+        let err = super::validate_provider_rules(&capabilities, &rules)
+            .expect_err("must fail");
 
         assert!(matches!(
             err,

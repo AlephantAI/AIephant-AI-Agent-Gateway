@@ -3,6 +3,7 @@ use std::{
     sync::{Arc, atomic::AtomicBool},
 };
 
+use async_openai::types::responses::CreateResponse;
 use derive_more::{AsRef, From, Into};
 use uuid::Uuid;
 
@@ -114,14 +115,36 @@ pub struct MapperContext {
     /// OpenAI-mapped SSE response; `None` for non-streaming.
     pub anthropic_openai_usage: Option<AnthropicOpenAiUsageCell>,
     /// Unified `chat/completions` used Responses-shaped JSON and was routed to
-    /// `/v1/responses`; translate upstream Responses SSE / JSON to Chat
-    /// Completions for the client (e.g. Cursor).
+    /// `/v1/responses`; IDE adaptation maps upstream Responses SSE / JSON back
+    /// to Chat Completions for the client (e.g. Cursor).
     pub unified_responses_bridge_chat_completions_sse: bool,
+    /// When true, mapper skipped semantic body conversion for this
+    /// round-trip; response mapping reads this from [`MapperContext`]
+    /// copied onto the upstream [`http::Response`].
+    pub native_semantic_passthrough: bool,
+    /// Cursor IDE + OpenAI-compatible upstream: client called `/v1/responses`
+    /// but the gateway translated the request to `chat/completions`; map the
+    /// upstream Chat Completions stream / JSON back to Responses API shape.
+    pub cursor_responses_via_chat_completions: bool,
+    /// Original client [`CreateResponse`] when
+    /// [`Self::cursor_responses_via_chat_completions`] is enabled.
+    pub cursor_responses_origin: Option<CreateResponse>,
+    /// Client expects Responses API wire on the HTTP response (e.g. Codex VS
+    /// Code). When true, do not use the unified `chat/completions` shortcut
+    /// that returns upstream Chat Completions SSE unchanged.
+    pub client_expects_responses_wire: bool,
 }
 
+/// Request extension: mapper skips
+/// [`crate::middleware::mapper::EndpointConverter`] semantic body conversion
+/// for this round-trip when paired with
+/// [`MapperContext::native_semantic_passthrough`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct NativeSemanticPassthrough;
+
 /// Marker: unified `chat/completions` redirected to Responses API due to
-/// Responses-shaped body; mapper bridges the upstream stream back to Chat
-/// Completions for the client.
+/// Responses-shaped body; IDE adaptation bridges the upstream stream / JSON
+/// back to Chat Completions for the client.
 #[derive(Debug, Clone, Copy)]
 pub struct UnifiedChatCompletionsResponsesBridge;
 
@@ -159,6 +182,18 @@ pub struct UnifiedImplicitModelFallbackContext {
 /// catalog / `model-mapping` resolution (body `model` kept verbatim).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct MasterKeyUnifiedModelPassthrough;
+
+/// Unified API has already enforced virtual-key model policy for this request.
+/// Mapper must not run allowed_models / blocked_models a second time.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct UnifiedModelPolicyChecked;
+
+/// Unified API explicit model should bypass provider catalog/model mapping.
+/// This does not change the target provider, is not
+/// [`NativeSemanticPassthrough`], is not [`MasterKeyUnifiedModelPassthrough`],
+/// and does not bypass IDE/request/ response adaptation.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct UnifiedModelBodyPassthrough;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LargeContextAction {

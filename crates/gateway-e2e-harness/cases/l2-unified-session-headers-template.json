@@ -3,7 +3,7 @@
   "tier": "L2",
   "intent": "Unified API with alephant session headers should still process successfully",
   "profile": ["full"],
-  "curl": "curl -X POST \"$GATEWAY_BASE/v1/chat/completions\" -H \"Authorization: Bearer $ALEPHANT_CONTROL_PLANE_API_KEY\" -H \"Alephant-Session-Id: s-template-001\" -H \"Alephant-Session-Path: flow/main\" -H \"Alephant-Session-Name: e2e-template\" -H \"Content-Type: application/json\" -d '{\"model\":\"openai/gpt-4o-mini\",\"messages\":[{\"role\":\"user\",\"content\":\"session-headers-template\"}],\"max_tokens\":8}'",
+  "curl": "curl -X POST \"$GATEWAY_BASE/v1/chat/completions\" -H \"Authorization: Bearer $ALEPHANT_CONTROL_OPENROUTER_API_KEY\" -H \"Alephant-Session-Id: s-template-001\" -H \"Alephant-Session-Path: flow/main\" -H \"Alephant-Session-Name: e2e-template\" -H \"Content-Type: application/json\" -d '{\"model\":\"openai/gpt-4o-mini\",\"messages\":[{\"role\":\"user\",\"content\":\"session-headers-template\"}],\"max_tokens\":8}'",
   "assertions": {
     "httpStatus": 200
   }

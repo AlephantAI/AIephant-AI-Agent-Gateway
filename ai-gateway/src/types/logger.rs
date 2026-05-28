@@ -51,7 +51,10 @@ fn skip_cache_reference_id_sentinel(v: &Option<String>) -> bool {
         None => true,
         Some(s) => {
             let t = s.trim();
-            t.is_empty() || t.eq_ignore_ascii_case("00000000-0000-0000-0000-000000000000")
+            t.is_empty()
+                || t.eq_ignore_ascii_case(
+                    "00000000-0000-0000-0000-000000000000",
+                )
         }
     }
 }
@@ -96,7 +99,8 @@ pub struct AlephantLogMetadata {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub prompt_version_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub prompt_inputs: Option<std::collections::HashMap<String, serde_json::Value>>,
+    pub prompt_inputs:
+        Option<std::collections::HashMap<String, serde_json::Value>>,
     /// Registry / resolved model for ingest (`alephantMeta.gatewayModel`).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub gateway_model: Option<String>,
@@ -137,7 +141,8 @@ impl AlephantLogMetadata {
             .transpose()?;
         let omit_request_log = headers.get("alephant-omit-request").is_some();
         let omit_response_log = headers.get("alephant-omit-response").is_some();
-        let webhook_enabled = headers.remove("x-alephant-webhook-enabled").is_some();
+        let webhook_enabled =
+            headers.remove("x-alephant-webhook-enabled").is_some();
         let posthog_api_key = headers
             .remove("x-alephant-posthog-api-key")
             .map(|v| v.to_str().map(std::borrow::ToOwned::to_owned))
@@ -150,11 +155,12 @@ impl AlephantLogMetadata {
             .remove("x-alephant-lytix-key")
             .map(|v| v.to_str().map(std::borrow::ToOwned::to_owned))
             .transpose()?;
-        let (prompt_id, prompt_version_id, prompt_inputs) = if let Some(ctx) = prompt_ctx {
-            (Some(ctx.prompt_id), ctx.prompt_version_id, ctx.inputs)
-        } else {
-            (None, None, None)
-        };
+        let (prompt_id, prompt_version_id, prompt_inputs) =
+            if let Some(ctx) = prompt_ctx {
+                (Some(ctx.prompt_id), ctx.prompt_version_id, ctx.inputs)
+            } else {
+                (None, None, None)
+            };
 
         Ok(Self {
             model_override,
@@ -165,7 +171,9 @@ impl AlephantLogMetadata {
             posthog_host,
             lytix_key,
             gateway_router_id: router_id,
-            gateway_deployment_target: deployment_target.log_label().to_string(),
+            gateway_deployment_target: deployment_target
+                .log_label()
+                .to_string(),
             prompt_id,
             prompt_version_id,
             prompt_inputs,
@@ -183,8 +191,12 @@ impl AlephantLogMetadata {
         })
     }
 
-    pub fn apply_large_context_decision(&mut self, decision: &LargeContextDecision) {
-        self.large_context_handler = Some(decision.handler.as_str().to_string());
+    pub fn apply_large_context_decision(
+        &mut self,
+        decision: &LargeContextDecision,
+    ) {
+        self.large_context_handler =
+            Some(decision.handler.as_str().to_string());
         self.large_context_action = Some(decision.action.as_str().to_string());
         self.large_context_original_model = decision.original_model.clone();
         self.large_context_effective_model = decision.effective_model.clone();
@@ -540,7 +552,9 @@ mod tests {
             .path("/v1/chat/completions".to_string())
             .request_created_at(request_created_at)
             .is_stream(false)
-            .cache_reference_id(Some("00000000-0000-0000-0000-000000000000".to_string()))
+            .cache_reference_id(Some(
+                "00000000-0000-0000-0000-000000000000".to_string(),
+            ))
             .build();
         let json_nil = serde_json::to_string(&with_nil_placeholder).unwrap();
         assert!(
@@ -599,7 +613,10 @@ mod tests {
             "x-alephant-model-override",
             HeaderValue::from_static("gpt-4o-mini"),
         );
-        headers.insert("x-alephant-webhook-enabled", HeaderValue::from_static("1"));
+        headers.insert(
+            "x-alephant-webhook-enabled",
+            HeaderValue::from_static("1"),
+        );
         headers.insert(
             "x-alephant-posthog-api-key",
             HeaderValue::from_static("ph-key"),
@@ -608,9 +625,12 @@ mod tests {
             "x-alephant-posthog-host",
             HeaderValue::from_static("https://ph.example"),
         );
-        headers.insert("x-alephant-lytix-key", HeaderValue::from_static("lytix"));
-        headers.insert("alephant-omit-request", HeaderValue::from_static("true"));
-        headers.insert("alephant-omit-response", HeaderValue::from_static("true"));
+        headers
+            .insert("x-alephant-lytix-key", HeaderValue::from_static("lytix"));
+        headers
+            .insert("alephant-omit-request", HeaderValue::from_static("true"));
+        headers
+            .insert("alephant-omit-response", HeaderValue::from_static("true"));
 
         let meta = AlephantLogMetadata::from_headers(
             &mut headers,
@@ -644,11 +664,15 @@ mod tests {
             .build();
         let value = serde_json::to_value(&r).expect("serialize response");
         assert_eq!(
-            value.get("originPromptTokens").and_then(|v| v.as_i64()),
+            value
+                .get("originPromptTokens")
+                .and_then(serde_json::Value::as_i64),
             Some(4_096)
         );
         assert_eq!(
-            value.get("promptTokens").and_then(|v| v.as_i64()),
+            value
+                .get("promptTokens")
+                .and_then(serde_json::Value::as_i64),
             Some(2_048)
         );
     }
@@ -762,7 +786,8 @@ mod tests {
             .time_to_first_token(15)
             .response_created_at(Utc::now())
             .build();
-        let json = serde_json::to_string(&Log::new(request_log, response_log)).unwrap();
+        let json = serde_json::to_string(&Log::new(request_log, response_log))
+            .unwrap();
         assert!(json.contains("\"workspaceId\""));
         assert!(
             json.contains("\"storageLocation\":\"s3\""),
@@ -806,7 +831,8 @@ mod tests {
             .request_created_at(request_created_at)
             .is_stream(false)
             .build();
-        let mut value = serde_json::to_value(&built).expect("serialize RequestLog");
+        let mut value =
+            serde_json::to_value(&built).expect("serialize RequestLog");
         let obj = value
             .as_object_mut()
             .expect("RequestLog serializes to a JSON object");
@@ -814,8 +840,8 @@ mod tests {
             .remove("workspaceId")
             .expect("serialized RequestLog must contain workspaceId");
         obj.insert("organizationId".to_string(), workspace);
-        let decoded: RequestLog =
-            serde_json::from_value(value).expect("deserialize with organizationId alias");
+        let decoded: RequestLog = serde_json::from_value(value)
+            .expect("deserialize with organizationId alias");
         assert_eq!(decoded.workspace_id, built.workspace_id);
     }
 
@@ -838,13 +864,14 @@ mod tests {
             .request_created_at(request_created_at)
             .is_stream(false)
             .build();
-        let mut value = serde_json::to_value(&built).expect("serialize RequestLog");
+        let mut value =
+            serde_json::to_value(&built).expect("serialize RequestLog");
         let obj = value
             .as_object_mut()
             .expect("RequestLog serializes to a JSON object");
         obj.remove("storageLocation");
-        let decoded: RequestLog =
-            serde_json::from_value(value).expect("deserialize without storageLocation");
+        let decoded: RequestLog = serde_json::from_value(value)
+            .expect("deserialize without storageLocation");
         assert_eq!(decoded.storage_location, "clickhouse");
     }
 
@@ -878,7 +905,8 @@ mod tests {
             .response_created_at(Utc::now())
             .response_body("{}".to_string())
             .build();
-        let json = serde_json::to_string(&Log::new(request_log, response_log)).unwrap();
+        let json = serde_json::to_string(&Log::new(request_log, response_log))
+            .unwrap();
         assert!(
             json.contains(r#""body":"{\"x\":1}""#),
             "request should use JSON key body, got {json}",

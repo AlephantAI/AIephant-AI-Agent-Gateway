@@ -15,7 +15,7 @@ s3:
   secret-key: "minioadmin"
 
 alephant:
-  base-url: "http://alephant-mock-server.internal:5150"
+  log-collector-url: "http://alephant-mock-server.internal:5150"
   features: auth
 
 telemetry:

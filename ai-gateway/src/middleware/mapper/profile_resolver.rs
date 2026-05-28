@@ -3,17 +3,20 @@ use std::sync::OnceLock;
 use super::{
     capabilities::ProviderCapabilities,
     families::ProviderProtocolFamily,
-    non_stream_profile::{NonStreamFormatProfile, RequestProfile, ResponseProfile},
+    non_stream_profile::{
+        NonStreamFormatProfile, RequestProfile, ResponseProfile,
+    },
     rule_validator::{ProviderRuleValidationError, validate_provider_rules},
     rules::{
-        FinishReasonMapping, ProviderRequestRuleSet, ProviderResponseRuleSet, ProviderRuleSet,
-        ProviderStreamRuleSet, ToolCallMapping, UsageMapping,
+        FinishReasonMapping, ProviderRequestRuleSet, ProviderResponseRuleSet,
+        ProviderRuleSet, ProviderStreamRuleSet, ToolCallMapping, UsageMapping,
     },
 };
 use crate::{
     config::mapper_profiles::{
-        MapperCapabilitiesPatch, MapperProfileCatalogEntry, MapperProfilesConfig,
-        RequestProfilePatch, ResponseProfilePatch, StreamProfilePatch,
+        MapperCapabilitiesPatch, MapperProfileCatalogEntry,
+        MapperProfilesConfig, RequestProfilePatch, ResponseProfilePatch,
+        StreamProfilePatch,
     },
     types::provider::InferenceProvider,
 };
@@ -44,11 +47,12 @@ fn resolve_mapper_metadata_from_config(
         .and_then(|entry| entry.family)
         .or_else(|| provider_entry.and_then(|entry| entry.family))
         .unwrap_or_else(|| ProviderProtocolFamily::for_provider(provider));
-    let family_entry = config
-        .family_defaults
-        .get(&family)
-        .unwrap_or_else(|| panic!("missing family mapper baseline for {family:?}"));
-    let mut metadata = resolved_from_family_entry(provider.clone(), family, family_entry);
+    let family_entry =
+        config.family_defaults.get(&family).unwrap_or_else(|| {
+            panic!("missing family mapper baseline for {family:?}")
+        });
+    let mut metadata =
+        resolved_from_family_entry(provider.clone(), family, family_entry);
 
     apply_catalog_entry(&mut metadata, provider_entry);
     apply_catalog_entry(&mut metadata, model_entry);
@@ -68,24 +72,24 @@ fn resolved_from_family_entry(
     family: ProviderProtocolFamily,
     entry: &MapperProfileCatalogEntry,
 ) -> ResolvedMapperMetadata {
-    let capabilities_patch = entry
-        .capabilities
-        .as_ref()
-        .unwrap_or_else(|| panic!("family mapper baseline missing capabilities for {family:?}"));
-    let request_patch = entry
-        .request
-        .as_ref()
-        .unwrap_or_else(|| panic!("family mapper baseline missing request profile for {family:?}"));
+    let capabilities_patch = entry.capabilities.as_ref().unwrap_or_else(|| {
+        panic!("family mapper baseline missing capabilities for {family:?}")
+    });
+    let request_patch = entry.request.as_ref().unwrap_or_else(|| {
+        panic!("family mapper baseline missing request profile for {family:?}")
+    });
     let response_patch = entry.response.as_ref().unwrap_or_else(|| {
         panic!("family mapper baseline missing response profile for {family:?}")
     });
-    let stream_patch = entry
-        .stream
-        .as_ref()
-        .unwrap_or_else(|| panic!("family mapper baseline missing stream profile for {family:?}"));
+    let stream_patch = entry.stream.as_ref().unwrap_or_else(|| {
+        panic!("family mapper baseline missing stream profile for {family:?}")
+    });
 
     ResolvedMapperMetadata {
-        capabilities: provider_capabilities_from_patch(provider.clone(), capabilities_patch),
+        capabilities: provider_capabilities_from_patch(
+            provider.clone(),
+            capabilities_patch,
+        ),
         rules: provider_rules_from_patches(
             provider.clone(),
             family,
@@ -119,13 +123,17 @@ fn provider_capabilities_from_patch(
             .expect("family capabilities must define supports_tool_choice"),
         supports_parallel_tool_calls: patch
             .supports_parallel_tool_calls
-            .expect("family capabilities must define supports_parallel_tool_calls"),
+            .expect(
+                "family capabilities must define supports_parallel_tool_calls",
+            ),
         supports_thinking: patch
             .supports_thinking
             .expect("family capabilities must define supports_thinking"),
         supports_streaming_reasoning: patch
             .supports_streaming_reasoning
-            .expect("family capabilities must define supports_streaming_reasoning"),
+            .expect(
+                "family capabilities must define supports_streaming_reasoning",
+            ),
     }
 }
 
@@ -146,9 +154,9 @@ fn provider_rules_from_patches(
             tool_choice_mode: request
                 .tool_choice_mode
                 .expect("family request patch must define tool_choice_mode"),
-            response_format_mode: request
-                .response_format_mode
-                .expect("family request patch must define response_format_mode"),
+            response_format_mode: request.response_format_mode.expect(
+                "family request patch must define response_format_mode",
+            ),
             reasoning_mode: request
                 .reasoning_mode
                 .expect("family request patch must define reasoning_mode"),
@@ -164,14 +172,14 @@ fn provider_rules_from_patches(
                 ),
             ),
             tool_call_mapping: tool_call_mapping_from_mode(
-                response
-                    .tool_call_mapping_mode
-                    .expect("family response patch must define tool_call_mapping_mode"),
+                response.tool_call_mapping_mode.expect(
+                    "family response patch must define tool_call_mapping_mode",
+                ),
             ),
             usage_mapping: usage_mapping_from_mode(
-                response
-                    .usage_mapping_mode
-                    .expect("family response patch must define usage_mapping_mode"),
+                response.usage_mapping_mode.expect(
+                    "family response patch must define usage_mapping_mode",
+                ),
             ),
         },
         stream: ProviderStreamRuleSet {
@@ -195,15 +203,15 @@ fn non_stream_profile_from_patches(
             system_handling: request
                 .system_handling
                 .expect("family request patch must define system_handling"),
-            message_content_mode: request
-                .message_content_mode
-                .expect("family request patch must define message_content_mode"),
+            message_content_mode: request.message_content_mode.expect(
+                "family request patch must define message_content_mode",
+            ),
             tool_choice_mode: request
                 .tool_choice_mode
                 .expect("family request patch must define tool_choice_mode"),
-            response_format_mode: request
-                .response_format_mode
-                .expect("family request patch must define response_format_mode"),
+            response_format_mode: request.response_format_mode.expect(
+                "family request patch must define response_format_mode",
+            ),
             reasoning_mode: request
                 .reasoning_mode
                 .expect("family request patch must define reasoning_mode"),
@@ -215,13 +223,15 @@ fn non_stream_profile_from_patches(
             content_mode: response
                 .content_mode
                 .expect("family response patch must define content_mode"),
-            tool_call_mapping_mode: response
-                .tool_call_mapping_mode
-                .expect("family response patch must define tool_call_mapping_mode"),
-            finish_reason_mapping_mode: response.finish_reason_mapping_mode.expect(
-                "family response patch must define \
-                     finish_reason_mapping_mode",
+            tool_call_mapping_mode: response.tool_call_mapping_mode.expect(
+                "family response patch must define tool_call_mapping_mode",
             ),
+            finish_reason_mapping_mode: response
+                .finish_reason_mapping_mode
+                .expect(
+                    "family response patch must define \
+                     finish_reason_mapping_mode",
+                ),
             usage_mapping_mode: response
                 .usage_mapping_mode
                 .expect("family response patch must define usage_mapping_mode"),
@@ -275,7 +285,10 @@ fn apply_capabilities_patch(
     }
 }
 
-fn apply_request_patch(metadata: &mut ResolvedMapperMetadata, patch: &RequestProfilePatch) {
+fn apply_request_patch(
+    metadata: &mut ResolvedMapperMetadata,
+    patch: &RequestProfilePatch,
+) {
     if let Some(value) = patch.system_handling {
         metadata.rules.request.system_handling = value;
         metadata.non_stream_profile.request.system_handling = value;
@@ -301,16 +314,21 @@ fn apply_request_patch(metadata: &mut ResolvedMapperMetadata, patch: &RequestPro
     }
 }
 
-fn apply_response_patch(metadata: &mut ResolvedMapperMetadata, patch: &ResponseProfilePatch) {
+fn apply_response_patch(
+    metadata: &mut ResolvedMapperMetadata,
+    patch: &ResponseProfilePatch,
+) {
     if let Some(value) = patch.content_mode {
         metadata.non_stream_profile.response.content_mode = value;
     }
     if let Some(value) = patch.tool_call_mapping_mode {
-        metadata.rules.response.tool_call_mapping = tool_call_mapping_from_mode(value);
+        metadata.rules.response.tool_call_mapping =
+            tool_call_mapping_from_mode(value);
         metadata.non_stream_profile.response.tool_call_mapping_mode = value;
     }
     if let Some(value) = patch.finish_reason_mapping_mode {
-        metadata.rules.response.finish_reason_mapping = finish_reason_mapping_from_mode(value);
+        metadata.rules.response.finish_reason_mapping =
+            finish_reason_mapping_from_mode(value);
         metadata
             .non_stream_profile
             .response
@@ -374,14 +392,16 @@ mod tests {
         config::mapper_profiles::MapperProfilesConfig,
         middleware::mapper::{
             capability_data::default_provider_capabilities,
-            non_stream_profile_data::default_non_stream_profile, rule_data::default_provider_rules,
+            non_stream_profile_data::default_non_stream_profile,
+            rule_data::default_provider_rules,
             rule_validator::ProviderRuleValidationError, rules::ReasoningMode,
         },
         types::provider::InferenceProvider,
     };
 
     #[test]
-    fn resolve_mapper_metadata_applies_model_override_after_provider_and_family_defaults() {
+    fn resolve_mapper_metadata_applies_model_override_after_provider_and_family_defaults()
+     {
         let metadata = resolve_mapper_metadata(
             &InferenceProvider::Named("deepseek".into()),
             Some("deepseek/deepseek-reasoner"),
@@ -401,7 +421,7 @@ mod tests {
 
     #[test]
     fn resolve_mapper_metadata_falls_back_to_provider_or_family_default_when_model_has_no_override()
-    {
+     {
         let metadata = resolve_mapper_metadata(
             &InferenceProvider::Named("deepseek".into()),
             Some("deepseek/deepseek-chat"),
@@ -422,8 +442,8 @@ mod tests {
     #[test]
     fn provider_level_wrappers_match_resolver_defaults() {
         let provider = InferenceProvider::Anthropic;
-        let metadata =
-            resolve_mapper_metadata(&provider, None).expect("provider defaults should be valid");
+        let metadata = resolve_mapper_metadata(&provider, None)
+            .expect("provider defaults should be valid");
 
         assert_eq!(
             default_provider_capabilities(&provider),
@@ -439,7 +459,7 @@ mod tests {
     #[test]
     fn resolve_mapper_metadata_from_config_rejects_invalid_merged_metadata() {
         let config: MapperProfilesConfig = serde_yml::from_str(
-            r#"
+            r"
 family-defaults:
   openai-compatible:
     family: openai-compatible
@@ -469,7 +489,7 @@ model-overrides:
   custom/model:
     capabilities:
       supports-response-format: false
-"#,
+",
         )
         .expect("synthetic config should deserialize");
 

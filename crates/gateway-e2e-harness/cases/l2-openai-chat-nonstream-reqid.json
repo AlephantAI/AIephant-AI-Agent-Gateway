@@ -3,7 +3,7 @@
   "tier": "L2",
   "intent": "Unified API OpenAI non-stream baseline with x-request-id header existence",
   "profile": ["full"],
-  "curl": "curl -X POST \"$GATEWAY_BASE/v1/chat/completions\" -H \"Authorization: Bearer $ALEPHANT_CONTROL_PLANE_API_KEY\" -H \"Content-Type: application/json\" -d '{\"model\":\"openai/gpt-4o-mini\",\"messages\":[{\"role\":\"user\",\"content\":\"openai-nonstream-reqid\"}],\"max_tokens\":8}'",
+  "curl": "curl -X POST \"$GATEWAY_BASE/v1/chat/completions\" -H \"Authorization: Bearer $ALEPHANT_CONTROL_OPENROUTER_API_KEY\" -H \"Content-Type: application/json\" -d '{\"model\":\"openai/gpt-4o-mini\",\"messages\":[{\"role\":\"user\",\"content\":\"openai-nonstream-reqid\"}],\"max_tokens\":8}'",
   "assertions": {
     "httpStatus": 200,
     "headers": {

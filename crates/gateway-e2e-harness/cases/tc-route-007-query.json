@@ -2,7 +2,7 @@
   "caseId": "ROUTE-007",
   "tier": "L2",
   "intent": "Query string on unified path",
-  "curl": "curl -X POST \"$GATEWAY_BASE\"/v1/chat/completions?trace=route007 -H \"Authorization: Bearer legend\" -H \"Content-Type: application/json\" -d '{\"model\":\"openai/gpt-4o-mini\",\"messages\":[{\"role\":\"user\",\"content\":\"route-007\"}],\"max_tokens\":4}'",
+  "curl": "curl -X POST \"$GATEWAY_BASE\"/v1/chat/completions?trace=route007 -H \"Authorization: Bearer $ALEPHANT_CONTROL_OPENROUTER_API_KEY\" -H \"Content-Type: application/json\" -d '{\"model\":\"openai/gpt-4o-mini\",\"messages\":[{\"role\":\"user\",\"content\":\"route-007\"}],\"max_tokens\":4}'",
   "assertions": {
     "httpStatus": 200,
     "json": {

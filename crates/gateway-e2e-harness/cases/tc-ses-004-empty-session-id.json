@@ -1,0 +1,19 @@
+{
+  "caseId": "SES-004",
+  "tier": "L1",
+  "intent": "Empty Alephant-Session-Id header treated as absent — request succeeds without session context",
+  "curl": "curl -X POST \"$GATEWAY_BASE\"/v1/chat/completions -H \"Authorization: Bearer $ALEPHANT_CONTROL_OPENROUTER_API_KEY\" -H \"Alephant-Session-Id: \" -H \"Content-Type: application/json\" -d '{\"model\":\"openai/gpt-4o-mini\",\"messages\":[{\"role\":\"user\",\"content\":\"ses-004\"}],\"max_tokens\":4}'",
+  "assertions": {
+    "httpStatus": 200,
+    "json": {
+      "pathExists": [
+        "/choices",
+        "/choices/0/message"
+      ],
+      "arrayMinLength": {
+        "/choices": 1
+      }
+    }
+  },
+  "profile": ["gate", "full"]
+}

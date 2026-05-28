@@ -32,7 +32,7 @@ pub fn show_welcome_banner(addr: &SocketAddr) {
 
     let curl_example = format!(
         "\x1b[0mcurl --request POST \\
-  --url http://{addr:?}/ai/chat/completions \
+  --url http://{addr:?}/v1/chat/completions \
          \\
   --header 'Content-Type: application/json' \\
   --data '{{

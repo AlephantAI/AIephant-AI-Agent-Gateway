@@ -17,7 +17,9 @@ use tower::{Layer, Service};
 use super::{memory::MemoryInFlightLimiter, redis_release, redis_script};
 use crate::{
     app_state::AppState,
-    config::gateway_in_flight_limit::{GatewayInFlightBackend, GatewayInFlightLimitConfig},
+    config::gateway_in_flight_limit::{
+        GatewayInFlightBackend, GatewayInFlightLimitConfig,
+    },
     error::{
         init::InitError,
         invalid_req::{InvalidRequestError, TooManyRequestsError},
@@ -36,7 +38,8 @@ fn log_redis_degraded_throttled(summary: &str) {
     static LAST: Mutex<Option<Instant>> = Mutex::new(None);
     let now = Instant::now();
     let mut g = LAST.lock().expect("degraded log mutex poisoned");
-    let should_log = g.map_or(true, |t| now.duration_since(t) >= Duration::from_secs(5));
+    let should_log =
+        g.is_none_or(|t| now.duration_since(t) >= Duration::from_secs(5));
     if should_log {
         *g = Some(now);
         tracing::error!(
@@ -78,7 +81,8 @@ impl GatewayInFlightLimitLayer {
             .clone()
             .unwrap_or_default();
         let redis_counter_key = format!("{}inflight", cfg.redis_key_prefix);
-        let memory = Arc::new(MemoryInFlightLimiter::new(cfg.max_concurrent.max(1)));
+        let memory =
+            Arc::new(MemoryInFlightLimiter::new(cfg.max_concurrent.max(1)));
         let use_redis = Arc::new(AtomicBool::new(false));
         if cfg.enabled && matches!(cfg.backend, GatewayInFlightBackend::Redis) {
             match app_state.redis() {
@@ -117,8 +121,11 @@ impl GatewayInFlightLimitLayer {
             let use_redis = state.use_redis.clone();
             let metrics = state.metrics.clone();
             tokio::spawn(async move {
-                let mut interval = tokio::time::interval(Duration::from_secs(30));
-                interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+                let mut interval =
+                    tokio::time::interval(Duration::from_secs(30));
+                interval.set_missed_tick_behavior(
+                    tokio::time::MissedTickBehavior::Skip,
+                );
                 loop {
                     interval.tick().await;
                     if use_redis.load(Ordering::Relaxed) {
@@ -126,9 +133,13 @@ impl GatewayInFlightLimitLayer {
                     }
                     if let Ok(()) = redis.ping().await {
                         use_redis.store(true, Ordering::Relaxed);
-                        metrics
-                            .rate_limit_redis_degraded_gauge
-                            .record(0, &[opentelemetry::KeyValue::new("layer", "in_flight")]);
+                        metrics.rate_limit_redis_degraded_gauge.record(
+                            0,
+                            &[opentelemetry::KeyValue::new(
+                                "layer",
+                                "in_flight",
+                            )],
+                        );
                         tracing::info!(
                             target: "ai_gateway::gateway_in_flight_limit",
                             "Redis recovered, switching back from in-memory \
@@ -147,30 +158,30 @@ impl GatewayInFlightLimitLayer {
         let max_i64 = i64::from(max);
         let key = state.redis_counter_key.as_str();
 
-        if state.use_redis.load(Ordering::Relaxed) {
-            if let Some(ref redis) = state.redis {
-                match redis
-                    .gateway_in_flight_try_acquire(
-                        acquire_script(),
-                        key,
-                        redis_release::TTL_SECS,
-                        max_i64,
-                    )
-                    .await
-                {
-                    Ok(true) => return Ok(HeldSlot::Redis),
-                    Ok(false) => return Err(()),
-                    Err(e) => {
-                        state.metrics.gateway_in_flight_redis_degraded.add(1, &[]);
-                        log_redis_degraded_throttled(&format!(
-                            "gateway-in-flight-limit: Redis EVAL failed: {e}"
-                        ));
-                        state.use_redis.store(false, Ordering::Relaxed);
-                        state
-                            .metrics
-                            .rate_limit_redis_degraded_gauge
-                            .record(1, &[opentelemetry::KeyValue::new("layer", "in_flight")]);
-                    }
+        if state.use_redis.load(Ordering::Relaxed)
+            && let Some(ref redis) = state.redis
+        {
+            match redis
+                .gateway_in_flight_try_acquire(
+                    acquire_script(),
+                    key,
+                    redis_release::TTL_SECS,
+                    max_i64,
+                )
+                .await
+            {
+                Ok(true) => return Ok(HeldSlot::Redis),
+                Ok(false) => return Err(()),
+                Err(e) => {
+                    state.metrics.gateway_in_flight_redis_degraded.add(1, &[]);
+                    log_redis_degraded_throttled(&format!(
+                        "gateway-in-flight-limit: Redis EVAL failed: {e}"
+                    ));
+                    state.use_redis.store(false, Ordering::Relaxed);
+                    state.metrics.rate_limit_redis_degraded_gauge.record(
+                        1,
+                        &[opentelemetry::KeyValue::new("layer", "in_flight")],
+                    );
                 }
             }
         }
@@ -206,14 +217,20 @@ pub struct GatewayInFlightLimitService<S> {
 
 impl<S> Service<Request> for GatewayInFlightLimitService<S>
 where
-    S: Service<Request, Response = Response, Error = Infallible> + Clone + Send + 'static,
+    S: Service<Request, Response = Response, Error = Infallible>
+        + Clone
+        + Send
+        + 'static,
     S::Future: Send + 'static,
 {
     type Response = Response;
     type Error = Infallible;
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
-    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+    fn poll_ready(
+        &mut self,
+        cx: &mut Context<'_>,
+    ) -> Poll<Result<(), Self::Error>> {
         self.inner.poll_ready(cx)
     }
 
@@ -223,17 +240,18 @@ where
         std::mem::swap(&mut self.inner, &mut inner);
         Box::pin(async move {
             if !state.cfg.enabled {
-                return Ok(inner.call(req).await?);
+                return inner.call(req).await;
             }
             let max = state.cfg.max_concurrent.max(1);
             let key = state.redis_counter_key.clone();
 
-            let slot = match GatewayInFlightLimitLayer::try_acquire(&state).await {
-                Ok(s) => s,
-                Err(()) => {
-                    state.metrics.gateway_in_flight_rejected.add(1, &[]);
-                    return Ok(GatewayInFlightLimitLayer::too_many(max));
-                }
+            let slot = if let Ok(s) =
+                GatewayInFlightLimitLayer::try_acquire(&state).await
+            {
+                s
+            } else {
+                state.metrics.gateway_in_flight_rejected.add(1, &[]);
+                return Ok(GatewayInFlightLimitLayer::too_many(max));
             };
 
             state.metrics.gateway_in_flight_allowed.add(1, &[]);
@@ -260,7 +278,11 @@ where
                         let key_for_task = key.clone();
                         tokio::spawn(async move {
                             if let Err(e) =
-                                redis_release::decr_floor_refresh_ttl(&redis, &key_for_task).await
+                                redis_release::decr_floor_refresh_ttl(
+                                    &redis,
+                                    &key_for_task,
+                                )
+                                .await
                             {
                                 tracing::warn!(
                                     target:
@@ -274,7 +296,8 @@ where
                     })
                 }
             };
-            let wrapped = axum_core::body::Body::new(CountedBody::new(body, on_release));
+            let wrapped =
+                axum_core::body::Body::new(CountedBody::new(body, on_release));
             Ok(http::Response::from_parts(parts, wrapped))
         })
     }

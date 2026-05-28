@@ -1,7 +1,9 @@
 use super::families::ProviderProtocolFamily;
 use crate::types::provider::InferenceProvider;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize,
+)]
 #[serde(rename_all = "kebab-case")]
 pub enum SystemHandling {
     Ignore,
@@ -9,7 +11,9 @@ pub enum SystemHandling {
     FirstClassField,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize,
+)]
 #[serde(rename_all = "kebab-case")]
 pub enum ToolChoiceMode {
     Native,
@@ -18,7 +22,9 @@ pub enum ToolChoiceMode {
     Unsupported,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize,
+)]
 #[serde(rename_all = "kebab-case")]
 pub enum ResponseFormatMode {
     Passthrough,
@@ -26,7 +32,9 @@ pub enum ResponseFormatMode {
     ProviderSpecificHelper,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize,
+)]
 #[serde(rename_all = "kebab-case")]
 pub enum ReasoningMode {
     Passthrough,
@@ -35,7 +43,9 @@ pub enum ReasoningMode {
     Unsupported,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize,
+)]
 #[serde(rename_all = "kebab-case")]
 pub enum MultimodalMode {
     #[serde(rename = "openai-style")]
@@ -45,28 +55,36 @@ pub enum MultimodalMode {
     Unsupported,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize,
+)]
 #[serde(rename_all = "kebab-case")]
 pub enum FinishReasonMapping {
     Passthrough,
     ProviderSpecific,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize,
+)]
 #[serde(rename_all = "kebab-case")]
 pub enum ToolCallMapping {
     Native,
     ProviderSpecific,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize,
+)]
 #[serde(rename_all = "kebab-case")]
 pub enum UsageMapping {
     Passthrough,
     ProviderSpecific,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize,
+)]
 #[serde(rename_all = "kebab-case")]
 pub enum StreamMode {
     #[serde(rename = "openai-sse")]
@@ -153,6 +171,9 @@ mod tests {
             rules.request.response_format_mode,
             super::ResponseFormatMode::Unsupported
         );
-        assert_eq!(rules.stream.stream_mode, super::StreamMode::AnthropicEvents);
+        assert_eq!(
+            rules.stream.stream_mode,
+            super::StreamMode::AnthropicEvents
+        );
     }
 }

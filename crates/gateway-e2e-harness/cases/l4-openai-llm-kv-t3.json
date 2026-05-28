@@ -3,7 +3,7 @@
   "tier": "L4",
   "intent": "LLM KV two-slot bucket: pass when response is cache HIT with alephant-cache-bucket-idx (repeat-safe; prior requests may already warm cache)",
   "profile": ["full"],
-  "curl": "curl -X POST \"$GATEWAY_BASE/v1/chat/completions\" -H \"Authorization: Bearer $ALEPHANT_CONTROL_PLANE_API_KEY\" -H \"Content-Type: application/json\" -H \"Alephant-Cache-Enabled: true\" -H \"Alephant-Cache-Bucket-Max-Size: 2\" -d '{\"model\":\"openai/gpt-4o-mini\",\"messages\":[{\"role\":\"user\",\"content\":\"kv-harness-fixed-prompt-20260417\"}],\"max_tokens\":4}'",
+  "curl": "curl -X POST \"$GATEWAY_BASE/v1/chat/completions\" -H \"Authorization: Bearer $ALEPHANT_CONTROL_OPENROUTER_API_KEY\" -H \"Content-Type: application/json\" -H \"Alephant-Cache-Enabled: true\" -H \"Alephant-Cache-Bucket-Max-Size: 2\" -d '{\"model\":\"openai/gpt-4o-mini\",\"messages\":[{\"role\":\"user\",\"content\":\"kv-harness-fixed-prompt-20260417\"}],\"max_tokens\":4}'",
   "assertions": {
     "httpStatus": 200,
     "headers": {

@@ -78,7 +78,7 @@ def build_case(seq: int, provider_code: str, model_id: str) -> dict:
         separators=(",", ":"),
     )
     curl = (
-        "curl -X POST \"$GATEWAY_BASE/ai/chat/completions\" "
+        "curl -X POST \"$GATEWAY_BASE/v1/chat/completions\" "
         f"-H \"Authorization: Bearer {vk}\" "
         "-H \"Content-Type: application/json\" "
         f"-d '{body_json}'"

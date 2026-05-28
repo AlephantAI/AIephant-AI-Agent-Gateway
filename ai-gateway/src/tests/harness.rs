@@ -21,9 +21,9 @@ pub const MOCK_SERVER_PORT: u16 = 8111;
 pub struct HarnessBuilder {
     mock_args: Option<MockArgs>,
     config: Option<Config>,
-    /// Override alephant `base_url` after mock setup (e.g. for log capture
-    /// server).
-    alephant_base_url_override: Option<Url>,
+    /// Override alephant `log_collector_url` after mock setup (e.g. for log
+    /// capture server).
+    log_collector_url_override: Option<Url>,
 }
 
 impl HarnessBuilder {
@@ -44,8 +44,8 @@ impl HarnessBuilder {
         let mock_args = self
             .mock_args
             .unwrap_or_else(|| MockArgs::builder().build());
-        let alephant_base_url_override = self.alephant_base_url_override;
-        Harness::new(mock_args, config, alephant_base_url_override).await
+        let log_collector_url_override = self.log_collector_url_override;
+        Harness::new(mock_args, config, log_collector_url_override).await
     }
 
     /// No-op in Cloud-only mode — kept for API compatibility with existing
@@ -57,15 +57,18 @@ impl HarnessBuilder {
 
     /// No-op in Cloud-only mode.
     #[must_use]
-    pub fn with_auth_keys(self, _keys: Vec<crate::virtual_key::legacy_key::Key>) -> Self {
+    pub fn with_auth_keys(
+        self,
+        _keys: Vec<crate::virtual_key::legacy_key::Key>,
+    ) -> Self {
         self
     }
 
-    /// Override `config.alephant.base_url` after mock setup (e.g. to point to a
-    /// log capture server).
+    /// Override `config.alephant.log_collector_url` after mock setup (e.g. to
+    /// point to a log capture server).
     #[must_use]
-    pub fn with_alephant_base_url(mut self, url: Url) -> Self {
-        self.alephant_base_url_override = Some(url);
+    pub fn with_log_collector_url(mut self, url: Url) -> Self {
+        self.log_collector_url_override = Some(url);
         self
     }
 }
@@ -79,11 +82,11 @@ impl Harness {
     async fn new(
         mock_args: MockArgs,
         mut config: Config,
-        alephant_base_url_override: Option<Url>,
+        log_collector_url_override: Option<Url>,
     ) -> Self {
         let mock = Mock::new(&mut config, mock_args).await;
-        if let Some(url) = alephant_base_url_override {
-            config.alephant.base_url = url;
+        if let Some(url) = log_collector_url_override {
+            config.alephant.log_collector_url = url;
         }
         let app = App::new(config).await.expect("failed to create app");
         let app_factory = AppFactory::new(app.state.clone(), app);
@@ -124,7 +127,8 @@ impl tower::Service<Request> for Harness {
         let socket_addr = self.socket_addr;
         std::mem::swap(&mut self.app_factory, &mut factory);
         Box::pin(async move {
-            let mut app = factory.into_service().call(socket_addr).await.unwrap();
+            let mut app =
+                factory.into_service().call(socket_addr).await.unwrap();
             poll_fn(|cx| tower::Service::poll_ready(&mut app, cx))
                 .await
                 .unwrap();

@@ -3,7 +3,7 @@
   "tier": "L4",
   "intent": "LLM KV cache template with explicit max-age TTL control",
   "profile": ["full"],
-  "curl": "curl -X POST \"$GATEWAY_BASE/v1/chat/completions\" -H \"Authorization: Bearer $ALEPHANT_CONTROL_PLANE_API_KEY\" -H \"Content-Type: application/json\" -H \"Alephant-Cache-Enabled: true\" -H \"Alephant-Cache-Control: max-age=30\" -H \"Alephant-Cache-Bucket-Max-Size: 2\" -d '{\"model\":\"openai/gpt-4o-mini\",\"messages\":[{\"role\":\"user\",\"content\":\"cache-control-max-age-template\"}],\"max_tokens\":8}'",
+  "curl": "curl -X POST \"$GATEWAY_BASE/v1/chat/completions\" -H \"Authorization: Bearer $ALEPHANT_CONTROL_OPENROUTER_API_KEY\" -H \"Content-Type: application/json\" -H \"Alephant-Cache-Enabled: true\" -H \"Alephant-Cache-Control: max-age=30\" -H \"Alephant-Cache-Bucket-Max-Size: 2\" -d '{\"model\":\"openai/gpt-4o-mini\",\"messages\":[{\"role\":\"user\",\"content\":\"cache-control-max-age-template\"}],\"max_tokens\":8}'",
   "assertions": {
     "httpStatus": 200
   }

@@ -43,7 +43,10 @@ pub async fn choose_default_gateway_model(
     auth: &AuthContext,
     vk_policy: &VkPolicy,
 ) -> Result<String, ApiError> {
-    choose_default_gateway_model_excluding_provider(app_state, path, auth, vk_policy, None).await
+    choose_default_gateway_model_excluding_provider(
+        app_state, path, auth, vk_policy, None,
+    )
+    .await
 }
 
 pub async fn choose_default_gateway_model_excluding_provider(
@@ -73,7 +76,8 @@ pub async fn choose_default_gateway_model_excluding_provider(
     let workspace_id = *auth.org_id.as_ref();
 
     let resolve_started_at = Instant::now();
-    let list = resolve_model_id_list(store, workspace_id, vk_policy, auth).await?;
+    let list =
+        resolve_model_id_list(store, workspace_id, vk_policy, auth).await?;
     let resolve_elapsed_ms = resolve_started_at.elapsed().as_millis();
     let raw_candidate_count = list.len();
     let list = expand_policy_model_list(app_state, list);
@@ -98,10 +102,18 @@ pub async fn choose_default_gateway_model_excluding_provider(
         return Err(InvalidRequestError::NoModelAvailable.into());
     }
 
-    let scored =
-        resolve_scored_gateway_models(store, path, vk_policy, &list, debug_unified).await?;
+    let scored = resolve_scored_gateway_models(
+        store,
+        path,
+        vk_policy,
+        &list,
+        debug_unified,
+    )
+    .await?;
 
-    let Some(chosen) = pick_best_scored_gateway_model(&scored, excluded_provider_code) else {
+    let Some(chosen) =
+        pick_best_scored_gateway_model(&scored, excluded_provider_code)
+    else {
         return Err(InvalidRequestError::NoModelAvailable.into());
     };
     let total_elapsed_ms = started_at.elapsed().as_millis();
@@ -165,7 +177,12 @@ async fn resolve_scored_gateway_models(
         .get_gateway_model_selection_info_batch(
             &candidates
                 .iter()
-                .map(|candidate| (candidate.provider_code.clone(), candidate.model_id.clone()))
+                .map(|candidate| {
+                    (
+                        candidate.provider_code.clone(),
+                        candidate.model_id.clone(),
+                    )
+                })
                 .collect::<Vec<_>>(),
         )
         .await?;
@@ -188,19 +205,21 @@ async fn resolve_scored_gateway_models(
         "choose_default_gateway_model: batch candidate metadata loaded"
     );
 
-    let selection_info_by_key: HashMap<String, Option<serde_json::Value>> = selection_rows
-        .into_iter()
-        .map(|row| {
-            (
-                candidate_lookup_key(&row.provider_code, &row.model_id),
-                row.info.map(|value| value.0),
-            )
-        })
-        .collect();
+    let selection_info_by_key: HashMap<String, Option<serde_json::Value>> =
+        selection_rows
+            .into_iter()
+            .map(|row| {
+                (
+                    candidate_lookup_key(&row.provider_code, &row.model_id),
+                    row.info.map(|value| value.0),
+                )
+            })
+            .collect();
 
     for candidate in &candidates {
         let candidate_started_at = Instant::now();
-        let lookup_key = candidate_lookup_key(&candidate.provider_code, &candidate.model_id);
+        let lookup_key =
+            candidate_lookup_key(&candidate.provider_code, &candidate.model_id);
         let Some(info) = selection_info_by_key.get(&lookup_key) else {
             if debug_unified {
                 tracing::info!(
@@ -215,7 +234,8 @@ async fn resolve_scored_gateway_models(
         if !model_info_allows_unified_path(info.as_ref(), path) {
             if debug_unified {
                 let interaction_type =
-                    model_interaction_type_from_info(info.as_ref()).unwrap_or("unknown");
+                    model_interaction_type_from_info(info.as_ref())
+                        .unwrap_or("unknown");
                 tracing::info!(
                     "[unified_api] choose_default_gateway_model: candidate={} \
                      skipped=interaction_type_mismatch \
@@ -226,10 +246,11 @@ async fn resolve_scored_gateway_models(
             }
             continue;
         }
-        let sum = info.as_ref().map(|j| price_sum_from_info(j)).unwrap_or(0.0);
+        let sum = info.as_ref().map_or(0.0, price_sum_from_info);
         if debug_unified {
             let interaction_type =
-                model_interaction_type_from_info(info.as_ref()).unwrap_or("missing");
+                model_interaction_type_from_info(info.as_ref())
+                    .unwrap_or("missing");
             tracing::info!(
                 "[unified_api] choose_default_gateway_model: candidate={} \
                  accepted=true selection_info_batch_ms={batch_elapsed_ms} \
@@ -256,8 +277,9 @@ fn pick_best_scored_gateway_model(
     let filtered: Vec<(String, f64)> = scored
         .iter()
         .filter(|candidate| {
-            excluded_provider_code
-                .is_none_or(|excluded| !candidate.provider_code.eq_ignore_ascii_case(excluded))
+            excluded_provider_code.is_none_or(|excluded| {
+                !candidate.provider_code.eq_ignore_ascii_case(excluded)
+            })
         })
         .map(|candidate| (candidate.gateway_model.clone(), candidate.price_sum))
         .collect();
@@ -278,7 +300,10 @@ fn candidate_lookup_key(provider_code: &str, model_id: &str) -> String {
 
 /// Expand bare `model_id` from policy into `code/model`; entries that already
 /// include `provider/` are re-normalized before deduping.
-fn expand_policy_model_list(app_state: &AppState, list: Vec<String>) -> Vec<String> {
+fn expand_policy_model_list(
+    app_state: &AppState,
+    list: Vec<String>,
+) -> Vec<String> {
     let index = app_state.get_bare_model_expand_index();
     let mut out: Vec<String> = Vec::new();
     let mut seen_lower: HashSet<String> = HashSet::new();
@@ -312,7 +337,9 @@ enum ModelInteractionSelectionPolicy {
     LegacyCompatible,
 }
 
-fn selection_policy_for_unified_path(path: &str) -> ModelInteractionSelectionPolicy {
+fn selection_policy_for_unified_path(
+    path: &str,
+) -> ModelInteractionSelectionPolicy {
     match path {
         "chat/completions" | "messages" | "responses" => {
             ModelInteractionSelectionPolicy::ChatMultimodalReasoning
@@ -322,7 +349,9 @@ fn selection_policy_for_unified_path(path: &str) -> ModelInteractionSelectionPol
     }
 }
 
-fn model_interaction_type_from_info(info: Option<&serde_json::Value>) -> Option<&str> {
+fn model_interaction_type_from_info(
+    info: Option<&serde_json::Value>,
+) -> Option<&str> {
     info.and_then(|i| {
         i.get("model_interaction_type")
             .and_then(serde_json::Value::as_str)
@@ -335,14 +364,24 @@ fn policy_allows_interaction_type(
 ) -> bool {
     match policy {
         ModelInteractionSelectionPolicy::ChatMultimodalReasoning => {
-            matches!(interaction_type, Some("chat" | "multimodal" | "reasoning"))
+            matches!(
+                interaction_type,
+                Some("chat" | "multimodal" | "reasoning")
+            )
         }
-        ModelInteractionSelectionPolicy::EmbeddingOnly => interaction_type == Some("embedding"),
-        ModelInteractionSelectionPolicy::LegacyCompatible => interaction_type != Some("embedding"),
+        ModelInteractionSelectionPolicy::EmbeddingOnly => {
+            interaction_type == Some("embedding")
+        }
+        ModelInteractionSelectionPolicy::LegacyCompatible => {
+            interaction_type != Some("embedding")
+        }
     }
 }
 
-fn model_info_allows_unified_path(info: Option<&serde_json::Value>, path: &str) -> bool {
+fn model_info_allows_unified_path(
+    info: Option<&serde_json::Value>,
+    path: &str,
+) -> bool {
     let policy = selection_policy_for_unified_path(path);
     let interaction_type = model_interaction_type_from_info(info);
     policy_allows_interaction_type(policy, interaction_type)
@@ -358,8 +397,13 @@ async fn resolve_model_id_list(
         return Ok(v);
     }
 
-    if let Some(v) =
-        load_overrides_list(store, workspace_id, vk.virtual_key_id, auth.department_id).await?
+    if let Some(v) = load_overrides_list(
+        store,
+        workspace_id,
+        vk.virtual_key_id,
+        auth.department_id,
+    )
+    .await?
     {
         return Ok(v);
     }
@@ -367,10 +411,9 @@ async fn resolve_model_id_list(
     if let Some(row) = store
         .get_policy_config_model_access_for_workspace(workspace_id)
         .await?
+        && let Some(ids) = model_ids_from_config_json(&row.config.0)
     {
-        if let Some(ids) = model_ids_from_config_json(&row.config.0) {
-            return Ok(ids);
-        }
+        return Ok(ids);
     }
 
     Ok(vec![])
@@ -391,37 +434,36 @@ async fn load_overrides_list(
     virtual_key_id: Uuid,
     department_id: Uuid,
 ) -> Result<Option<Vec<String>>, ApiError> {
-    if department_id != Uuid::nil() {
-        if let Some(row) = store
-            .get_policy_overrides_by_workspace_and_department(workspace_id, department_id)
+    if department_id != Uuid::nil()
+        && let Some(row) = store
+            .get_policy_overrides_by_workspace_and_department(
+                workspace_id,
+                department_id,
+            )
             .await?
-        {
-            if let Some(ids) = model_ids_from_policy_overrides_json(&row.overrides.0) {
-                if !ids.is_empty() {
-                    return Ok(Some(ids));
-                }
-            }
-        }
+        && let Some(ids) =
+            model_ids_from_policy_overrides_json(&row.overrides.0)
+        && !ids.is_empty()
+    {
+        return Ok(Some(ids));
     }
     if let Some(row) = store
         .get_policy_overrides_for_virtual_key(workspace_id, virtual_key_id)
         .await?
+        && let Some(ids) =
+            model_ids_from_policy_overrides_json(&row.overrides.0)
+        && !ids.is_empty()
     {
-        if let Some(ids) = model_ids_from_policy_overrides_json(&row.overrides.0) {
-            if !ids.is_empty() {
-                return Ok(Some(ids));
-            }
-        }
+        return Ok(Some(ids));
     }
     if let Some(row) = store
         .get_policy_overrides_workspace_default(workspace_id)
         .await?
+        && let Some(ids) =
+            model_ids_from_policy_overrides_json(&row.overrides.0)
+        && !ids.is_empty()
     {
-        if let Some(ids) = model_ids_from_policy_overrides_json(&row.overrides.0) {
-            if !ids.is_empty() {
-                return Ok(Some(ids));
-            }
-        }
+        return Ok(Some(ids));
     }
     Ok(None)
 }
@@ -431,11 +473,15 @@ mod tests {
     use serde_json::json;
 
     use super::{
-        ModelInteractionSelectionPolicy, ScoredGatewayModel, expand_policy_model_list,
-        model_info_allows_unified_path, pick_best_scored_gateway_model,
-        policy_allows_interaction_type, selection_policy_for_unified_path,
+        ModelInteractionSelectionPolicy, ScoredGatewayModel,
+        expand_policy_model_list, model_info_allows_unified_path,
+        pick_best_scored_gateway_model, policy_allows_interaction_type,
+        selection_policy_for_unified_path,
     };
-    use crate::{app::build_test_app, config::Config, discover::router::BareModelExpandIndex};
+    use crate::{
+        app::build_test_app, config::Config,
+        discover::router::BareModelExpandIndex,
+    };
 
     async fn app_state_with_index(
         f: impl FnOnce(&mut BareModelExpandIndex),
@@ -489,8 +535,10 @@ mod tests {
             idx.push("openai", "x");
         })
         .await;
-        let out =
-            expand_policy_model_list(&state, vec!["  ".to_string(), "no-such-bare".to_string()]);
+        let out = expand_policy_model_list(
+            &state,
+            vec!["  ".to_string(), "no-such-bare".to_string()],
+        );
         assert!(out.is_empty());
     }
 
@@ -652,7 +700,8 @@ mod tests {
     }
 
     #[test]
-    fn pick_best_model_returns_none_when_excluded_provider_removes_all_candidates() {
+    fn pick_best_model_returns_none_when_excluded_provider_removes_all_candidates()
+     {
         let chosen = pick_best_scored_gateway_model(
             &[ScoredGatewayModel {
                 gateway_model: "openai/gpt-5.4".to_string(),

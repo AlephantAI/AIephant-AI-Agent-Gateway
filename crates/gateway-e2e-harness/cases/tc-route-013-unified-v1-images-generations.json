@@ -2,8 +2,8 @@
   "caseId": "ROUTE-013",
   "tier": "L2",
   "intent": "Unified POST /v1/images/generations",
-  "requiredEnv": ["ALEPHANT_CONTROL_PLANE_API_KEY"],
-  "curl": "curl -X POST \"$GATEWAY_BASE\"/v1/images/generations -H \"Authorization: Bearer $ALEPHANT_CONTROL_PLANE_API_KEY\" -H \"Content-Type: application/json\" -d '{\"model\":\"dall-e-3\",\"prompt\":\"route-013 abstract icon\",\"n\":1,\"size\":\"1024x1024\"}'",
+  "requiredEnv": ["ALEPHANT_CONTROL_OPENROUTER_API_KEY"],
+  "curl": "curl -X POST \"$GATEWAY_BASE\"/v1/images/generations -H \"Authorization: Bearer $ALEPHANT_CONTROL_OPENROUTER_API_KEY\" -H \"Content-Type: application/json\" -d '{\"model\":\"dall-e-3\",\"prompt\":\"route-013 abstract icon\",\"n\":1,\"size\":\"1024x1024\"}'",
   "assertions": {
     "httpStatus": {
       "in": [

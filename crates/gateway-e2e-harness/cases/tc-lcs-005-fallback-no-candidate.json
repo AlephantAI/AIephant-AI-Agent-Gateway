@@ -2,7 +2,7 @@
   "caseId": "LCS-005",
   "tier": "L2",
   "intent": "fallback without second candidate",
-  "curl": "curl -X POST \"$GATEWAY_BASE\"/v1/chat/completions -H \"Authorization: Bearer legend\" -H \"Alephant-Token-Limit-Exception-Handler: fallback\" -H \"Content-Type: application/json\" -d '{\"model\":\"openai/gpt-4o-mini\",\"messages\":[{\"role\":\"user\",\"content\":\"lcs-005\"}],\"max_tokens\":8}'",
+  "curl": "curl -X POST \"$GATEWAY_BASE\"/v1/chat/completions -H \"Authorization: Bearer $ALEPHANT_CONTROL_OPENROUTER_API_KEY\" -H \"Alephant-Token-Limit-Exception-Handler: fallback\" -H \"Content-Type: application/json\" -d '{\"model\":\"openai/gpt-4o-mini\",\"messages\":[{\"role\":\"user\",\"content\":\"lcs-005\"}],\"max_tokens\":8}'",
   "assertions": {
     "httpStatus": {
       "in": [

@@ -2,7 +2,9 @@ use http::Extensions;
 use typed_builder::TypedBuilder;
 
 use crate::types::{
-    extensions::{AuthContext, MapperContext, MapperProfileContext, ProviderRequestId},
+    extensions::{
+        AuthContext, MapperContext, MapperProfileContext, ProviderRequestId,
+    },
     provider::InferenceProvider,
     router::RouterId,
 };
@@ -58,9 +60,9 @@ mod tests {
         let mapper_profile_context = MapperProfileContext {
             provider: InferenceProvider::Named("deepseek".into()),
             raw_model: "deepseek/deepseek-reasoner".into(),
-            non_stream_profile: default_non_stream_profile(&InferenceProvider::Named(
-                "deepseek".into(),
-            )),
+            non_stream_profile: default_non_stream_profile(
+                &InferenceProvider::Named("deepseek".into()),
+            ),
         };
         let copier = ExtensionsCopier::builder()
             .inference_provider(InferenceProvider::Named("deepseek".into()))
@@ -72,6 +74,10 @@ mod tests {
                 model: None,
                 anthropic_openai_usage: None,
                 unified_responses_bridge_chat_completions_sse: false,
+                native_semantic_passthrough: false,
+                cursor_responses_via_chat_completions: false,
+                cursor_responses_origin: None,
+                client_expects_responses_wire: false,
             })
             .mapper_profile_context(Some(mapper_profile_context.clone()))
             .build();

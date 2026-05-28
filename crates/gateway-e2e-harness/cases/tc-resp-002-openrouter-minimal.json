@@ -1,0 +1,17 @@
+{
+  "caseId": "RESP-002",
+  "tier": "L2",
+  "intent": "TIER: A-strict; POST /v1/responses with ALEPHANT_CONTROL_OPENROUTER_API_KEY (unified openai/gpt-4o-mini)",
+  "requiredEnv": ["ALEPHANT_CONTROL_OPENROUTER_API_KEY"],
+  "curl": "curl -f -X POST \"$GATEWAY_BASE/v1/responses\" -H \"Authorization: Bearer $ALEPHANT_CONTROL_OPENROUTER_API_KEY\" -H \"Content-Type: application/json\" -d '{\"model\":\"openai/gpt-4o-mini\",\"input\":\"resp-002-openrouter\",\"max_output_tokens\":16}'",
+  "assertions": {
+    "httpStatus": 200,
+    "headers": {
+      "exists": ["x-request-id"]
+    },
+    "json": {
+      "pathExists": ["/id", "/object", "/output", "/status"]
+    }
+  },
+  "profile": ["full"]
+}

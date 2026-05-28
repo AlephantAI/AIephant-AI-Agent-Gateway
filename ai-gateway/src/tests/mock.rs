@@ -175,9 +175,15 @@ impl Mock {
             args.alephant_port,
         )
         .await;
-        config.alephant.base_url = Url::parse(&alephant_mock.uri()).unwrap();
+        config.alephant.log_collector_url =
+            Url::parse(&alephant_mock.uri()).unwrap();
 
-        handle_presigned_url_mock(&alephant_mock, &s3_mock, args.stubs.as_ref()).await;
+        handle_presigned_url_mock(
+            &alephant_mock,
+            &s3_mock,
+            args.stubs.as_ref(),
+        )
+        .await;
 
         Self {
             openai_mock,
@@ -371,7 +377,12 @@ impl Mock {
         )
         .await;
 
-        handle_presigned_url_mock(&self.alephant_mock, &self.s3_mock, Some(&stubs)).await;
+        handle_presigned_url_mock(
+            &self.alephant_mock,
+            &self.s3_mock,
+            Some(&stubs),
+        )
+        .await;
     }
 }
 
@@ -393,7 +404,8 @@ async fn start_mock(
     record: bool,
     port: Option<u16>,
 ) -> Stubr {
-    let active_stubs = stubs.as_ref().map(|stubs| stubs.keys().copied().collect());
+    let active_stubs =
+        stubs.as_ref().map(|stubs| stubs.keys().copied().collect());
     let mock = Stubr::try_start_with(
         stub_path,
         active_stubs,
@@ -452,7 +464,9 @@ async fn handle_presigned_url_mock(
     s3_mock: &Stubr,
     stubs: Option<&HashMap<&'static str, Times>>,
 ) {
-    if let Some(expectation) = stubs.and_then(|s| s.get("success:alephant:sign_s3_url")) {
+    if let Some(expectation) =
+        stubs.and_then(|s| s.get("success:alephant:sign_s3_url"))
+    {
         // the reason we do this hack is because the presigned url needs the
         // port of the S3 mock, which is dynamic, so we can't use regular
         // stubs here.
@@ -466,19 +480,22 @@ async fn handle_presigned_url_mock(
             url = %presigned_url,
             "setting up presigned url mock"
         );
-        let presigned_url_mock = ResponseTemplate::new(200).set_body_json(serde_json::json!({
-            "data": {
-                "url": presigned_url
-            }
-        }));
-        stubr::wiremock_rs::Mock::given(stubr::wiremock_rs::matchers::method("POST"))
-            .and(stubr::wiremock_rs::matchers::path(
-                "/v1/router/control-plane/sign-s3-url",
-            ))
-            .respond_with(presigned_url_mock)
-            .expect(expectation.clone())
-            .named("success:alephant:sign_s3_url")
-            .mount(&alephant_mock.http_server)
-            .await;
+        let presigned_url_mock =
+            ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "data": {
+                    "url": presigned_url
+                }
+            }));
+        stubr::wiremock_rs::Mock::given(stubr::wiremock_rs::matchers::method(
+            "POST",
+        ))
+        .and(stubr::wiremock_rs::matchers::path(
+            "/v1/router/control-plane/sign-s3-url",
+        ))
+        .respond_with(presigned_url_mock)
+        .expect(expectation.clone())
+        .named("success:alephant:sign_s3_url")
+        .mount(&alephant_mock.http_server)
+        .await;
     }
 }

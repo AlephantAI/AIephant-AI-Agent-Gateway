@@ -4,7 +4,9 @@ use uuid::Uuid;
 
 use crate::error::auth::AuthError;
 
-#[derive(Debug, AsRef, Copy, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, From)]
+#[derive(
+    Debug, AsRef, Copy, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, From,
+)]
 pub struct UserId(Uuid);
 
 impl UserId {
@@ -24,7 +26,8 @@ impl TryFrom<&str> for UserId {
     type Error = AuthError;
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         Ok(UserId::new(
-            Uuid::parse_str(value).map_err(|_| AuthError::InvalidCredentials)?,
+            Uuid::parse_str(value)
+                .map_err(|_| AuthError::InvalidCredentials)?,
         ))
     }
 }

@@ -2,7 +2,7 @@
   "caseId": "KV-007",
   "tier": "L4",
   "intent": "Hit headers: use tc-kv-004-t3 or l4-* three-step",
-  "curl": "curl -X POST \"$GATEWAY_BASE\"/v1/chat/completions -H \"Authorization: Bearer legend\" -H \"Alephant-Cache-Enabled: true\" -H \"Content-Type: application/json\" -d '{\"model\":\"openai/gpt-4o-mini\",\"messages\":[{\"role\":\"user\",\"content\":\"kv-007\"}],\"max_tokens\":4}'",
+  "curl": "curl -X POST \"$GATEWAY_BASE\"/v1/chat/completions -H \"Authorization: Bearer $ALEPHANT_CONTROL_OPENROUTER_API_KEY\" -H \"Alephant-Cache-Enabled: true\" -H \"Content-Type: application/json\" -d '{\"model\":\"openai/gpt-4o-mini\",\"messages\":[{\"role\":\"user\",\"content\":\"kv-007\"}],\"max_tokens\":4}'",
   "assertions": {
     "httpStatus": 200
   },

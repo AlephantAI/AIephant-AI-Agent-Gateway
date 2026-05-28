@@ -314,6 +314,13 @@ pub struct CreateResponse {
     /// to monitor and detect abuse.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub user: Option<String>,
+
+    /// Captures any additional fields not explicitly defined above, ensuring
+    /// that custom or vendor-specific fields survive deserialization →
+    /// re-serialization round-trips.
+    #[serde(flatten)]
+    #[builder(default)]
+    pub extra: std::collections::HashMap<String, serde_json::Value>,
 }
 
 /// Service tier request options.
@@ -380,13 +387,19 @@ pub enum ReasoningSummary {
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct TextConfig {
     /// Defines the format: plain text, JSON object, or JSON schema.
+    /// Defaults to `Text` when omitted by the client.
+    #[serde(default)]
     pub format: TextResponseFormat,
+    /// Output verbosity (Cursor / OpenAI Responses API extension).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub verbosity: Option<String>,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Default)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum TextResponseFormat {
     /// The type of response format being defined: `text`
+    #[default]
     Text,
     /// The type of response format being defined: `json_object`
     JsonObject,
@@ -403,6 +416,7 @@ pub enum ToolDefinition {
     /// Custom function call.
     Function(Function),
     /// Web search preview tool.
+    #[serde(alias = "web_search")]
     WebSearchPreview(WebSearchPreview),
     /// Virtual computer control tool.
     ComputerUsePreview(ComputerUsePreview),
@@ -456,6 +470,7 @@ pub struct Function {
     /// A JSON schema object describing the parameters of the function.
     pub parameters: serde_json::Value,
     /// Whether to enforce strict parameter validation.
+    #[serde(default)]
     pub strict: bool,
     /// A description of the function. Used by the model to determine whether
     /// or not to call the function.
@@ -875,29 +890,29 @@ pub enum Annotation {
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct FileCitation {
     /// The ID of the file.
-    file_id: String,
+    pub file_id: String,
     /// The index of the file in the list of files.
-    index: u32,
+    pub index: u32,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct UrlCitation {
     /// The index of the last character of the URL citation in the message.
-    end_index: u32,
+    pub end_index: u32,
     /// The index of the first character of the URL citation in the message.
-    start_index: u32,
+    pub start_index: u32,
     /// The title of the web resource.
-    title: String,
+    pub title: String,
     /// The URL of the web resource.
-    url: String,
+    pub url: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct FilePath {
     /// The ID of the file.
-    file_id: String,
+    pub file_id: String,
     /// The index of the file in the list of files.
-    index: u32,
+    pub index: u32,
 }
 
 /// A refusal explanation from the model.
@@ -1464,4 +1479,18 @@ pub enum Status {
     Failed,
     InProgress,
     Incomplete,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ToolDefinition;
+
+    #[test]
+    fn tool_definition_accepts_web_search_alias() {
+        let v: ToolDefinition = serde_json::from_value(serde_json::json!({
+            "type": "web_search"
+        }))
+        .unwrap();
+        assert!(matches!(v, ToolDefinition::WebSearchPreview(_)));
+    }
 }

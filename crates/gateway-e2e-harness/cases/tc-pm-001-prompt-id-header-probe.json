@@ -2,7 +2,7 @@
   "caseId": "PM-001",
   "tier": "L2",
   "intent": "TIER: C-probe; may not 200; Alephant-Prompt-ID on unified /ai (Redis prompt optional)",
-  "curl": "curl -X POST \"$GATEWAY_BASE/v1/chat/completions\" -H \"Authorization: Bearer legend\" -H \"Content-Type: application/json\" -H \"Alephant-Prompt-ID: e2e-tc-pm-001\" -d '{\"model\":\"openai/gpt-4o-mini\",\"messages\":[{\"role\":\"user\",\"content\":\"pm-001\"}],\"max_tokens\":4}'",
+  "curl": "curl -X POST \"$GATEWAY_BASE/v1/chat/completions\" -H \"Authorization: Bearer $ALEPHANT_CONTROL_OPENROUTER_API_KEY\" -H \"Content-Type: application/json\" -H \"Alephant-Prompt-ID: e2e-tc-pm-001\" -d '{\"model\":\"openai/gpt-4o-mini\",\"messages\":[{\"role\":\"user\",\"content\":\"pm-001\"}],\"max_tokens\":4}'",
   "assertions": {
     "httpStatus": {
       "in": [200, 400, 401, 403, 404, 422, 429, 500, 502, 503]

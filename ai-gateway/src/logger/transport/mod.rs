@@ -29,7 +29,7 @@ pub fn build_request_log_transport(
 ) -> Arc<dyn LogTransport> {
     let http = HttpLogTransport::new(
         http_client.request_client.clone(),
-        config.alephant.base_url.clone(),
+        config.alephant.log_collector_url.clone(),
         metrics.clone(),
     );
     match config.request_log.transport {

@@ -1,4 +1,5 @@
 pub mod catch_panic;
+pub(crate) mod debug_log;
 pub mod handle_error;
 pub mod health_check;
 pub mod meltdown;
@@ -63,7 +64,10 @@ where
     deserializer.deserialize_str(Helper(PhantomData))
 }
 
-pub fn serialize_to_str<T, S>(value: &T, serializer: S) -> Result<S::Ok, S::Error>
+pub fn serialize_to_str<T, S>(
+    value: &T,
+    serializer: S,
+) -> Result<S::Ok, S::Error>
 where
     T: Display,
     S: Serializer,
@@ -74,8 +78,12 @@ where
 pub(crate) fn host_header(url: &Url) -> HeaderValue {
     match url.host() {
         Some(url::Host::Domain(host)) => HeaderValue::from_str(host).unwrap(),
-        Some(url::Host::Ipv4(host)) => HeaderValue::from_str(host.to_string().as_str()).unwrap(),
-        Some(url::Host::Ipv6(host)) => HeaderValue::from_str(host.to_string().as_str()).unwrap(),
+        Some(url::Host::Ipv4(host)) => {
+            HeaderValue::from_str(host.to_string().as_str()).unwrap()
+        }
+        Some(url::Host::Ipv6(host)) => {
+            HeaderValue::from_str(host.to_string().as_str()).unwrap()
+        }
         _ => HeaderValue::from_str("").unwrap(),
     }
 }

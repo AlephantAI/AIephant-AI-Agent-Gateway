@@ -2,7 +2,7 @@
   "caseId": "LCS-007",
   "tier": "L1",
   "intent": "Helicone-Session-Id without Alephant-Session-Id",
-  "curl": "curl -X POST \"$GATEWAY_BASE\"/v1/chat/completions -H \"Authorization: Bearer legend\" -H \"Helicone-Session-Id: h1\" -H \"Content-Type: application/json\" -d '{\"model\":\"openai/gpt-4o-mini\",\"messages\":[{\"role\":\"user\",\"content\":\"lcs-007\"}],\"max_tokens\":4}'",
+  "curl": "curl -X POST \"$GATEWAY_BASE\"/v1/chat/completions -H \"Authorization: Bearer $ALEPHANT_CONTROL_OPENROUTER_API_KEY\" -H \"Helicone-Session-Id: h1\" -H \"Content-Type: application/json\" -d '{\"model\":\"openai/gpt-4o-mini\",\"messages\":[{\"role\":\"user\",\"content\":\"lcs-007\"}],\"max_tokens\":4}'",
   "assertions": {
     "httpStatus": 200
   },

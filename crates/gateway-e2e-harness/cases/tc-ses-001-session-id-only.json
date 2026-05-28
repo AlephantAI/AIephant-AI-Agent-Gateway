@@ -1,0 +1,19 @@
+{
+  "caseId": "SES-001",
+  "tier": "L1",
+  "intent": "Alephant-Session-Id header only — basic session passthrough on unified API",
+  "curl": "curl -X POST \"$GATEWAY_BASE\"/v1/chat/completions -H \"Authorization: Bearer $ALEPHANT_CONTROL_OPENROUTER_API_KEY\" -H \"Alephant-Session-Id: ses-001-e2e\" -H \"Content-Type: application/json\" -d '{\"model\":\"openai/gpt-4o-mini\",\"messages\":[{\"role\":\"user\",\"content\":\"ses-001\"}],\"max_tokens\":4}'",
+  "assertions": {
+    "httpStatus": 200,
+    "json": {
+      "pathExists": [
+        "/choices",
+        "/choices/0/message"
+      ],
+      "arrayMinLength": {
+        "/choices": 1
+      }
+    }
+  },
+  "profile": ["gate", "full"]
+}

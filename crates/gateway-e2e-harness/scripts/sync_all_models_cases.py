@@ -55,7 +55,7 @@ def build_case(case_index: int, model: str) -> dict:
             "ALL_MODELS_E2E_ENABLE",
         ],
         "curl": (
-            "curl -X POST \"$GATEWAY_BASE/ai/chat/completions\" "
+            "curl -X POST \"$GATEWAY_BASE/v1/chat/completions\" "
             "-H \"Authorization: Bearer $ALEPHANT_CONTROL_PLANE_API_KEY\" "
             "-H \"Content-Type: application/json\" "
             f"-d '{{\"model\":\"{model}\",\"messages\":[{{\"role\":\"user\",\"content\":\"Hello\"}}]}}'"

@@ -2,7 +2,7 @@
   "caseId": "DM-002",
   "tier": "L2",
   "intent": "Default model: manual negative probe; run only in a seeded environment where policy candidates are missing or have non-chat interaction types so chat-like default selection returns the existing no-model-available error",
-  "curl": "curl -X POST \"$GATEWAY_BASE/v1/chat/completions\" -H \"Authorization: Bearer legend\" -H \"Content-Type: application/json\" -d '{\"messages\":[{\"role\":\"user\",\"content\":\"dm-002 default model no candidate\"}],\"max_tokens\":4}'",
+  "curl": "curl -X POST \"$GATEWAY_BASE/v1/chat/completions\" -H \"Authorization: Bearer $ALEPHANT_CONTROL_OPENROUTER_API_KEY\" -H \"Content-Type: application/json\" -d '{\"messages\":[{\"role\":\"user\",\"content\":\"dm-002 default model no candidate\"}],\"max_tokens\":4}'",
   "assertions": {
     "httpStatus": {
       "in": [400, 403, 404, 422, 500]

@@ -1,0 +1,12 @@
+{
+  "caseId": "PM-003",
+  "tier": "L2",
+  "intent": "Alephant-Prompt-ID without template variables (legendprompttest)",
+  "curl": "curl -X POST \"$GATEWAY_BASE/v1/chat/completions\" -H \"Authorization: Bearer $ALEPHANT_CONTROL_OPENROUTER_API_KEY\" -H \"Content-Type: application/json\" -H \"Alephant-Prompt-ID: legendprompttest\" -d '{\"model\":\"openai/gpt-4o-mini\",\"messages\":[{\"role\":\"user\",\"content\":\"pm-003\"}],\"max_tokens\":8}'",
+  "assertions": {
+    "httpStatus": {
+      "in": [200, 400, 404, 422, 429, 500, 502, 503]
+    }
+  },
+  "profile": ["gate", "full"]
+}

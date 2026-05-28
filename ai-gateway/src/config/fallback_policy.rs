@@ -9,7 +9,9 @@ use super::{monitor::GracePeriod, retry::RetryConfig};
 use crate::error::init::InitError;
 
 /// High-level fallback behaviour mode (`compat` matches legacy layering).
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize, Serialize)]
+#[derive(
+    Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize, Serialize,
+)]
 #[serde(rename_all = "kebab-case")]
 pub enum FallbackMode {
     #[default]
@@ -59,7 +61,10 @@ pub struct ProviderFailoverPolicyBlock {
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct FallbackObservabilityPolicy {
-    #[serde(default = "default_emit_decision_log", rename = "emit-decision-log")]
+    #[serde(
+        default = "default_emit_decision_log",
+        rename = "emit-decision-log"
+    )]
     pub emit_decision_log: bool,
     #[serde(default = "default_metrics_prefix", rename = "metrics-prefix")]
     pub metrics_prefix: String,

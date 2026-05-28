@@ -3,7 +3,7 @@
   "tier": "L1",
   "intent": "Unified API with invalid Bearer + anthropic model (full only; gate uses l1-auth-invalid-bearer-unified for invalid-token shape)",
   "profile": ["full"],
-  "curl": "curl -X POST \"$GATEWAY_BASE/v1/chat/completions\" -H \"Authorization: Bearer $ALEPHANT_CONTROL_PLANE_API_KEY\" -H \"Content-Type: application/json\" -d '{\"model\":\"anthropic/claude-3-haiku\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}],\"max_tokens\":4}'",
+  "curl": "curl -X POST \"$GATEWAY_BASE/v1/chat/completions\" -H \"Authorization: Bearer fake-key\" -H \"Content-Type: application/json\" -d '{\"model\":\"anthropic/claude-3-haiku\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}],\"max_tokens\":4}'",
   "assertions": {
     "httpStatus": { "in": [400, 401, 403, 404, 422, 429, 500, 502, 503] }
   }

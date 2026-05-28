@@ -1,0 +1,14 @@
+{
+  "caseId": "SES-005",
+  "tier": "L2",
+  "intent": "Session headers on streaming request — session context preserved through SSE pipeline",
+  "curl": "curl -X POST \"$GATEWAY_BASE\"/v1/chat/completions -H \"Authorization: Bearer $ALEPHANT_CONTROL_OPENROUTER_API_KEY\" -H \"Alephant-Session-Id: ses-005-e2e\" -H \"Alephant-Session-Path: /stream/test\" -H \"Alephant-Session-Name: e2e-stream\" -H \"Content-Type: application/json\" -d '{\"model\":\"openai/gpt-4o-mini\",\"messages\":[{\"role\":\"user\",\"content\":\"ses-005\"}],\"max_tokens\":8,\"stream\":true}'",
+  "assertions": {
+    "httpStatus": 200,
+    "sse": {
+      "dataFramesMin": 1,
+      "hasDone": true
+    }
+  },
+  "profile": ["gate", "full"]
+}

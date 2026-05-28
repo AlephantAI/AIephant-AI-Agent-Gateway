@@ -4,35 +4,33 @@
 //! POST-only inference paths) return 405 without consuming auth or request
 //! bodies.
 
-use std::{
-    sync::Arc,
-    task::{Context, Poll},
-};
+use std::task::{Context, Poll};
 
 use http::{Method, uri::PathAndQuery};
-use rustc_hash::FxHashSet;
 use tower::{Layer, Service};
 
 use crate::{
-    endpoints::ApiEndpoint,
-    error::{api::ApiError, internal::InternalError, invalid_req::InvalidRequestError},
+    error::{
+        api::ApiError, internal::InternalError,
+        invalid_req::InvalidRequestError,
+    },
     router::{router_details::RouteType, unified_api::UnifiedApi},
-    types::{provider::InferenceProvider, request::Request, response::Response},
+    types::{request::Request, response::Response},
 };
 
-/// Providers that have a direct-proxy stack configured (same keys as
-/// [`crate::router::direct::DirectProxiesWithoutMapper`]).
 #[derive(Clone)]
-pub struct RoutingPrecheckLayer {
-    direct_proxy_providers: Arc<FxHashSet<InferenceProvider>>,
+pub struct RoutingPrecheckLayer;
+
+impl Default for RoutingPrecheckLayer {
+    fn default() -> Self {
+        Self
+    }
 }
 
 impl RoutingPrecheckLayer {
     #[must_use]
-    pub fn new(direct_proxy_providers: Arc<FxHashSet<InferenceProvider>>) -> Self {
-        Self {
-            direct_proxy_providers,
-        }
+    pub fn new() -> Self {
+        Self
     }
 }
 
@@ -40,17 +38,13 @@ impl<S> Layer<S> for RoutingPrecheckLayer {
     type Service = RoutingPrecheckService<S>;
 
     fn layer(&self, inner: S) -> Self::Service {
-        RoutingPrecheckService {
-            inner,
-            direct_proxy_providers: self.direct_proxy_providers.clone(),
-        }
+        RoutingPrecheckService { inner }
     }
 }
 
 #[derive(Clone)]
 pub struct RoutingPrecheckService<S> {
     inner: S,
-    direct_proxy_providers: Arc<FxHashSet<InferenceProvider>>,
 }
 
 /// Paths that mirror upstream LLM HTTP APIs and expect a JSON **POST** body.
@@ -96,7 +90,9 @@ pub(crate) fn path_requires_post(path: &str) -> bool {
     }
     // Legacy completions: bare `completions` or `.../completions` (not
     // `.../chat/completions`, handled above).
-    if p == "completions" || (p.ends_with("/completions") && !p.ends_with("/chat/completions")) {
+    if p == "completions"
+        || (p.ends_with("/completions") && !p.ends_with("/chat/completions"))
+    {
         return true;
     }
     false
@@ -106,6 +102,14 @@ fn check_method(method: &Method, path: &str) -> Result<(), ApiError> {
     if *method == Method::OPTIONS {
         // CORS preflight: must not require POST or auth.
         return Ok(());
+    }
+    if path.trim_start_matches('/') == "models" && *method != Method::GET {
+        return Err(ApiError::InvalidRequest(
+            InvalidRequestError::MethodNotAllowed {
+                method: method.as_str().to_string(),
+                path: path.to_string(),
+            },
+        ));
     }
     if path_requires_post(path) && *method != Method::POST {
         return Err(ApiError::InvalidRequest(
@@ -118,64 +122,54 @@ fn check_method(method: &Method, path: &str) -> Result<(), ApiError> {
     Ok(())
 }
 
-fn precheck(req: &Request, direct_allowed: &FxHashSet<InferenceProvider>) -> Result<(), ApiError> {
+fn precheck(req: &Request) -> Result<(), ApiError> {
     let Some(route_type) = req.extensions().get::<RouteType>() else {
         return Err(ApiError::InvalidRequest(InvalidRequestError::NotFound(
             req.uri().path().to_string(),
         )));
     };
 
-    let path_and_query = req
-        .extensions()
-        .get::<PathAndQuery>()
-        .ok_or_else(|| ApiError::Internal(InternalError::ExtensionNotFound("PathAndQuery")))?;
+    let path_and_query =
+        req.extensions().get::<PathAndQuery>().ok_or_else(|| {
+            ApiError::Internal(InternalError::ExtensionNotFound("PathAndQuery"))
+        })?;
     let path = path_and_query.path();
 
-    match route_type {
-        RouteType::UnifiedApi { .. } => {
-            UnifiedApi::try_from(path).map_err(|_| {
-                ApiError::InvalidRequest(InvalidRequestError::NotFound(
-                    req.uri().path().to_string(),
-                ))
-            })?;
-            check_method(req.method(), path)?;
-        }
-        RouteType::Router { .. } => {
-            if ApiEndpoint::new(path).is_none() {
-                return Err(ApiError::InvalidRequest(InvalidRequestError::NotFound(
-                    path.to_string(),
-                )));
-            }
-            check_method(req.method(), path)?;
-        }
-        RouteType::DirectProxy { provider, .. } => {
-            if !direct_allowed.contains(provider) {
-                return Err(ApiError::InvalidRequest(InvalidRequestError::NotFound(
-                    req.uri().path().to_string(),
-                )));
-            }
-            check_method(req.method(), path)?;
-        }
-    }
+    let RouteType::UnifiedApi { .. } = route_type;
+    UnifiedApi::try_from(path).map_err(|_| {
+        ApiError::InvalidRequest(InvalidRequestError::NotFound(
+            req.uri().path().to_string(),
+        ))
+    })?;
+    check_method(req.method(), path)?;
+
     Ok(())
 }
 
 impl<S> Service<Request> for RoutingPrecheckService<S>
 where
-    S: Service<Request, Response = Response, Error = ApiError> + Clone + Send + 'static,
+    S: Service<Request, Response = Response, Error = ApiError>
+        + Clone
+        + Send
+        + 'static,
     S::Future: Send + 'static,
 {
     type Response = Response;
     type Error = ApiError;
-    type Future =
-        futures::future::Either<std::future::Ready<Result<Self::Response, Self::Error>>, S::Future>;
+    type Future = futures::future::Either<
+        std::future::Ready<Result<Self::Response, Self::Error>>,
+        S::Future,
+    >;
 
-    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+    fn poll_ready(
+        &mut self,
+        cx: &mut Context<'_>,
+    ) -> Poll<Result<(), Self::Error>> {
         self.inner.poll_ready(cx)
     }
 
     fn call(&mut self, req: Request) -> Self::Future {
-        if let Err(e) = precheck(&req, &self.direct_proxy_providers) {
+        if let Err(e) = precheck(&req) {
             return futures::future::Either::Left(std::future::ready(Err(e)));
         }
         futures::future::Either::Right(self.inner.call(req))
@@ -184,7 +178,52 @@ where
 
 #[cfg(test)]
 mod tests {
+    use std::str::FromStr;
+
     use super::*;
+
+    fn request_with_route(
+        path: &str,
+        route_type: RouteType,
+        method: Method,
+    ) -> Request {
+        let mut req = http::Request::builder()
+            .method(method)
+            .uri(format!("http://router.alephant.test/{path}"))
+            .body(axum_core::body::Body::empty())
+            .unwrap();
+        req.extensions_mut().insert(route_type);
+        req.extensions_mut()
+            .insert(PathAndQuery::from_str(path).unwrap());
+        req
+    }
+
+    #[test]
+    fn precheck_accepts_unified_chat_post() {
+        let req = request_with_route(
+            "chat/completions",
+            RouteType::UnifiedApi {
+                path: "chat/completions".into(),
+            },
+            Method::POST,
+        );
+        assert!(precheck(&req).is_ok());
+    }
+
+    #[test]
+    fn precheck_rejects_unknown_unified_endpoint() {
+        let req = request_with_route(
+            "not-supported",
+            RouteType::UnifiedApi {
+                path: "not-supported".into(),
+            },
+            Method::POST,
+        );
+        assert!(matches!(
+            precheck(&req),
+            Err(ApiError::InvalidRequest(InvalidRequestError::NotFound(_)))
+        ));
+    }
 
     #[test]
     fn post_required_heuristics() {
@@ -201,5 +240,11 @@ mod tests {
         assert!(path_requires_post("v1beta/openai/chat/completions"));
         assert!(!path_requires_post("v1/models"));
         assert!(!path_requires_post("openapi.json"));
+    }
+
+    #[test]
+    fn models_allows_get_only() {
+        assert!(check_method(&Method::GET, "models").is_ok());
+        assert!(check_method(&Method::POST, "models").is_err());
     }
 }

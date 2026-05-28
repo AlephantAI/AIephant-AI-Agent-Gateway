@@ -1,4 +1,6 @@
-use super::{profile_resolver::resolve_mapper_metadata, rules::ProviderRuleSet};
+use super::{
+    profile_resolver::resolve_mapper_metadata, rules::ProviderRuleSet,
+};
 use crate::types::provider::InferenceProvider;
 
 #[must_use]
@@ -17,7 +19,9 @@ pub fn default_provider_rules(provider: &InferenceProvider) -> ProviderRuleSet {
 mod tests {
     use crate::types::provider::InferenceProvider;
 
-    fn assert_evidence_backed_openai_compatible_rule_profile(provider_name: &str) {
+    fn assert_evidence_backed_openai_compatible_rule_profile(
+        provider_name: &str,
+    ) {
         let rules = super::default_named_provider_rules(provider_name);
 
         assert_eq!(
@@ -91,7 +95,8 @@ mod tests {
     }
 
     #[test]
-    fn default_named_provider_rules_mistral_is_kept_at_evidence_backed_defaults() {
+    fn default_named_provider_rules_mistral_is_kept_at_evidence_backed_defaults()
+     {
         assert_evidence_backed_openai_compatible_rule_profile("mistral");
     }
 
@@ -106,13 +111,16 @@ mod tests {
     }
 
     #[test]
-    fn default_named_provider_rules_hyperbolic_is_kept_at_evidence_backed_defaults() {
+    fn default_named_provider_rules_hyperbolic_is_kept_at_evidence_backed_defaults()
+     {
         assert_evidence_backed_openai_compatible_rule_profile("hyperbolic");
     }
 
     #[test]
     fn default_provider_rules_deepseek_use_openai_compatible_family() {
-        let rules = super::default_provider_rules(&InferenceProvider::Named("deepseek".into()));
+        let rules = super::default_provider_rules(&InferenceProvider::Named(
+            "deepseek".into(),
+        ));
 
         assert_eq!(
             rules.family,
@@ -122,7 +130,8 @@ mod tests {
 
     #[test]
     fn default_provider_rules_anthropic_map_reasoning_to_thinking() {
-        let rules = super::default_provider_rules(&InferenceProvider::Anthropic);
+        let rules =
+            super::default_provider_rules(&InferenceProvider::Anthropic);
 
         assert_eq!(
             rules.request.reasoning_mode,

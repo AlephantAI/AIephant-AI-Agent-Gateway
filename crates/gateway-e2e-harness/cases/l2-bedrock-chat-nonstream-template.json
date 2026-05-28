@@ -3,7 +3,7 @@
   "tier": "L2",
   "intent": "Unified API bedrock non-stream template; expect 200 when bedrock credentials and model are configured",
   "profile": ["full"],
-  "curl": "curl -X POST \"$GATEWAY_BASE/v1/chat/completions\" -H \"Authorization: Bearer $ALEPHANT_CONTROL_PLANE_API_KEY\" -H \"Content-Type: application/json\" -d '{\"model\":\"bedrock/us.anthropic.claude-3-5-sonnet-20241022-v2:0\",\"messages\":[{\"role\":\"user\",\"content\":\"bedrock-nonstream-template\"}],\"max_tokens\":16}'",
+  "curl": "curl -X POST \"$GATEWAY_BASE/v1/chat/completions\" -H \"Authorization: Bearer $ALEPHANT_CONTROL_OPENROUTER_API_KEY\" -H \"Content-Type: application/json\" -d '{\"model\":\"bedrock/us.anthropic.claude-3-5-sonnet-20241022-v2:0\",\"messages\":[{\"role\":\"user\",\"content\":\"bedrock-nonstream-template\"}],\"max_tokens\":16}'",
   "assertions": {
     "httpStatus": { "in": [200, 400, 401, 403, 404, 422, 429, 500, 502, 503] }
   }

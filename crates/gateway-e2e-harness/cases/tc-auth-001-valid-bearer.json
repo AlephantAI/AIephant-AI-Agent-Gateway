@@ -2,7 +2,7 @@
   "caseId": "AUTH-001",
   "tier": "L2",
   "intent": "Valid Bearer + successful unified call",
-  "curl": "curl -X POST \"$GATEWAY_BASE\"/v1/chat/completions -H \"Authorization: Bearer legend\" -H \"Content-Type: application/json\" -d '{\"model\":\"openai/gpt-4o-mini\",\"messages\":[{\"role\":\"user\",\"content\":\"auth-001\"}],\"max_tokens\":6}'",
+  "curl": "curl -X POST \"$GATEWAY_BASE\"/v1/chat/completions -H \"Authorization: Bearer $ALEPHANT_CONTROL_OPENROUTER_API_KEY\" -H \"Content-Type: application/json\" -d '{\"model\":\"openai/gpt-4o-mini\",\"messages\":[{\"role\":\"user\",\"content\":\"auth-001\"}],\"max_tokens\":6}'",
   "assertions": {
     "httpStatus": 200,
     "json": {

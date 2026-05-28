@@ -31,9 +31,16 @@ impl RequestEnvelope {
     pub fn from_openai_chat_request(
         source_endpoint: ApiEndpoint,
         target_provider: InferenceProvider,
-        request: async_openai::types::CreateChatCompletionRequest,
+        mut request: async_openai::types::CreateChatCompletionRequest,
     ) -> Self {
         let params = OpenAiRequestParams::from_request(&request);
+
+        #[allow(deprecated)]
+        if request.max_completion_tokens.is_none()
+            && let Some(v) = request.max_tokens.take()
+        {
+            request.max_completion_tokens = Some(v);
+        }
 
         Self {
             source_endpoint,
@@ -50,7 +57,10 @@ impl RequestEnvelope {
     }
 
     #[must_use]
-    pub fn with_target_capabilities(mut self, capabilities: ProviderCapabilities) -> Self {
+    pub fn with_target_capabilities(
+        mut self,
+        capabilities: ProviderCapabilities,
+    ) -> Self {
         self.target_capabilities = Some(capabilities);
         self
     }
@@ -62,13 +72,19 @@ impl RequestEnvelope {
     }
 
     #[must_use]
-    pub fn with_request_rule_context(mut self, request_rule_context: RequestRuleContext) -> Self {
+    pub fn with_request_rule_context(
+        mut self,
+        request_rule_context: RequestRuleContext,
+    ) -> Self {
         self.request_rule_context = Some(request_rule_context);
         self
     }
 
     #[must_use]
-    pub fn with_resolved_metadata(mut self, resolved_metadata: ResolvedMapperMetadata) -> Self {
+    pub fn with_resolved_metadata(
+        mut self,
+        resolved_metadata: ResolvedMapperMetadata,
+    ) -> Self {
         self.resolved_metadata = Some(resolved_metadata);
         self
     }
@@ -79,7 +95,9 @@ impl RequestEnvelope {
         body: &Bytes,
     ) -> Result<Option<Self>, ApiError> {
         match source_endpoint {
-            ApiEndpoint::OpenAI(openai) if *openai == OpenAI::chat_completions() => {
+            ApiEndpoint::OpenAI(openai)
+                if *openai == OpenAI::chat_completions() =>
+            {
                 let request = serde_json::from_slice::<
                     async_openai::types::CreateChatCompletionRequest,
                 >(body)

@@ -3,7 +3,7 @@ telemetry:
   exporter: stdout
 
 alephant:
-  base-url: "http://localhost:8585"
+  log-collector-url: "http://localhost:8585"
   features: none
 
 rate-limit-store:

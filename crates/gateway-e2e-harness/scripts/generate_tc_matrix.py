@@ -21,7 +21,7 @@ CASES_DIR = Path(__file__).resolve().parents[1] / "cases"
 
 # Same curl shape as l4-openai-llm-kv-*.json (single $GATEWAY_BASE URL with slash).
 KV_TWO_BUCKET_CURL = (
-    "curl -X POST \"$GATEWAY_BASE/ai/chat/completions\" -H \"Authorization: Bearer legend\" "
+    "curl -X POST \"$GATEWAY_BASE/v1/chat/completions\" -H \"Authorization: Bearer legend\" "
     "-H \"Content-Type: application/json\" -H \"Alephant-Cache-Enabled: true\" "
     "-H \"Alephant-Cache-Bucket-Max-Size: 2\" "
     '-d \'{"model":"openai/gpt-4o-mini","messages":[{"role":"user","content":"kv-two-buckets-$HARNESS_E2E_RUN_TOKEN"}],"max_tokens":4}\''
@@ -34,7 +34,7 @@ ERR_WIDE = {
     },
 }
 
-# Unified `/ai/chat/completions` JSON mapping → OpenAI-style `choices` (success).
+# Unified `/v1/chat/completions` JSON mapping → OpenAI-style `choices` (success).
 OPENAI_CHAT_OK_JSON = {
     "json": {
         "pathExists": ["/choices", "/choices/0/message"],
@@ -110,8 +110,8 @@ def main() -> None:
     files["tc-cfg-004-alephant-smoke.json"] = j(
         "CFG-004",
         "L2",
-        "End-to-end success; alephant.base_url for logging is not assertable via HTTP alone",
-        f"curl -X POST {gb}/ai/chat/completions -H {vk} {ct} "
+        "End-to-end success; alephant.log_collector_url for logging is not assertable via HTTP alone",
+        f"curl -X POST {gb}/v1/chat/completions -H {vk} {ct} "
         + curl_d_json(r'{"model":"openai/gpt-4o-mini","messages":[{"role":"user","content":"cfg-004"}],"max_tokens":4}'),
         merge_assert({"httpStatus": 200}, OPENAI_CHAT_OK_JSON),
         ["full"],
@@ -120,7 +120,7 @@ def main() -> None:
         "CFG-005",
         "L2",
         "Provider default base_url: smoke via successful OpenAI unified call",
-        f"curl -X POST {gb}/ai/chat/completions -H {vk} {ct} "
+        f"curl -X POST {gb}/v1/chat/completions -H {vk} {ct} "
         + curl_d_json(r'{"model":"openai/gpt-4o-mini","messages":[{"role":"user","content":"cfg-005"}],"max_tokens":4}'),
         merge_assert({"httpStatus": 200}, OPENAI_CHAT_OK_JSON),
         ["full"],
@@ -129,7 +129,7 @@ def main() -> None:
         "CFG-006",
         "L2",
         "master_keys.base_url: configure via DB/env then run; wide status until verified",
-        f"curl -X POST {gb}/ai/chat/completions -H {vk} {ct} "
+        f"curl -X POST {gb}/v1/chat/completions -H {vk} {ct} "
         + curl_d_json(r'{"model":"openai/gpt-4o-mini","messages":[{"role":"user","content":"cfg-006"}],"max_tokens":4}'),
         WIDE,
         ["full"],
@@ -140,7 +140,7 @@ def main() -> None:
         "AUTH-001",
         "L2",
         "Valid Bearer + successful unified call",
-        f"curl -X POST {gb}/ai/chat/completions -H {vk} {ct} "
+        f"curl -X POST {gb}/v1/chat/completions -H {vk} {ct} "
         + curl_d_json(r'{"model":"openai/gpt-4o-mini","messages":[{"role":"user","content":"auth-001"}],"max_tokens":6}'),
         merge_assert({"httpStatus": 200}, OPENAI_CHAT_OK_JSON),
         ["full"],
@@ -149,7 +149,7 @@ def main() -> None:
         "AUTH-002",
         "L1",
         "Missing Authorization on unified API (full only; gate uses ERR-001 as canonical missing-auth probe)",
-        f"curl -X POST {gb}/ai/chat/completions {ct} "
+        f"curl -X POST {gb}/v1/chat/completions {ct} "
         + curl_d_json(r'{"model":"openai/gpt-4o-mini","messages":[{"role":"user","content":"auth-002"}],"max_tokens":4}'),
         merge_assert({"httpStatus": {"in": [400, 401, 403]}}, API_ERROR_JSON),
         ["full"],
@@ -158,7 +158,7 @@ def main() -> None:
         "AUTH-003",
         "L2",
         "Requires alephant.features=none (auth off). Isolated env only; skipped in gate/full by profile.",
-        f"curl -X POST {gb}/ai/chat/completions {ct} "
+        f"curl -X POST {gb}/v1/chat/completions {ct} "
         + curl_d_json(r'{"model":"openai/gpt-4o-mini","messages":[{"role":"user","content":"auth-003"}],"max_tokens":4}'),
         WIDE,
         ["manual"],
@@ -167,7 +167,7 @@ def main() -> None:
         "AUTH-004",
         "L2",
         "Repeat VK request succeeds (internal hash cache)",
-        f"curl -X POST {gb}/ai/chat/completions -H {vk} {ct} "
+        f"curl -X POST {gb}/v1/chat/completions -H {vk} {ct} "
         + curl_d_json(r'{"model":"openai/gpt-4o-mini","messages":[{"role":"user","content":"auth-004"}],"max_tokens":4}'),
         merge_assert({"httpStatus": 200}, OPENAI_CHAT_OK_JSON),
         ["full"],
@@ -176,7 +176,7 @@ def main() -> None:
         "AUTH-005",
         "L2",
         "Org missing provider key: use VK for org without keys; expect error",
-        f"curl -X POST {gb}/ai/chat/completions -H {vk} {ct} "
+        f"curl -X POST {gb}/v1/chat/completions -H {vk} {ct} "
         + curl_d_json(r'{"model":"openai/gpt-4o-mini","messages":[{"role":"user","content":"auth-005"}],"max_tokens":4}'),
         WIDE,
         ["full"],
@@ -185,7 +185,7 @@ def main() -> None:
         "AUTH-006",
         "L2",
         "Master key used upstream: verify via mock/logs; HTTP success when configured",
-        f"curl -X POST {gb}/ai/chat/completions -H {vk} {ct} "
+        f"curl -X POST {gb}/v1/chat/completions -H {vk} {ct} "
         + curl_d_json(r'{"model":"openai/gpt-4o-mini","messages":[{"role":"user","content":"auth-006"}],"max_tokens":4}'),
         merge_assert({"httpStatus": 200}, OPENAI_CHAT_OK_JSON),
         ["full"],
@@ -194,7 +194,7 @@ def main() -> None:
         "AUTH-007",
         "L2",
         "Cold path: first request after empty cache",
-        f"curl -X POST {gb}/ai/chat/completions -H {vk} {ct} "
+        f"curl -X POST {gb}/v1/chat/completions -H {vk} {ct} "
         + curl_d_json(r'{"model":"openai/gpt-4o-mini","messages":[{"role":"user","content":"auth-007"}],"max_tokens":4}'),
         merge_assert({"httpStatus": 200}, OPENAI_CHAT_OK_JSON),
         ["full"],
@@ -203,27 +203,17 @@ def main() -> None:
         "AUTH-009",
         "L2",
         "Unified API no router ownership check",
-        f"curl -X POST {gb}/ai/chat/completions -H {vk} {ct} "
+        f"curl -X POST {gb}/v1/chat/completions -H {vk} {ct} "
         + curl_d_json(r'{"model":"openai/gpt-4o-mini","messages":[{"role":"user","content":"auth-009"}],"max_tokens":4}'),
         merge_assert({"httpStatus": 200}, OPENAI_CHAT_OK_JSON),
         ["full"],
     )
-    files["tc-auth-010-direct-no-router.json"] = j(
-        "AUTH-010",
-        "L2",
-        "Direct proxy no router ownership check",
-        f"curl -X POST {gb}/openai/v1/chat/completions -H {vk} {ct} "
-        + curl_d_json(r'{"model":"gpt-4o-mini","messages":[{"role":"user","content":"auth-010"}],"max_tokens":4}'),
-        WIDE,
-        ["full"],
-    )
-
     # --- C ROUTE ---
     files["tc-route-002-ai.json"] = j(
         "ROUTE-002",
         "L2",
-        "/ai/chat/completions unified",
-        f"curl -X POST {gb}/ai/chat/completions -H {vk} {ct} "
+        "/v1/chat/completions unified",
+        f"curl -X POST {gb}/v1/chat/completions -H {vk} {ct} "
         + curl_d_json(r'{"model":"openai/gpt-4o-mini","messages":[{"role":"user","content":"route-002"}],"max_tokens":4}'),
         merge_assert({"httpStatus": 200}, OPENAI_CHAT_OK_JSON),
         ["full"],
@@ -237,15 +227,6 @@ def main() -> None:
         merge_assert({"httpStatus": 200}, OPENAI_CHAT_OK_JSON),
         ["full"],
     )
-    files["tc-route-004-direct-openai.json"] = j(
-        "ROUTE-004",
-        "L2",
-        "/openai/v1/chat/completions direct",
-        f"curl -X POST {gb}/openai/v1/chat/completions -H {vk} {ct} "
-        + curl_d_json(r'{"model":"gpt-4o-mini","messages":[{"role":"user","content":"route-004"}],"max_tokens":4}'),
-        WIDE,
-        ["full"],
-    )
     files["tc-route-005-not-found.json"] = j(
         "ROUTE-005",
         "L1",
@@ -254,56 +235,21 @@ def main() -> None:
         merge_assert({"httpStatus": 404}, API_ERROR_JSON),
         ["gate", "full"],
     )
-    files["tc-route-006-router-id-too-long.json"] = j(
-        "ROUTE-006",
-        "L1",
-        "Router id > 12 chars (full only; gate uses ROUTE-005 as canonical routing negative)",
-        f"curl -X POST {gb}/router/this-id-is-way-too-long-for-router/v1/chat/completions -H {vk} {ct} "
-        + curl_d_json(r'{"model":"openai/gpt-4o-mini","messages":[]}'),
-        merge_assert(ERR_WIDE, API_ERROR_JSON),
-        ["full"],
-    )
     files["tc-route-007-query.json"] = j(
         "ROUTE-007",
         "L2",
         "Query string on unified path",
-        f"curl -X POST {gb}/ai/chat/completions?trace=route007 -H {vk} {ct} "
+        f"curl -X POST {gb}/v1/chat/completions?trace=route007 -H {vk} {ct} "
         + curl_d_json(r'{"model":"openai/gpt-4o-mini","messages":[{"role":"user","content":"route-007"}],"max_tokens":4}'),
         merge_assert({"httpStatus": 200}, OPENAI_CHAT_OK_JSON),
         ["full"],
     )
-    files["tc-route-008-forced-ai.json"] = j(
-        "ROUTE-008",
-        "L2",
-        "alephant-forced-routing on /ai",
-        f"curl -X POST {gb}/ai/chat/completions -H {vk} "
-        + '-H "Alephant-Forced-Routing: openai" '
-        + f"{ct} "
-        + curl_d_json(r'{"model":"anthropic/claude-3-haiku","messages":[{"role":"user","content":"route-008"}],"max_tokens":4}'),
-        WIDE,
-        ["full"],
-    )
-    files["tc-route-010-forced-invalid.json"] = j(
-        "ROUTE-010",
-        "L2",
-        "Invalid forced routing provider",
-        f"curl -X POST {gb}/ai/chat/completions -H {vk} "
-        + '-H "Alephant-Forced-Routing: __not_a_real_provider__" '
-        + f"{ct} "
-        + curl_d_json(r'{"model":"openai/gpt-4o-mini","messages":[{"role":"user","content":"route-010"}],"max_tokens":4}'),
-        merge_assert(
-            {"httpStatus": {"in": [400, 404, 422]}},
-            API_ERROR_JSON,
-        ),
-        ["full"],
-    )
-
     # --- D UNI (extra rows; UNI-001..014 overlap with l2-* files) ---
     files["tc-uni-006-gemini-stream.json"] = j(
         "UNI-006",
         "L2",
         "Gemini stream",
-        f"curl -N -X POST {gb}/ai/chat/completions -H {vk} {ct} "
+        f"curl -N -X POST {gb}/v1/chat/completions -H {vk} {ct} "
         + curl_d_json(r'{"model":"gemini/gemini-2.0-flash","stream":true,"messages":[{"role":"user","content":"uni-006"}],"max_tokens":24}'),
         WIDE,
         ["full"],
@@ -312,7 +258,7 @@ def main() -> None:
         "UNI-008",
         "L2",
         "Ollama stream",
-        f"curl -N -X POST {gb}/ai/chat/completions -H {vk} {ct} "
+        f"curl -N -X POST {gb}/v1/chat/completions -H {vk} {ct} "
         + curl_d_json(r'{"model":"ollama/llama3.1:8b","stream":true,"messages":[{"role":"user","content":"uni-008"}],"max_tokens":24}'),
         WIDE,
         ["full"],
@@ -321,7 +267,7 @@ def main() -> None:
         "UNI-010",
         "L2",
         "Bedrock stream",
-        f"curl -N -X POST {gb}/ai/chat/completions -H {vk} {ct} "
+        f"curl -N -X POST {gb}/v1/chat/completions -H {vk} {ct} "
         + curl_d_json(r'{"model":"bedrock/us.anthropic.claude-3-5-sonnet-20241022-v2:0","stream":true,"messages":[{"role":"user","content":"uni-010"}],"max_tokens":24}'),
         WIDE,
         ["full"],
@@ -330,7 +276,7 @@ def main() -> None:
         "UNI-011",
         "L2",
         "Named provider deepseek",
-        f"curl -X POST {gb}/ai/chat/completions -H {vk} {ct} "
+        f"curl -X POST {gb}/v1/chat/completions -H {vk} {ct} "
         + curl_d_json(r'{"model":"deepseek/deepseek-chat","messages":[{"role":"user","content":"uni-011a"}],"max_tokens":8}'),
         WIDE,
         ["full"],
@@ -339,7 +285,7 @@ def main() -> None:
         "UNI-011",
         "L2",
         "Named provider qwen (second matrix row)",
-        f"curl -X POST {gb}/ai/chat/completions -H {vk} {ct} "
+        f"curl -X POST {gb}/v1/chat/completions -H {vk} {ct} "
         + curl_d_json(r'{"model":"qwen/qwen-turbo","messages":[{"role":"user","content":"uni-011b"}],"max_tokens":8}'),
         WIDE,
         ["full"],
@@ -348,7 +294,7 @@ def main() -> None:
         "UNI-012",
         "L2",
         "tool_calls on anthropic unified model",
-        f"curl -X POST {gb}/ai/chat/completions -H {vk} {ct} "
+        f"curl -X POST {gb}/v1/chat/completions -H {vk} {ct} "
         + curl_d_json(r'{"model":"anthropic/claude-3-haiku","messages":[{"role":"user","content":"call get_time"}],"tools":[{"type":"function","function":{"name":"get_time","parameters":{"type":"object","properties":{}}}}],"max_tokens":64}'),
         merge_assert({"httpStatus": 200}, OPENAI_CHAT_OK_JSON),
         ["full"],
@@ -357,76 +303,19 @@ def main() -> None:
         "UNI-014",
         "L2",
         "reasoning_effort field",
-        f"curl -X POST {gb}/ai/chat/completions -H {vk} {ct} "
+        f"curl -X POST {gb}/v1/chat/completions -H {vk} {ct} "
         + curl_d_json(r'{"model":"openai/gpt-4o-mini","messages":[{"role":"user","content":"uni-014"}],"reasoning_effort":"low","max_tokens":16}'),
         WIDE,
         ["full"],
     )
 
     # --- E PATH ---
-    files["tc-path-001-direct-openai.json"] = j(
-        "PATH-001",
-        "L2",
-        "Direct openai chat completions",
-        f"curl -X POST {gb}/openai/v1/chat/completions -H {vk} {ct} "
-        + curl_d_json(r'{"model":"gpt-4o-mini","messages":[{"role":"user","content":"path-001"}],"max_tokens":8}'),
-        WIDE,
-        ["full"],
-    )
-    files["tc-path-002-direct-anthropic.json"] = j(
-        "PATH-002",
-        "L2",
-        "Direct anthropic messages",
-        f"curl -X POST {gb}/anthropic/v1/messages -H {vk} {ct} "
-        + curl_d_json(r'{"model":"claude-3-haiku","messages":[{"role":"user","content":"path-002"}],"max_tokens":16}'),
-        WIDE,
-        ["full"],
-    )
-    files["tc-path-003-google.json"] = j(
-        "PATH-003",
-        "L2",
-        "Direct gemini OpenAI-compatible",
-        f"curl -X POST {gb}/gemini/v1beta/openai/chat/completions -H {vk} {ct} "
-        + curl_d_json(r'{"model":"gemini-2.0-flash","messages":[{"role":"user","content":"path-003"}],"max_tokens":8}'),
-        WIDE,
-        ["full"],
-    )
-    files["tc-path-004-ollama.json"] = j(
-        "PATH-004",
-        "L2",
-        "Direct ollama",
-        f"curl -X POST {gb}/ollama/v1/chat/completions -H {vk} {ct} "
-        + curl_d_json(r'{"model":"llama3.1:8b","messages":[{"role":"user","content":"path-004"}],"max_tokens":8}'),
-        WIDE,
-        ["full"],
-    )
-    files["tc-path-005-bedrock.json"] = j(
-        "PATH-005",
-        "L2",
-        "Direct bedrock converse (body may need full ConverseInput in real env)",
-        f"curl -X POST {gb}/bedrock/model/us.anthropic.claude-3-haiku-20240307-v1%3A0/converse -H {vk} {ct} "
-        + r"-d '{}'",
-        WIDE,
-        ["full"],
-    )
-    files["tc-path-008-direct-session.json"] = j(
-        "PATH-008",
-        "L2",
-        "Direct + session headers",
-        f"curl -X POST {gb}/openai/v1/chat/completions -H {vk} "
-        + '-H "Alephant-Session-Id: path008" '
-        + f"{ct} "
-        + curl_d_json(r'{"model":"gpt-4o-mini","messages":[{"role":"user","content":"path-008"}],"max_tokens":4}'),
-        WIDE,
-        ["full"],
-    )
-
     # --- F LCS ---
     files["tc-lcs-001-no-handler.json"] = j(
         "LCS-001",
         "L2",
         "No large-context handler",
-        f"curl -X POST {gb}/ai/chat/completions -H {vk} {ct} "
+        f"curl -X POST {gb}/v1/chat/completions -H {vk} {ct} "
         + curl_d_json(r'{"model":"openai/gpt-4o-mini","messages":[{"role":"user","content":"lcs-001"}],"max_tokens":8}'),
         {"httpStatus": 200},
         ["full"],
@@ -435,7 +324,7 @@ def main() -> None:
         "LCS-002",
         "L2",
         "truncate",
-        f"curl -X POST {gb}/ai/chat/completions -H {vk} -H \"Alephant-Token-Limit-Exception-Handler: truncate\" {ct} "
+        f"curl -X POST {gb}/v1/chat/completions -H {vk} -H \"Alephant-Token-Limit-Exception-Handler: truncate\" {ct} "
         + curl_d_json(r'{"model":"openai/gpt-4o-mini","messages":[{"role":"user","content":"lcs-002"}],"max_tokens":8}'),
         WIDE,
         ["full"],
@@ -444,7 +333,7 @@ def main() -> None:
         "LCS-003",
         "L2",
         "middle-out",
-        f"curl -X POST {gb}/ai/chat/completions -H {vk} -H \"Alephant-Token-Limit-Exception-Handler: middle-out\" {ct} "
+        f"curl -X POST {gb}/v1/chat/completions -H {vk} -H \"Alephant-Token-Limit-Exception-Handler: middle-out\" {ct} "
         + curl_d_json(r'{"model":"openai/gpt-4o-mini","messages":[{"role":"user","content":"lcs-003"}],"max_tokens":8}'),
         WIDE,
         ["full"],
@@ -453,7 +342,7 @@ def main() -> None:
         "LCS-004",
         "L2",
         "fallback + model override",
-        f"curl -X POST {gb}/ai/chat/completions -H {vk} -H \"Alephant-Token-Limit-Exception-Handler: fallback\" "
+        f"curl -X POST {gb}/v1/chat/completions -H {vk} -H \"Alephant-Token-Limit-Exception-Handler: fallback\" "
         + '-H "Alephant-Model-Override: openai/gpt-4o-mini" '
         + f"{ct} "
         + curl_d_json(r'{"model":"openai/gpt-4o-mini","messages":[{"role":"user","content":"lcs-004"}],"max_tokens":8}'),
@@ -464,17 +353,8 @@ def main() -> None:
         "LCS-005",
         "L2",
         "fallback without second candidate",
-        f"curl -X POST {gb}/ai/chat/completions -H {vk} -H \"Alephant-Token-Limit-Exception-Handler: fallback\" {ct} "
+        f"curl -X POST {gb}/v1/chat/completions -H {vk} -H \"Alephant-Token-Limit-Exception-Handler: fallback\" {ct} "
         + curl_d_json(r'{"model":"openai/gpt-4o-mini","messages":[{"role":"user","content":"lcs-005"}],"max_tokens":8}'),
-        WIDE,
-        ["full"],
-    )
-    files["tc-lcs-006-direct-no-lc.json"] = j(
-        "LCS-006",
-        "L2",
-        "Large context not applied on direct openai path",
-        f"curl -X POST {gb}/openai/v1/chat/completions -H {vk} -H \"Alephant-Token-Limit-Exception-Handler: truncate\" {ct} "
-        + curl_d_json(r'{"model":"gpt-4o-mini","messages":[{"role":"user","content":"lcs-006"}],"max_tokens":8}'),
         WIDE,
         ["full"],
     )
@@ -482,7 +362,7 @@ def main() -> None:
         "LCS-007",
         "L1",
         "Alephant-Session-Id without Alephant-Session-Id",
-        f"curl -X POST {gb}/ai/chat/completions -H {vk} -H \"Alephant-Session-Id: h1\" {ct} "
+        f"curl -X POST {gb}/v1/chat/completions -H {vk} -H \"Alephant-Session-Id: h1\" {ct} "
         + curl_d_json(r'{"model":"openai/gpt-4o-mini","messages":[{"role":"user","content":"lcs-007"}],"max_tokens":4}'),
         {"httpStatus": 200},
         ["full"],
@@ -491,27 +371,18 @@ def main() -> None:
         "LCS-008",
         "L2",
         "Alephant session path without leading slash",
-        f"curl -X POST {gb}/ai/chat/completions -H {vk} "
+        f"curl -X POST {gb}/v1/chat/completions -H {vk} "
         + '-H "Alephant-Session-Id: lcs008" -H "Alephant-Session-Path: a/b" '
         + f"{ct} "
         + curl_d_json(r'{"model":"openai/gpt-4o-mini","messages":[{"role":"user","content":"lcs-008"}],"max_tokens":4}'),
         {"httpStatus": 200},
         ["full"],
     )
-    files["tc-lcs-009-prompt-direct.json"] = j(
-        "LCS-009",
-        "L2",
-        "Alephant-Prompt-ID on direct path",
-        f"curl -X POST {gb}/openai/v1/chat/completions -H {vk} -H \"Alephant-Prompt-ID: e2e-prompt-1\" {ct} "
-        + curl_d_json(r'{"model":"gpt-4o-mini","messages":[{"role":"user","content":"lcs-009"}],"max_tokens":4}'),
-        WIDE,
-        ["full"],
-    )
     files["tc-lcs-010-prompt-unified.json"] = j(
         "LCS-010",
         "L2",
         "Prompt-ID on unified /ai (design boundary probe)",
-        f"curl -X POST {gb}/ai/chat/completions -H {vk} -H \"Alephant-Prompt-ID: e2e-prompt-1\" {ct} "
+        f"curl -X POST {gb}/v1/chat/completions -H {vk} -H \"Alephant-Prompt-ID: e2e-prompt-1\" {ct} "
         + curl_d_json(r'{"model":"openai/gpt-4o-mini","messages":[{"role":"user","content":"lcs-010"}],"max_tokens":4}'),
         WIDE,
         ["full"],
@@ -522,7 +393,7 @@ def main() -> None:
         "KV-001",
         "L4",
         "Alephant-Cache-Enabled",
-        f"curl -X POST {gb}/ai/chat/completions -H {vk} -H \"Alephant-Cache-Enabled: true\" -H \"Alephant-Cache-Bucket-Max-Size: 2\" {ct} "
+        f"curl -X POST {gb}/v1/chat/completions -H {vk} -H \"Alephant-Cache-Enabled: true\" -H \"Alephant-Cache-Bucket-Max-Size: 2\" {ct} "
         + curl_d_json(r'{"model":"openai/gpt-4o-mini","messages":[{"role":"user","content":"kv-001"}],"max_tokens":4}'),
         {"httpStatus": 200},
         ["full"],
@@ -531,7 +402,7 @@ def main() -> None:
         "KV-002",
         "L4",
         "Read only",
-        f"curl -X POST {gb}/ai/chat/completions -H {vk} -H \"Alephant-Cache-Read: true\" -H \"Alephant-Cache-Save: false\" {ct} "
+        f"curl -X POST {gb}/v1/chat/completions -H {vk} -H \"Alephant-Cache-Read: true\" -H \"Alephant-Cache-Save: false\" {ct} "
         + curl_d_json(r'{"model":"openai/gpt-4o-mini","messages":[{"role":"user","content":"kv-002"}],"max_tokens":4}'),
         {"httpStatus": 200},
         ["full"],
@@ -540,7 +411,7 @@ def main() -> None:
         "KV-003",
         "L4",
         "Save only",
-        f"curl -X POST {gb}/ai/chat/completions -H {vk} -H \"Alephant-Cache-Read: false\" -H \"Alephant-Cache-Save: true\" {ct} "
+        f"curl -X POST {gb}/v1/chat/completions -H {vk} -H \"Alephant-Cache-Read: false\" -H \"Alephant-Cache-Save: true\" {ct} "
         + curl_d_json(r'{"model":"openai/gpt-4o-mini","messages":[{"role":"user","content":"kv-003"}],"max_tokens":4}'),
         {"httpStatus": 200},
         ["full"],
@@ -579,7 +450,7 @@ def main() -> None:
         "KV-005",
         "L2",
         "Invalid bucket size 0 -> 5xx",
-        f"curl -X POST {gb}/ai/chat/completions -H {vk} -H \"Alephant-Cache-Bucket-Max-Size: 0\" {ct} "
+        f"curl -X POST {gb}/v1/chat/completions -H {vk} -H \"Alephant-Cache-Bucket-Max-Size: 0\" {ct} "
         + curl_d_json(r'{"model":"openai/gpt-4o-mini","messages":[{"role":"user","content":"kv-005"}],"max_tokens":4}'),
         {"httpStatus": {"in": [500, 502, 503]}},
         ["full"],
@@ -588,7 +459,7 @@ def main() -> None:
         "KV-006",
         "L4",
         "TTL: wait for expiry then MISS — use manual timing or CH; probe only",
-        f"curl -X POST {gb}/ai/chat/completions -H {vk} -H \"Alephant-Cache-Enabled: true\" -H \"Alephant-Cache-Control: max-age=2\" {ct} "
+        f"curl -X POST {gb}/v1/chat/completions -H {vk} -H \"Alephant-Cache-Enabled: true\" -H \"Alephant-Cache-Control: max-age=2\" {ct} "
         + curl_d_json(r'{"model":"openai/gpt-4o-mini","messages":[{"role":"user","content":"kv-006-ttl"}],"max_tokens":4}'),
         {"httpStatus": 200},
         ["manual"],
@@ -597,7 +468,7 @@ def main() -> None:
         "KV-007",
         "L4",
         "Hit headers: use tc-kv-004-t3 or l4-* three-step",
-        f"curl -X POST {gb}/ai/chat/completions -H {vk} -H \"Alephant-Cache-Enabled: true\" {ct} "
+        f"curl -X POST {gb}/v1/chat/completions -H {vk} -H \"Alephant-Cache-Enabled: true\" {ct} "
         + curl_d_json(r'{"model":"openai/gpt-4o-mini","messages":[{"role":"user","content":"kv-007"}],"max_tokens":4}'),
         {"httpStatus": 200},
         ["full"],
@@ -606,7 +477,7 @@ def main() -> None:
         "KV-008",
         "L4",
         "Cache seed isolation",
-        f"curl -X POST {gb}/ai/chat/completions -H {vk} -H \"Alephant-Cache-Enabled: true\" -H \"Alephant-Cache-Seed: seed-a\" {ct} "
+        f"curl -X POST {gb}/v1/chat/completions -H {vk} -H \"Alephant-Cache-Enabled: true\" -H \"Alephant-Cache-Seed: seed-a\" {ct} "
         + curl_d_json(r'{"model":"openai/gpt-4o-mini","messages":[{"role":"user","content":"kv-008"}],"max_tokens":4}'),
         {"httpStatus": 200},
         ["full"],
@@ -619,7 +490,7 @@ def main() -> None:
             "L2",
             f"RL-{n:03d}: rate-limit semantics need burst/load or integration tests; "
             f"single-request probe (manual profile skips default runs)",
-            f"curl -X POST {gb}/ai/chat/completions -H {vk} {ct} "
+            f"curl -X POST {gb}/v1/chat/completions -H {vk} {ct} "
             + curl_d_json(
                 r'{"model":"openai/gpt-4o-mini","messages":[{"role":"user","content":"rl-'
                 + f"{n:03d}"
@@ -649,7 +520,7 @@ def main() -> None:
             f"FB-{n:03d}",
             "L2",
             fb_intent,
-            f"curl -X POST {gb}/ai/chat/completions -H {vk} {ct} "
+            f"curl -X POST {gb}/v1/chat/completions -H {vk} {ct} "
             + curl_d_json(
                 r'{"model":"openai/gpt-4o-mini","messages":[{"role":"user","content":"fb-'
                 + f"{n:03d}"
@@ -665,7 +536,7 @@ def main() -> None:
         "L2",
         "Observability HTTP smoke: when enabled, request logging may emit downstream telemetry; "
         "this JSON does not include a ch block",
-        f"curl -X POST {gb}/ai/chat/completions -H {vk} {ct} "
+        f"curl -X POST {gb}/v1/chat/completions -H {vk} {ct} "
         + curl_d_json(r'{"model":"openai/gpt-4o-mini","messages":[{"role":"user","content":"obs-001"}],"max_tokens":4}'),
         merge_assert({"httpStatus": 200}, OPENAI_CHAT_OK_JSON),
         ["full"],
@@ -674,7 +545,7 @@ def main() -> None:
         "OBS-002",
         "L2",
         "Observability off: requires features without observability (manual env)",
-        f"curl -X POST {gb}/ai/chat/completions -H {vk} {ct} "
+        f"curl -X POST {gb}/v1/chat/completions -H {vk} {ct} "
         + curl_d_json(r'{"model":"openai/gpt-4o-mini","messages":[{"role":"user","content":"obs-002"}],"max_tokens":4}'),
         WIDE,
         ["manual"],
@@ -684,7 +555,7 @@ def main() -> None:
             f"OBS-{n:03d}",
             "L2",
             f"OBS-{n:03d}: large body / cache log fields — see logger tests (manual)",
-            f"curl -X POST {gb}/ai/chat/completions -H {vk} {ct} "
+            f"curl -X POST {gb}/v1/chat/completions -H {vk} {ct} "
             + curl_d_json(
                 r'{"model":"openai/gpt-4o-mini","messages":[{"role":"user","content":"obs-'
                 + f"{n:03d}"
@@ -697,7 +568,7 @@ def main() -> None:
         "OBS-006",
         "L1",
         "x-request-id present",
-        f"curl -X POST {gb}/ai/chat/completions -H {vk} {ct} "
+        f"curl -X POST {gb}/v1/chat/completions -H {vk} {ct} "
         + curl_d_json(r'{"model":"openai/gpt-4o-mini","messages":[{"role":"user","content":"obs-006"}],"max_tokens":4}'),
         merge_assert(
             {"httpStatus": 200, "headers": {"exists": ["x-request-id"]}},
@@ -709,7 +580,7 @@ def main() -> None:
         "OBS-007",
         "L2",
         "Log redaction: verify in log ingest (manual)",
-        f"curl -X POST {gb}/ai/chat/completions -H {vk} {ct} "
+        f"curl -X POST {gb}/v1/chat/completions -H {vk} {ct} "
         + curl_d_json(r'{"model":"openai/gpt-4o-mini","messages":[{"role":"user","content":"obs-007"}],"max_tokens":4}'),
         {"httpStatus": 200},
         ["manual"],
@@ -718,7 +589,7 @@ def main() -> None:
         "OBS-008",
         "L2",
         "sessionId in logs when Alephant-Session-Id set",
-        f"curl -X POST {gb}/ai/chat/completions -H {vk} -H \"Alephant-Session-Id: obs008\" {ct} "
+        f"curl -X POST {gb}/v1/chat/completions -H {vk} -H \"Alephant-Session-Id: obs008\" {ct} "
         + curl_d_json(r'{"model":"openai/gpt-4o-mini","messages":[{"role":"user","content":"obs-008"}],"max_tokens":4}'),
         merge_assert({"httpStatus": 200}, OPENAI_CHAT_OK_JSON),
         ["full"],
@@ -729,7 +600,7 @@ def main() -> None:
         "ERR-001",
         "L1",
         "Unauthorized error shape",
-        f"curl -X POST {gb}/ai/chat/completions {ct} "
+        f"curl -X POST {gb}/v1/chat/completions {ct} "
         + r"-d '{\"model\":\"openai/gpt-4o-mini\",\"messages\":[]}'",
         merge_assert({"httpStatus": {"in": [400, 401, 403]}}, API_ERROR_JSON),
         ["gate", "full"],
@@ -738,7 +609,7 @@ def main() -> None:
         "ERR-002",
         "L1",
         "Malformed JSON body",
-        f"curl -X POST {gb}/ai/chat/completions -H {vk} -H \"Content-Type: application/json\" -d 'not-json{{'",
+        f"curl -X POST {gb}/v1/chat/completions -H {vk} -H \"Content-Type: application/json\" -d 'not-json{{'",
         merge_assert(ERR_WIDE, API_ERROR_JSON),
         ["full"],
     )
@@ -746,7 +617,7 @@ def main() -> None:
         "ERR-003",
         "L1",
         "L1: unknown provider/model → API error JSON (canonical; merged legacy l1-unified-unsupported-model-fake-key)",
-        f"curl -X POST {gb}/ai/chat/completions -H {vk} {ct} "
+        f"curl -X POST {gb}/v1/chat/completions -H {vk} {ct} "
         + curl_d_json(r'{"model":"unknown-provider/not-a-real-model","messages":[{"role":"user","content":"err-003"}],"max_tokens":4}'),
         merge_assert(ERR_WIDE, API_ERROR_JSON),
         ["gate", "full"],
@@ -755,7 +626,7 @@ def main() -> None:
         "ERR-004",
         "L1",
         "Unsupported route / method (GET on POST-only path); body often JSON error",
-        f"curl -X GET {gb}/ai/chat/completions",
+        f"curl -X GET {gb}/v1/chat/completions",
         {
             "httpStatus": {"in": [400, 404, 405, 422]},
             "body": {"contains": ['"error"']},
@@ -766,7 +637,7 @@ def main() -> None:
         "ERR-005",
         "L2",
         "compat_mode=true behavior — run with compat gateway (manual)",
-        f"curl -X POST {gb}/ai/chat/completions -H {vk} {ct} "
+        f"curl -X POST {gb}/v1/chat/completions -H {vk} {ct} "
         + curl_d_json(r'{"model":"openai/gpt-4o-mini","messages":[{"role":"user","content":"err-005"}],"max_tokens":4}'),
         WIDE,
         ["manual"],
@@ -775,7 +646,7 @@ def main() -> None:
         "ERR-006",
         "L2",
         "compat_mode=false: model selects provider (default deployment)",
-        f"curl -X POST {gb}/ai/chat/completions -H {vk} {ct} "
+        f"curl -X POST {gb}/v1/chat/completions -H {vk} {ct} "
         + curl_d_json(r'{"model":"openai/gpt-4o-mini","messages":[{"role":"user","content":"err-006"}],"max_tokens":4}'),
         {"httpStatus": 200},
         ["full"],

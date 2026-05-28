@@ -4,7 +4,7 @@ telemetry:
   exporter: stdout
 
 alephant:
-  base-url: "http://alephantai-logs-collector.dev.svc.cluster.local:8585"
+  log-collector-url: "http://alephantai-logs-collector.dev.svc.cluster.local:8585"
   features: all
 
 # Object storage (S3-compatible API). For local integration, adjust `endpoint`;

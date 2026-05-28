@@ -2,7 +2,7 @@
   "caseId": "OBS-008",
   "tier": "L2",
   "intent": "sessionId in logs when Alephant-Session-Id set",
-  "curl": "curl -X POST \"$GATEWAY_BASE\"/v1/chat/completions -H \"Authorization: Bearer legend\" -H \"Alephant-Session-Id: obs008\" -H \"Content-Type: application/json\" -d '{\"model\":\"openai/gpt-4o-mini\",\"messages\":[{\"role\":\"user\",\"content\":\"obs-008\"}],\"max_tokens\":4}'",
+  "curl": "curl -X POST \"$GATEWAY_BASE\"/v1/chat/completions -H \"Authorization: Bearer $ALEPHANT_CONTROL_OPENROUTER_API_KEY\" -H \"Alephant-Session-Id: obs008\" -H \"Content-Type: application/json\" -d '{\"model\":\"openai/gpt-4o-mini\",\"messages\":[{\"role\":\"user\",\"content\":\"obs-008\"}],\"max_tokens\":4}'",
   "assertions": {
     "httpStatus": 200,
     "json": {

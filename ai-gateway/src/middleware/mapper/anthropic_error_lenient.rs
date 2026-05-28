@@ -16,7 +16,9 @@ const DEFAULT_TOP_LEVEL_TYPE: &str = "error";
 /// Deserialize bytes into [`AnthropicApiError`], accepting strict Anthropic
 /// shape and several common provider variants.
 #[must_use]
-pub(crate) fn deserialize_anthropic_error_lenient(bytes: &[u8]) -> AnthropicApiError {
+pub(crate) fn deserialize_anthropic_error_lenient(
+    bytes: &[u8],
+) -> AnthropicApiError {
     if let Ok(v) = serde_json::from_slice::<AnthropicApiError>(bytes) {
         return v;
     }
@@ -53,14 +55,14 @@ fn anthropic_error_from_json_value(v: &Value) -> AnthropicApiError {
                             Value::Object(map.clone()).to_string()
                         }
                     });
-                let error_type = map
-                    .get("type")
-                    .map(value_to_message_fragment)
-                    .unwrap_or_else(|| DEFAULT_ERROR_TYPE.to_string());
-                let top_level_type = v
-                    .get("type")
-                    .map(value_to_message_fragment)
-                    .unwrap_or_else(|| DEFAULT_TOP_LEVEL_TYPE.to_string());
+                let error_type = map.get("type").map_or_else(
+                    || DEFAULT_ERROR_TYPE.to_string(),
+                    value_to_message_fragment,
+                );
+                let top_level_type = v.get("type").map_or_else(
+                    || DEFAULT_TOP_LEVEL_TYPE.to_string(),
+                    value_to_message_fragment,
+                );
                 return AnthropicApiError {
                     error: ErrorDetails {
                         message: truncate_chars(&message, MESSAGE_MAX_CHARS),
@@ -89,8 +91,10 @@ fn anthropic_error_from_json_value(v: &Value) -> AnthropicApiError {
         let error_type = map
             .get("type")
             .or_else(|| map.get("error_type"))
-            .map(value_to_message_fragment)
-            .unwrap_or_else(|| DEFAULT_ERROR_TYPE.to_string());
+            .map_or_else(
+                || DEFAULT_ERROR_TYPE.to_string(),
+                value_to_message_fragment,
+            );
         return AnthropicApiError {
             error: ErrorDetails {
                 message: truncate_chars(&message, MESSAGE_MAX_CHARS),
@@ -139,8 +143,7 @@ mod tests {
 
     #[test]
     fn strict_anthropic_shape_round_trips() {
-        let bytes =
-            br#"{"type":"error","error":{"type":"invalid_request_error","message":"bad request"}}"#;
+        let bytes = br#"{"type":"error","error":{"type":"invalid_request_error","message":"bad request"}}"#;
         let e = deserialize_anthropic_error_lenient(bytes);
         assert_eq!(e.kind, "error");
         assert_eq!(e.error.kind, "invalid_request_error");

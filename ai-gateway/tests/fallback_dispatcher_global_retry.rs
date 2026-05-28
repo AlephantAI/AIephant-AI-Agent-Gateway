@@ -8,7 +8,10 @@
 use std::collections::HashMap;
 
 use ai_gateway::{
-    config::{Config, alephant::AlephantFeatures, fallback_policy::FallbackPolicyConfig},
+    config::{
+        Config, alephant::AlephantFeatures,
+        fallback_policy::FallbackPolicyConfig,
+    },
     tests::{TestDefault, harness::Harness, mock::MockArgs},
 };
 use http::{Method, Request, StatusCode};
@@ -70,7 +73,7 @@ async fn global_retry_drives_unified_api_retries() {
 
     let req = Request::builder()
         .method(Method::POST)
-        .uri("http://router.alephant.test/ai/chat/completions")
+        .uri("http://router.alephant.test/v1/chat/completions")
         .header("content-type", "application/json")
         .header("authorization", "Bearer sk-alephant-test-key")
         .body(openai_body())

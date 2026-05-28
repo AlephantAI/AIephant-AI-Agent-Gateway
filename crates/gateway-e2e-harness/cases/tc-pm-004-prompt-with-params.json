@@ -1,0 +1,12 @@
+{
+  "caseId": "PM-004",
+  "tier": "L2",
+  "intent": "Alephant-Prompt-ID with template variables (prompt_param_test): 这是一个测试prompt，名字是{{name}}，大小是{{age}}; inputs name=legend age=22",
+  "curl": "curl -X POST \"$GATEWAY_BASE/v1/chat/completions\" -H \"Authorization: Bearer $ALEPHANT_CONTROL_OPENROUTER_API_KEY\" -H \"Content-Type: application/json\" -H \"Alephant-Prompt-ID: prompt_param_test\" -d '{\"model\":\"openai/gpt-4o-mini\",\"messages\":[{\"role\":\"user\",\"content\":\"pm-004\"}],\"max_tokens\":8,\"inputs\":{\"name\":\"legend\",\"age\":\"22\"}}'",
+  "assertions": {
+    "httpStatus": {
+      "in": [200, 400, 404, 422, 429, 500, 502, 503]
+    }
+  },
+  "profile": ["gate", "full"]
+}

@@ -19,7 +19,7 @@ impl OpenAiEmbedderClient {
         model: &str,
         input: &str,
     ) -> Result<Vec<f32>, String> {
-        let url = format!("{}/v1/embeddings", base_url.trim_end_matches('/'));
+        let url = build_embeddings_url(base_url);
         let request_body = json!({
             "model": model,
             "input": input
@@ -59,6 +59,21 @@ impl OpenAiEmbedderClient {
     }
 }
 
+/// If `base_url` already ends with a version segment (`/v1`, `/v2`, …),
+/// append only `/embeddings`; otherwise prepend `/v1`.
+fn build_embeddings_url(base_url: &str) -> String {
+    let trimmed = base_url.trim_end_matches('/');
+    let last_segment = trimmed.rsplit('/').next().unwrap_or("");
+    let has_version = last_segment.len() >= 2
+        && last_segment.starts_with('v')
+        && last_segment[1..].chars().all(|c| c.is_ascii_digit());
+    if has_version {
+        format!("{trimmed}/embeddings")
+    } else {
+        format!("{trimmed}/v1/embeddings")
+    }
+}
+
 #[derive(Debug, Deserialize)]
 struct EmbeddingResponse {
     data: Vec<EmbeddingItem>,
@@ -71,7 +86,43 @@ struct EmbeddingItem {
 
 #[cfg(test)]
 mod tests {
-    use super::OpenAiEmbedderClient;
+    use super::{OpenAiEmbedderClient, build_embeddings_url};
+
+    #[test]
+    fn url_without_version_segment() {
+        assert_eq!(
+            build_embeddings_url("https://api.openai.com"),
+            "https://api.openai.com/v1/embeddings"
+        );
+        assert_eq!(
+            build_embeddings_url("https://api.openai.com/"),
+            "https://api.openai.com/v1/embeddings"
+        );
+    }
+
+    #[test]
+    fn url_with_version_segment() {
+        assert_eq!(
+            build_embeddings_url("https://api.openai.com/v1"),
+            "https://api.openai.com/v1/embeddings"
+        );
+        assert_eq!(
+            build_embeddings_url("https://api.openai.com/v1/"),
+            "https://api.openai.com/v1/embeddings"
+        );
+        assert_eq!(
+            build_embeddings_url("https://api.openai.com/v2"),
+            "https://api.openai.com/v2/embeddings"
+        );
+    }
+
+    #[test]
+    fn url_with_custom_path_no_version() {
+        assert_eq!(
+            build_embeddings_url("https://my-proxy.example.com/api"),
+            "https://my-proxy.example.com/api/v1/embeddings"
+        );
+    }
 
     #[tokio::test]
     async fn embed_returns_error_on_bad_base_url() {

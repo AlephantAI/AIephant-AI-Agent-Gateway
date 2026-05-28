@@ -40,7 +40,8 @@ use crate::{
     middleware::response_headers::ResponseHeaderLayer,
     router::meta::MetaRouter,
     semantic_cache::{
-        EmbeddingBaseUrlResolver, OpenAiEmbedderClient, QdrantStore, SemanticCacheService,
+        EmbeddingBaseUrlResolver, OpenAiEmbedderClient, QdrantStore,
+        SemanticCacheService,
     },
     store::{connect, router::RouterStore, s3::BaseS3Client},
     types::provider::{InferenceProvider, ProviderKeys},
@@ -56,15 +57,20 @@ const SERVICE_NAME: &str = "ai-gateway";
 
 pub type AppResponseBody = tower_http::body::UnsyncBoxBody<
     bytes::Bytes,
-    Box<dyn std::error::Error + std::marker::Send + std::marker::Sync + 'static>,
+    Box<
+        dyn std::error::Error + std::marker::Send + std::marker::Sync + 'static,
+    >,
 >;
 pub type AppResponse = http::Response<AppResponseBody>;
 
 pub type BoxedServiceStack =
     BoxCloneService<crate::types::request::Request, AppResponse, Infallible>;
 
-pub type BoxedHyperServiceStack =
-    BoxCloneService<http::Request<hyper::body::Incoming>, AppResponse, Infallible>;
+pub type BoxedHyperServiceStack = BoxCloneService<
+    http::Request<hyper::body::Incoming>,
+    AppResponse,
+    Infallible,
+>;
 
 /// The top level app used to start the hyper server.
 /// The middleware stack is as follows:
@@ -155,7 +161,10 @@ impl tower::Service<crate::types::request::Request> for App {
 
     #[inline]
     #[tracing::instrument(skip_all)]
-    fn poll_ready(&mut self, ctx: &mut Context<'_>) -> std::task::Poll<Result<(), Self::Error>> {
+    fn poll_ready(
+        &mut self,
+        ctx: &mut Context<'_>,
+    ) -> std::task::Poll<Result<(), Self::Error>> {
         self.service_stack.poll_ready(ctx)
     }
 
@@ -169,12 +178,15 @@ impl tower::Service<crate::types::request::Request> for App {
 impl App {
     pub async fn new(config: Config) -> Result<Self, InitError> {
         tracing::debug!("creating app");
-        crate::config::client_ip_rate_limit::validate_global_client_ip_rate_limit(&config.global)?;
+        crate::config::client_ip_rate_limit::validate_global_client_ip_rate_limit(
+            &config.global,
+        )?;
         crate::config::gateway_in_flight_limit::validate_global_gateway_in_flight_limit(
             &config.global,
         )?;
         let app_state = Self::build_app_state(config).await?;
-        let service_stack = Self::build_service_stack(app_state.clone()).await?;
+        let service_stack =
+            Self::build_service_stack(app_state.clone()).await?;
 
         if let (Some(broadcast_cfg), Some(redis_url)) = (
             app_state
@@ -187,9 +199,11 @@ impl App {
         ) {
             let channel = broadcast_cfg.channel.clone();
             let url = redis_url.clone();
-            tokio::spawn(crate::discover::monitor::health::broadcast::run_subscriber(
-                url, channel,
-            ));
+            tokio::spawn(
+                crate::discover::monitor::health::broadcast::run_subscriber(
+                    url, channel,
+                ),
+            );
         }
 
         let app = Self {
@@ -242,7 +256,8 @@ impl App {
         let master_key_encryption_key = if config.compat_mode {
             None
         } else {
-            let key = crate::crypto::master_key_config::load_master_key_encryption_key()?;
+            let key =
+                crate::crypto::master_key_config::load_master_key_encryption_key()?;
             tracing::info!("MASTER_KEY_ENCRYPTION_KEY loaded successfully");
             Some(key)
         };
@@ -256,13 +271,17 @@ impl App {
             for vk in rows {
                 map.insert(vk.key_hash.clone(), vk);
             }
-            tracing::info!(count = map.len(), "loaded initial virtual_keys into cache");
+            tracing::info!(
+                count = map.len(),
+                "loaded initial virtual_keys into cache"
+            );
             RwLock::new(Some(map))
         } else {
             RwLock::new(None)
         };
 
-        let master_key_cache = match (&router_store, &master_key_encryption_key) {
+        let master_key_cache = match (&router_store, &master_key_encryption_key)
+        {
             (Some(rs), Some(enc_key)) => {
                 tracing::info!("master_key_cache initialised");
                 Some(crate::store::master_key_cache::MasterKeyCache::new(
@@ -298,7 +317,9 @@ impl App {
         };
 
         let content_filter =
-            crate::content_filter::ContentFilterClientHolder::new(content_filter_initial);
+            crate::content_filter::ContentFilterClientHolder::new(
+                content_filter_initial,
+            );
 
         if config.policy.enabled {
             crate::content_filter::spawn_content_filter_reconnect_task(
@@ -314,49 +335,54 @@ impl App {
             .clone()
             .map(|url| Arc::new(crate::app_redis::AppRedis::new(url)));
 
-        let request_log_transport = crate::logger::transport::build_request_log_transport(
-            &config,
-            &alephant_http_client,
-            &metrics,
-            redis.clone(),
-        );
+        let request_log_transport =
+            crate::logger::transport::build_request_log_transport(
+                &config,
+                &alephant_http_client,
+                &metrics,
+                redis.clone(),
+            );
 
         let llm_kv = crate::llm_kv_cache::build_llm_kv_backend(&config).await?;
-        if let Some(collection) = config.semantic_cache.qdrant.collection.as_deref() {
+        if let Some(collection) =
+            config.semantic_cache.qdrant.collection.as_deref()
+        {
             tracing::warn!(
                 collection = %collection,
                 "semantic_cache.qdrant.collection is deprecated and ignored; collection names are derived at runtime"
             );
         }
-        let semantic_cache = if config.semantic_cache.qdrant.url.trim().is_empty() {
-            tracing::warn!(
-                "semantic_cache.qdrant.url is empty; semantic cache \
+        let semantic_cache =
+            if config.semantic_cache.qdrant.url.trim().is_empty() {
+                tracing::warn!(
+                    "semantic_cache.qdrant.url is empty; semantic cache \
                      disabled"
-            );
-            None
-        } else {
-            let openai_base_url_seed = initial_providers_config
-                .get(&InferenceProvider::OpenAI)
-                .map(|provider_cfg| provider_cfg.base_url.to_string());
-            let base_url_resolver = EmbeddingBaseUrlResolver::from_runtime(
-                openai_base_url_seed,
-                redis.clone(),
-                router_store.clone(),
-            );
-            let vector_store = Arc::new(QdrantStore {
-                base_url: config.semantic_cache.qdrant.url.clone(),
-                api_key: config.semantic_cache.qdrant.api_key.clone(),
-                client: reqwest::Client::new(),
-            });
-            let embedder = Arc::new(OpenAiEmbedderClient::new(reqwest::Client::new()));
-            Some(Arc::new(SemanticCacheService::new(
-                embedder,
-                vector_store,
-                base_url_resolver,
-                config.semantic_cache.default_threshold(),
-                config.semantic_cache.default_ttl_seconds,
-            )))
-        };
+                );
+                None
+            } else {
+                let openai_base_url_seed = initial_providers_config
+                    .get(&InferenceProvider::OpenAI)
+                    .map(|provider_cfg| provider_cfg.base_url.to_string());
+                let base_url_resolver = EmbeddingBaseUrlResolver::from_runtime(
+                    openai_base_url_seed,
+                    redis.clone(),
+                    router_store.clone(),
+                );
+                let vector_store = Arc::new(QdrantStore {
+                    base_url: config.semantic_cache.qdrant.url.clone(),
+                    api_key: config.semantic_cache.qdrant.api_key.clone(),
+                    client: reqwest::Client::new(),
+                });
+                let embedder =
+                    Arc::new(OpenAiEmbedderClient::new(reqwest::Client::new()));
+                Some(Arc::new(SemanticCacheService::new(
+                    embedder,
+                    vector_store,
+                    base_url_resolver,
+                    config.semantic_cache.default_threshold(),
+                    config.semantic_cache.default_ttl_seconds,
+                )))
+            };
 
         let app_state = AppState(Arc::new(InnerAppState {
             config,
@@ -378,13 +404,20 @@ impl App {
             master_key_encryption_key,
             virtual_keys_cache,
             master_key_cache,
+            regional_endpoint_cache:
+                crate::dispatcher::regional_endpoint::new_fallback_cache(),
             providers_config: std::sync::RwLock::new(initial_providers_config),
             bare_model_expand_index: std::sync::RwLock::new(
                 crate::discover::router::BareModelExpandIndex::default(),
             ),
+            provider_bootstrap_fingerprint: std::sync::RwLock::new(None),
             content_filter,
-            workspace_provider_allowlist: std::sync::RwLock::new(rustc_hash::FxHashMap::default()),
-            provider_is_router_flags: std::sync::RwLock::new(rustc_hash::FxHashMap::default()),
+            workspace_provider_allowlist: std::sync::RwLock::new(
+                rustc_hash::FxHashMap::default(),
+            ),
+            provider_is_router_flags: std::sync::RwLock::new(
+                rustc_hash::FxHashMap::default(),
+            ),
             llm_kv,
             semantic_cache,
             cache_warmed: AtomicBool::new(false),
@@ -395,22 +428,31 @@ impl App {
 
     /// Constructs the application's service stack, including all middleware
     /// layers and the main router.
-    async fn build_service_stack(app_state: AppState) -> Result<BoxedServiceStack, InitError> {
+    async fn build_service_stack(
+        app_state: AppState,
+    ) -> Result<BoxedServiceStack, InitError> {
         let meter = global::meter(SERVICE_NAME);
-        let otel_metrics_layer = tower_otel_http_metrics::HTTPMetricsLayerBuilder::builder()
-            .with_meter(meter)
-            .with_response_extractor::<_, axum_core::body::Body>(AttributeExtractor)
-            .build()?;
+        let otel_metrics_layer =
+            tower_otel_http_metrics::HTTPMetricsLayerBuilder::builder()
+                .with_meter(meter)
+                .with_response_extractor::<_, axum_core::body::Body>(
+                    AttributeExtractor,
+                )
+                .build()?;
 
         let router = MetaRouter::build(app_state.clone()).await?;
 
         let client_ip_rate_limit_layer =
-            crate::middleware::client_ip_rate_limit::ClientIpRateLimitLayer::new(&app_state)
-                .await?;
+            crate::middleware::client_ip_rate_limit::ClientIpRateLimitLayer::new(
+                &app_state,
+            )
+            .await?;
 
         let gateway_in_flight_layer =
-            crate::middleware::gateway_in_flight_limit::GatewayInFlightLimitLayer::new(&app_state)
-                .await?;
+            crate::middleware::gateway_in_flight_limit::GatewayInFlightLimitLayer::new(
+                &app_state,
+            )
+            .await?;
 
         let compression_layer = CompressionLayer::new()
             .gzip(true)
@@ -470,7 +512,8 @@ impl meltdown::Service for App {
         Box::pin(async move {
             let app_state = self.state.clone();
             let config = app_state.config();
-            let addr = SocketAddr::from((config.server.address, config.server.port));
+            let addr =
+                SocketAddr::from((config.server.address, config.server.port));
             info!(address = %addr, tls = %config.server.tls, "server starting");
 
             let handle = axum_server::Handle::new();
@@ -482,9 +525,10 @@ impl meltdown::Service for App {
 
             match &config.server.tls {
                 TlsConfig::Enabled { cert, key } => {
-                    let tls_config = RustlsConfig::from_pem_file(cert.clone(), key.clone())
-                        .await
-                        .map_err(InitError::Tls)?;
+                    let tls_config =
+                        RustlsConfig::from_pem_file(cert.clone(), key.clone())
+                            .await
+                            .map_err(InitError::Tls)?;
 
                     tokio::select! {
                         biased;
@@ -544,12 +588,18 @@ impl tower::Service<http::Request<hyper::body::Incoming>> for HyperApp {
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
     #[inline]
-    fn poll_ready(&mut self, ctx: &mut Context<'_>) -> std::task::Poll<Result<(), Self::Error>> {
+    fn poll_ready(
+        &mut self,
+        ctx: &mut Context<'_>,
+    ) -> std::task::Poll<Result<(), Self::Error>> {
         self.service_stack.poll_ready(ctx)
     }
 
     #[inline]
-    fn call(&mut self, req: http::Request<hyper::body::Incoming>) -> Self::Future {
+    fn call(
+        &mut self,
+        req: http::Request<hyper::body::Incoming>,
+    ) -> Self::Future {
         self.service_stack.call(req)
     }
 }
@@ -585,7 +635,10 @@ where
     type Future = Ready<Result<Self::Response, Self::Error>>;
 
     #[inline]
-    fn poll_ready(&mut self, _ctx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+    fn poll_ready(
+        &mut self,
+        _ctx: &mut Context<'_>,
+    ) -> Poll<Result<(), Self::Error>> {
         Poll::Ready(Ok(()))
     }
 
@@ -610,7 +663,9 @@ where
 pub async fn build_test_app(mut config: Config) -> Result<App, InitError> {
     #[cfg(feature = "external")]
     if config.cloudflare_kv.is_none() {
-        use crate::{config::cloudflare_kv::CloudflareKvConfig, types::secret::Secret};
+        use crate::{
+            config::cloudflare_kv::CloudflareKvConfig, types::secret::Secret,
+        };
         config.cloudflare_kv = Some(CloudflareKvConfig {
             api_base: "https://api.cloudflare.com/client/v4".into(),
             account_id: "test".into(),
@@ -636,12 +691,13 @@ pub async fn build_test_app(mut config: Config) -> Result<App, InitError> {
         .clone()
         .map(|url| Arc::new(crate::app_redis::AppRedis::new(url)));
 
-    let request_log_transport = crate::logger::transport::build_request_log_transport(
-        &config,
-        &alephant_http_client,
-        &metrics,
-        redis.clone(),
-    );
+    let request_log_transport =
+        crate::logger::transport::build_request_log_transport(
+            &config,
+            &alephant_http_client,
+            &metrics,
+            redis.clone(),
+        );
 
     let app_state = AppState(Arc::new(InnerAppState {
         config,
@@ -663,13 +719,22 @@ pub async fn build_test_app(mut config: Config) -> Result<App, InitError> {
         master_key_encryption_key: None,
         virtual_keys_cache: tokio::sync::RwLock::new(None),
         master_key_cache: None,
+        regional_endpoint_cache:
+            crate::dispatcher::regional_endpoint::new_fallback_cache(),
         providers_config: std::sync::RwLock::new(initial_providers_config),
         bare_model_expand_index: std::sync::RwLock::new(
             crate::discover::router::BareModelExpandIndex::default(),
         ),
-        content_filter: crate::content_filter::ContentFilterClientHolder::new(None),
-        workspace_provider_allowlist: std::sync::RwLock::new(rustc_hash::FxHashMap::default()),
-        provider_is_router_flags: std::sync::RwLock::new(rustc_hash::FxHashMap::default()),
+        provider_bootstrap_fingerprint: std::sync::RwLock::new(None),
+        content_filter: crate::content_filter::ContentFilterClientHolder::new(
+            None,
+        ),
+        workspace_provider_allowlist: std::sync::RwLock::new(
+            rustc_hash::FxHashMap::default(),
+        ),
+        provider_is_router_flags: std::sync::RwLock::new(
+            rustc_hash::FxHashMap::default(),
+        ),
         llm_kv,
         semantic_cache: None,
         cache_warmed: AtomicBool::new(false),
@@ -688,4 +753,11 @@ pub async fn build_test_app(mut config: Config) -> Result<App, InitError> {
             },
         )),
     })
+}
+
+#[cfg(any(test, feature = "testing"))]
+pub async fn build_test_gateway_app(config: Config) -> Result<App, InitError> {
+    let mut app = build_test_app(config).await?;
+    app.service_stack = App::build_service_stack(app.state.clone()).await?;
+    Ok(app)
 }

@@ -13,7 +13,8 @@ use crate::{
     TikvKvClient,
     backend::LlmKvBackend,
     backoff::{
-        DEFAULT_BACKOFF_BASE_MS, DEFAULT_BACKOFF_CAP_MS, DEFAULT_BACKOFF_MAX_SHIFT, next_delay_ms,
+        DEFAULT_BACKOFF_BASE_MS, DEFAULT_BACKOFF_CAP_MS,
+        DEFAULT_BACKOFF_MAX_SHIFT, next_delay_ms,
     },
 };
 
@@ -110,7 +111,10 @@ impl LazyTikvBackend {
 
 #[async_trait]
 impl LlmKvBackend for LazyTikvBackend {
-    async fn get(&self, key: &str) -> Result<Option<String>, crate::error::LlmKvCacheError> {
+    async fn get(
+        &self,
+        key: &str,
+    ) -> Result<Option<String>, crate::error::LlmKvCacheError> {
         let Some(client) = self.ensure_client().await else {
             return Ok(None);
         };

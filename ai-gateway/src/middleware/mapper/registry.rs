@@ -4,15 +4,17 @@ use rustc_hash::FxHashMap as HashMap;
 
 use super::{
     EndpointConverter, TypedEndpointConverter, anthropic::AnthropicConverter,
-    capabilities::ProviderCapabilities, google::GoogleConverter, model::ModelMapper,
-    openai::OpenAIConverter, openai_compatible::OpenAICompatibleConverter,
-    profile_resolver::resolve_mapper_metadata, rule_data::default_provider_rules,
-    rule_validator::validate_provider_rules, rules::ProviderRuleSet,
+    capabilities::ProviderCapabilities, google::GoogleConverter,
+    model::ModelMapper, openai::OpenAIConverter,
+    openai_compatible::OpenAICompatibleConverter,
+    profile_resolver::resolve_mapper_metadata,
+    rule_data::default_provider_rules, rule_validator::validate_provider_rules,
+    rules::ProviderRuleSet,
 };
 use crate::{
     endpoints::{
-        self, ApiEndpoint, anthropic::Anthropic, bedrock::Bedrock, google::Google, ollama::Ollama,
-        openai::OpenAI,
+        self, ApiEndpoint, anthropic::Anthropic, bedrock::Bedrock,
+        google::Google, ollama::Ollama, openai::OpenAI,
     },
     middleware::mapper::{bedrock::BedrockConverter, ollama::OllamaConverter},
     types::provider::InferenceProvider,
@@ -52,7 +54,10 @@ impl EndpointConverterRegistry {
     }
 
     #[must_use]
-    pub fn get_provider_rules(&self, provider: &InferenceProvider) -> Option<&ProviderRuleSet> {
+    pub fn get_provider_rules(
+        &self,
+        provider: &InferenceProvider,
+    ) -> Option<&ProviderRuleSet> {
         self.0.rules.get(provider)
     }
 }
@@ -76,7 +81,10 @@ impl RegistryKey {
 struct EndpointConverterRegistryInner {
     /// In the future when we support other APIs beside just chat completion
     /// we'll want to add another level here.
-    converters: HashMap<RegistryKey, Box<dyn EndpointConverter + Send + Sync + 'static>>,
+    converters: HashMap<
+        RegistryKey,
+        Box<dyn EndpointConverter + Send + Sync + 'static>,
+    >,
     capabilities: HashMap<InferenceProvider, ProviderCapabilities>,
     rules: HashMap<InferenceProvider, ProviderRuleSet>,
 }
@@ -105,7 +113,10 @@ impl EndpointConverterRegistryInner {
         registry.register_provider_metadata(InferenceProvider::Bedrock);
         registry.register_named_openai_compatible_providers(model_mapper);
         registry.register_provider_metadata(InferenceProvider::Custom);
-        registry.register_openai_compatible_converter(InferenceProvider::Custom, model_mapper);
+        registry.register_openai_compatible_converter(
+            InferenceProvider::Custom,
+            model_mapper,
+        );
 
         let key = RegistryKey::new(
             ApiEndpoint::OpenAI(OpenAI::chat_completions()),
@@ -163,22 +174,24 @@ impl EndpointConverterRegistryInner {
             ApiEndpoint::OpenAI(OpenAI::chat_completions()),
             ApiEndpoint::OpenAI(OpenAI::chat_completions()),
         );
-        let converter = TypedEndpointConverter::<
-            endpoints::openai::ChatCompletions,
-            endpoints::openai::ChatCompletions,
-            OpenAIConverter,
-        >::new(OpenAIConverter::new(model_mapper.clone()));
+        let converter =
+            TypedEndpointConverter::<
+                endpoints::openai::ChatCompletions,
+                endpoints::openai::ChatCompletions,
+                OpenAIConverter,
+            >::new(OpenAIConverter::new(model_mapper.clone()));
         registry.register_converter(key, converter);
 
         let key = RegistryKey::new(
             ApiEndpoint::OpenAI(OpenAI::chat_completions()),
             ApiEndpoint::Ollama(Ollama::chat_completions()),
         );
-        let converter = TypedEndpointConverter::<
-            endpoints::openai::ChatCompletions,
-            endpoints::ollama::chat_completions::ChatCompletions,
-            OllamaConverter,
-        >::new(OllamaConverter::new(model_mapper.clone()));
+        let converter =
+            TypedEndpointConverter::<
+                endpoints::openai::ChatCompletions,
+                endpoints::ollama::chat_completions::ChatCompletions,
+                OllamaConverter,
+            >::new(OllamaConverter::new(model_mapper.clone()));
         registry.register_converter(key, converter);
 
         let key = RegistryKey::new(
@@ -298,10 +311,13 @@ impl EndpointConverterRegistryInner {
             .capabilities
             .get(&provider)
             .cloned()
-            .unwrap_or_else(|| self.register_provider_capabilities(provider.clone()));
+            .unwrap_or_else(|| {
+                self.register_provider_capabilities(provider.clone())
+            });
         let rules = default_provider_rules(&provider);
-        validate_provider_rules(&capabilities, &rules)
-            .expect("default provider rules must validate against capabilities");
+        validate_provider_rules(&capabilities, &rules).expect(
+            "default provider rules must validate against capabilities",
+        );
         self.rules.insert(provider, rules);
     }
 
@@ -313,11 +329,17 @@ impl EndpointConverterRegistryInner {
         self.rules.insert(provider, metadata.rules);
     }
 
-    fn register_named_openai_compatible_providers(&mut self, model_mapper: &ModelMapper) {
+    fn register_named_openai_compatible_providers(
+        &mut self,
+        model_mapper: &ModelMapper,
+    ) {
         for provider in model_mapper.configured_providers() {
             if let InferenceProvider::Named(_) = provider {
                 self.register_provider_metadata(provider.clone());
-                self.register_openai_compatible_converter(provider, model_mapper);
+                self.register_openai_compatible_converter(
+                    provider,
+                    model_mapper,
+                );
             }
         }
     }
@@ -331,7 +353,9 @@ impl EndpointConverterRegistryInner {
             .capabilities
             .get(&provider)
             .cloned()
-            .unwrap_or_else(|| self.register_provider_capabilities(provider.clone()));
+            .unwrap_or_else(|| {
+                self.register_provider_capabilities(provider.clone())
+            });
         let rules = self.rules.get(&provider).cloned().unwrap_or_else(|| {
             self.register_provider_rules(provider.clone());
             self.rules
@@ -342,6 +366,8 @@ impl EndpointConverterRegistryInner {
 
         let cc_capabilities = capabilities.clone();
         let cc_rules = rules.clone();
+        let embeddings_capabilities = capabilities.clone();
+        let embeddings_rules = rules.clone();
         let key = RegistryKey::new(
             ApiEndpoint::OpenAI(OpenAI::chat_completions()),
             ApiEndpoint::OpenAICompatible {
@@ -349,16 +375,37 @@ impl EndpointConverterRegistryInner {
                 openai_endpoint: OpenAI::chat_completions(),
             },
         );
-        let converter = TypedEndpointConverter::<
-            endpoints::openai::ChatCompletions,
-            endpoints::openai::OpenAICompatibleChatCompletions,
-            OpenAICompatibleConverter,
-        >::new(OpenAICompatibleConverter::new_with_metadata(
-            provider.clone(),
-            cc_capabilities,
-            cc_rules,
-            model_mapper.clone(),
-        ));
+        let converter =
+            TypedEndpointConverter::<
+                endpoints::openai::ChatCompletions,
+                endpoints::openai::OpenAICompatibleChatCompletions,
+                OpenAICompatibleConverter,
+            >::new(OpenAICompatibleConverter::new_with_metadata(
+                provider.clone(),
+                cc_capabilities,
+                cc_rules,
+                model_mapper.clone(),
+            ));
+        self.register_converter(key, converter);
+
+        let key = RegistryKey::new(
+            ApiEndpoint::OpenAI(OpenAI::embeddings()),
+            ApiEndpoint::OpenAICompatible {
+                provider: provider.clone(),
+                openai_endpoint: OpenAI::embeddings(),
+            },
+        );
+        let converter =
+            TypedEndpointConverter::<
+                endpoints::openai::Embeddings,
+                endpoints::openai::Embeddings,
+                OpenAICompatibleConverter,
+            >::new(OpenAICompatibleConverter::new_with_metadata(
+                provider.clone(),
+                embeddings_capabilities,
+                embeddings_rules,
+                model_mapper.clone(),
+            ));
         self.register_converter(key, converter);
 
         let key = RegistryKey::new(
@@ -368,16 +415,17 @@ impl EndpointConverterRegistryInner {
                 openai_endpoint: OpenAI::responses(),
             },
         );
-        let converter = TypedEndpointConverter::<
-            endpoints::openai::Responses,
-            endpoints::openai::Responses,
-            OpenAICompatibleConverter,
-        >::new(OpenAICompatibleConverter::new_with_metadata(
-            provider,
-            capabilities,
-            rules,
-            model_mapper.clone(),
-        ));
+        let converter =
+            TypedEndpointConverter::<
+                endpoints::openai::Responses,
+                endpoints::openai::Responses,
+                OpenAICompatibleConverter,
+            >::new(OpenAICompatibleConverter::new_with_metadata(
+                provider,
+                capabilities,
+                rules,
+                model_mapper.clone(),
+            ));
         self.register_converter(key, converter);
     }
 }
@@ -387,7 +435,8 @@ mod capability_tests {
     use std::sync::Arc;
 
     use crate::{
-        app::build_test_app, config::Config, middleware::mapper::model::ModelMapper,
+        app::build_test_app, config::Config,
+        middleware::mapper::model::ModelMapper,
         types::provider::InferenceProvider,
     };
 
@@ -466,19 +515,17 @@ mod capability_tests {
 
         assert!(registry.get_provider_capabilities(&provider).is_some());
         assert!(registry.get_provider_rules(&provider).is_some());
-        assert!(
-            registry
-                .get_converter(
-                    &crate::endpoints::ApiEndpoint::OpenAI(
-                        crate::endpoints::openai::OpenAI::chat_completions()
-                    ),
-                    &crate::endpoints::ApiEndpoint::OpenAICompatible {
-                        provider: provider.clone(),
-                        openai_endpoint: crate::endpoints::openai::OpenAI::chat_completions(),
-                    }
-                )
-                .is_some()
-        );
+        assert!(registry
+            .get_converter(
+                &crate::endpoints::ApiEndpoint::OpenAI(
+                    crate::endpoints::openai::OpenAI::chat_completions()
+                ),
+                &crate::endpoints::ApiEndpoint::OpenAICompatible {
+                    provider: provider.clone(),
+                    openai_endpoint: crate::endpoints::openai::OpenAI::chat_completions(),
+                }
+            )
+            .is_some());
     }
 
     #[tokio::test]
@@ -504,11 +551,44 @@ mod capability_tests {
                     ),
                     &crate::endpoints::ApiEndpoint::OpenAICompatible {
                         provider: provider.clone(),
-                        openai_endpoint: crate::endpoints::openai::OpenAI::responses(),
+                        openai_endpoint:
+                            crate::endpoints::openai::OpenAI::responses(),
                     }
                 )
                 .is_some(),
             "Responses converter should be registered for Named provider"
+        );
+    }
+
+    #[tokio::test]
+    async fn registry_registers_named_provider_embeddings_converter() {
+        let mut config = Config::default();
+        let provider = InferenceProvider::Named("custom-openai".into());
+        let template = config
+            .providers
+            .get(&InferenceProvider::Named("deepseek".into()))
+            .expect("deepseek provider should exist")
+            .clone();
+        config.providers.insert(provider.clone(), template);
+
+        let app = build_test_app(config).await.expect("build app");
+        let model_mapper = ModelMapper::new(app.state.clone());
+        let registry = super::EndpointConverterRegistry::new(&model_mapper);
+
+        assert!(
+            registry
+                .get_converter(
+                    &crate::endpoints::ApiEndpoint::OpenAI(
+                        crate::endpoints::openai::OpenAI::embeddings()
+                    ),
+                    &crate::endpoints::ApiEndpoint::OpenAICompatible {
+                        provider: provider.clone(),
+                        openai_endpoint:
+                            crate::endpoints::openai::OpenAI::embeddings(),
+                    }
+                )
+                .is_some(),
+            "Embeddings converter should be registered for Named provider"
         );
     }
 }

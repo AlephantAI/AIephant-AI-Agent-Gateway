@@ -11,7 +11,8 @@ pub fn chunk_has_first_model_token(bytes: &[u8]) -> bool {
 
     if let Some(choices) = v.get("choices").and_then(|c| c.as_array()) {
         for choice in choices {
-            let Some(delta) = choice.get("delta").and_then(|d| d.as_object()) else {
+            let Some(delta) = choice.get("delta").and_then(|d| d.as_object())
+            else {
                 continue;
             };
             for key in ["content", "reasoning_content"] {
@@ -38,6 +39,15 @@ pub fn chunk_has_first_model_token(bytes: &[u8]) -> bool {
         return !text.is_empty();
     }
 
+    // OpenAI Responses API: text/reasoning deltas carry a top-level `"delta"`
+    // string.
+    if let Some("response.output_text.delta" | "response.reasoning_text.delta") =
+        v.get("type").and_then(|t| t.as_str())
+        && let Some(delta) = v.get("delta").and_then(|d| d.as_str())
+    {
+        return !delta.is_empty();
+    }
+
     false
 }
 
@@ -59,8 +69,31 @@ mod tests {
 
     #[test]
     fn anthropic_text_delta_is_first_token() {
-        let j =
-            br#"{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"x"}}"#;
+        let j = br#"{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"x"}}"#;
         assert!(chunk_has_first_model_token(j));
+    }
+
+    #[test]
+    fn responses_output_text_delta_is_first_token() {
+        let j = br#"{"type":"response.output_text.delta","item_id":"item_0","output_index":0,"content_index":0,"delta":"Hello"}"#;
+        assert!(chunk_has_first_model_token(j));
+    }
+
+    #[test]
+    fn responses_reasoning_text_delta_is_first_token() {
+        let j = br#"{"type":"response.reasoning_text.delta","item_id":"item_0","output_index":0,"content_index":0,"delta":"Let me"}"#;
+        assert!(chunk_has_first_model_token(j));
+    }
+
+    #[test]
+    fn responses_created_is_not_first_token() {
+        let j = br#"{"type":"response.created","response":{"id":"resp_1","status":"in_progress"}}"#;
+        assert!(!chunk_has_first_model_token(j));
+    }
+
+    #[test]
+    fn responses_empty_delta_is_not_first_token() {
+        let j = br#"{"type":"response.output_text.delta","item_id":"item_0","output_index":0,"content_index":0,"delta":""}"#;
+        assert!(!chunk_has_first_model_token(j));
     }
 }

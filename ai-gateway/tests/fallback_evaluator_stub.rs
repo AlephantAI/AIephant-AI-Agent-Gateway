@@ -1,6 +1,8 @@
 use ai_gateway::{
     config::fallback_policy::FallbackPolicyConfig,
-    fallback::evaluator::{ErrorClass, FailoverSource, restore_after, should_remove, should_retry},
+    fallback::evaluator::{
+        ErrorClass, FailoverSource, restore_after, should_remove, should_retry,
+    },
 };
 
 #[test]

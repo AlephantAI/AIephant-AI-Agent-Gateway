@@ -2,7 +2,7 @@
   "caseId": "PM-002",
   "tier": "L2",
   "intent": "TIER: C-probe; may not 200; body prompt_id path (S3/CP optional)",
-  "curl": "curl -X POST \"$GATEWAY_BASE/v1/chat/completions\" -H \"Authorization: Bearer legend\" -H \"Content-Type: application/json\" -d '{\"model\":\"openai/gpt-4o-mini\",\"messages\":[{\"role\":\"user\",\"content\":\"pm-002\"}],\"max_tokens\":4,\"prompt_id\":\"e2e-pm-002-dummy\"}'",
+  "curl": "curl -X POST \"$GATEWAY_BASE/v1/chat/completions\" -H \"Authorization: Bearer $ALEPHANT_CONTROL_OPENROUTER_API_KEY\" -H \"Content-Type: application/json\" -d '{\"model\":\"openai/gpt-4o-mini\",\"messages\":[{\"role\":\"user\",\"content\":\"pm-002\"}],\"max_tokens\":4,\"prompt_id\":\"e2e-pm-002-dummy\"}'",
   "assertions": {
     "httpStatus": {
       "in": [200, 400, 401, 403, 404, 422, 429, 500, 502, 503]

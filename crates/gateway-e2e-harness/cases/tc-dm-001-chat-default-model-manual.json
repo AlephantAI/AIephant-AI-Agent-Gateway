@@ -2,7 +2,7 @@
   "caseId": "DM-001",
   "tier": "L2",
   "intent": "Default model: manual positive probe; request omits model and expects chat-like default injection when DB policy seed has an allowed chat/multimodal/reasoning model",
-  "curl": "curl -f -X POST \"$GATEWAY_BASE/v1/chat/completions\" -H \"Authorization: Bearer legend\" -H \"Content-Type: application/json\" -d '{\"messages\":[{\"role\":\"user\",\"content\":\"dm-001 default model smoke\"}],\"max_tokens\":4}'",
+  "curl": "curl -f -X POST \"$GATEWAY_BASE/v1/chat/completions\" -H \"Authorization: Bearer $ALEPHANT_CONTROL_OPENROUTER_API_KEY\" -H \"Content-Type: application/json\" -d '{\"messages\":[{\"role\":\"user\",\"content\":\"dm-001 default model smoke\"}],\"max_tokens\":4}'",
   "assertions": {
     "httpStatus": 200,
     "json": {

@@ -11,7 +11,9 @@ use ai_gateway::{
         FallbackMode, FallbackPolicyConfig, ProviderFailoverHealthPolicy,
         ProviderFailoverRateLimitPolicy,
     },
-    fallback::evaluator::{ErrorClass, FailoverSource, restore_after, should_remove, should_retry},
+    fallback::evaluator::{
+        ErrorClass, FailoverSource, restore_after, should_remove, should_retry,
+    },
 };
 
 // ─── should_retry ────────────────────────────────────────────────────────────

@@ -8,12 +8,21 @@ use tokio::sync::RwLock;
 
 use super::secret::Secret;
 use crate::{
-    config::Config, endpoints::ApiEndpoint, error::provider::ProviderError, metrics::Metrics,
-    types::org::OrgId,
+    config::Config, endpoints::ApiEndpoint, error::provider::ProviderError,
+    metrics::Metrics, types::org::OrgId,
 };
 
 #[derive(
-    Debug, Clone, Default, Copy, Eq, Hash, PartialEq, EnumIter, strum::Display, strum::EnumString,
+    Debug,
+    Clone,
+    Default,
+    Copy,
+    Eq,
+    Hash,
+    PartialEq,
+    EnumIter,
+    strum::Display,
+    strum::EnumString,
 )]
 #[strum(serialize_all = "kebab-case")]
 pub enum ModelProvider {
@@ -45,7 +54,15 @@ impl Serialize for ModelProvider {
 }
 
 #[derive(
-    Debug, Clone, Default, Eq, Hash, PartialEq, EnumIter, serde::Serialize, serde::Deserialize,
+    Debug,
+    Clone,
+    Default,
+    Eq,
+    Hash,
+    PartialEq,
+    EnumIter,
+    serde::Serialize,
+    serde::Deserialize,
 )]
 #[serde(rename_all = "kebab-case")]
 pub enum InferenceProvider {
@@ -67,33 +84,47 @@ impl InferenceProvider {
     #[must_use]
     pub fn endpoints(&self) -> Vec<ApiEndpoint> {
         match self {
-            InferenceProvider::OpenAI => crate::endpoints::openai::OpenAI::iter()
-                .map(ApiEndpoint::OpenAI)
-                .collect(),
-            InferenceProvider::Anthropic => crate::endpoints::anthropic::Anthropic::iter()
-                .map(ApiEndpoint::Anthropic)
-                .collect(),
-            InferenceProvider::Ollama => crate::endpoints::ollama::Ollama::iter()
-                .map(ApiEndpoint::Ollama)
-                .collect(),
-            InferenceProvider::Bedrock => crate::endpoints::bedrock::Bedrock::iter()
-                .map(ApiEndpoint::Bedrock)
-                .collect(),
-            InferenceProvider::GoogleGemini => crate::endpoints::google::Google::iter()
-                .map(ApiEndpoint::Google)
-                .collect(),
-            InferenceProvider::Custom => crate::endpoints::openai::OpenAI::iter()
-                .map(|endpoint| ApiEndpoint::OpenAICompatible {
-                    provider: self.clone(),
-                    openai_endpoint: endpoint,
-                })
-                .collect(),
-            InferenceProvider::Named(_) => crate::endpoints::openai::OpenAI::iter()
-                .map(|endpoint| ApiEndpoint::OpenAICompatible {
-                    provider: self.clone(),
-                    openai_endpoint: endpoint,
-                })
-                .collect(),
+            InferenceProvider::OpenAI => {
+                crate::endpoints::openai::OpenAI::iter()
+                    .map(ApiEndpoint::OpenAI)
+                    .collect()
+            }
+            InferenceProvider::Anthropic => {
+                crate::endpoints::anthropic::Anthropic::iter()
+                    .map(ApiEndpoint::Anthropic)
+                    .collect()
+            }
+            InferenceProvider::Ollama => {
+                crate::endpoints::ollama::Ollama::iter()
+                    .map(ApiEndpoint::Ollama)
+                    .collect()
+            }
+            InferenceProvider::Bedrock => {
+                crate::endpoints::bedrock::Bedrock::iter()
+                    .map(ApiEndpoint::Bedrock)
+                    .collect()
+            }
+            InferenceProvider::GoogleGemini => {
+                crate::endpoints::google::Google::iter()
+                    .map(ApiEndpoint::Google)
+                    .collect()
+            }
+            InferenceProvider::Custom => {
+                crate::endpoints::openai::OpenAI::iter()
+                    .map(|endpoint| ApiEndpoint::OpenAICompatible {
+                        provider: self.clone(),
+                        openai_endpoint: endpoint,
+                    })
+                    .collect()
+            }
+            InferenceProvider::Named(_) => {
+                crate::endpoints::openai::OpenAI::iter()
+                    .map(|endpoint| ApiEndpoint::OpenAICompatible {
+                        provider: self.clone(),
+                        openai_endpoint: endpoint,
+                    })
+                    .collect()
+            }
         }
     }
 
@@ -110,14 +141,18 @@ impl InferenceProvider {
         }
     }
 
-    pub fn from_provider_code(provider_name: &str) -> Result<Self, ProviderError> {
+    pub fn from_provider_code(
+        provider_name: &str,
+    ) -> Result<Self, ProviderError> {
         let normalized = provider_name.trim().to_ascii_lowercase();
         let provider = match normalized.as_str() {
             "openai" => InferenceProvider::OpenAI,
             "anthropic" => InferenceProvider::Anthropic,
             "aws bedrock" | "bedrock" | "amazon" => InferenceProvider::Bedrock,
             "ollama" => InferenceProvider::Ollama,
-            "google" | "google ai (gemini)" | "gemini" => InferenceProvider::GoogleGemini,
+            "google" | "google ai (gemini)" | "gemini" => {
+                InferenceProvider::GoogleGemini
+            }
             "custom" => InferenceProvider::Custom,
 
             // Legacy aliases.
@@ -125,65 +160,13 @@ impl InferenceProvider {
             "zai" => InferenceProvider::Named("z-ai".into()),
             "x.ai (grok)" | "xai" => InferenceProvider::Named("x-ai".into()),
 
-            // `providers.code` values from DB seed / migrations.
-            "ai21"
-            | "aion-labs"
-            | "alfredpros"
-            | "alibaba"
-            | "allenai"
-            | "alpindale"
-            | "anthracite-org"
-            | "arcee-ai"
-            | "baidu"
-            | "bytedance"
-            | "bytedance-seed"
-            | "cognitivecomputations"
-            | "cohere"
-            | "deepcogito"
-            | "deepseek"
-            | "eleutherai"
-            | "essentialai"
-            | "gryphe"
-            | "groq"
-            | "hyperbolic"
-            | "ibm-granite"
-            | "inception"
-            | "inflection"
-            | "kwaipilot"
-            | "liquid"
-            | "mancer"
-            | "meituan"
-            | "meta-llama"
-            | "microsoft"
-            | "minimax"
-            | "mistral"
-            | "mistralai"
-            | "moonshotai"
-            | "morph"
-            | "nex-agi"
-            | "nousresearch"
-            | "nvidia"
-            | "openrouter"
-            | "perplexity"
-            | "prime-intellect"
-            | "qwen"
-            | "reka"
-            | "rekaai"
-            | "relace"
-            | "sao10k"
-            | "stepfun"
-            | "switchpoint"
-            | "tencent"
-            | "thedrummer"
-            | "tngtech"
-            | "undi95"
-            | "upstage"
-            | "writer"
-            | "x-ai"
-            | "xiaomi"
-            | "z-ai" => InferenceProvider::Named(normalized.into()),
+            _ if is_valid_named_provider_code(&normalized) => {
+                InferenceProvider::Named(normalized.into())
+            }
             _ => {
-                return Err(ProviderError::InvalidProviderName(provider_name.into()));
+                return Err(ProviderError::InvalidProviderName(
+                    provider_name.into(),
+                ));
             }
         };
         Ok(provider)
@@ -204,10 +187,21 @@ impl InferenceProvider {
     }
 }
 
+fn is_valid_named_provider_code(code: &str) -> bool {
+    !code.is_empty()
+        && !code.starts_with('-')
+        && !code.ends_with('-')
+        && code
+            .bytes()
+            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
+}
+
 impl FromStr for InferenceProvider {
     type Err = std::convert::Infallible;
 
-    fn from_str(s: &str) -> ::core::result::Result<InferenceProvider, Self::Err> {
+    fn from_str(
+        s: &str,
+    ) -> ::core::result::Result<InferenceProvider, Self::Err> {
         let normalized = s.trim();
         Ok(InferenceProvider::from_provider_code(normalized)
             .unwrap_or_else(|_| InferenceProvider::Named(normalized.into())))
@@ -257,7 +251,9 @@ impl ProviderKey {
     }
 
     #[must_use]
-    pub fn as_aws_credentials(&self) -> (Option<&Secret<String>>, Option<&Secret<String>>) {
+    pub fn as_aws_credentials(
+        &self,
+    ) -> (Option<&Secret<String>>, Option<&Secret<String>>) {
         match self {
             ProviderKey::AwsCredentials {
                 access_key,
@@ -277,12 +273,19 @@ impl ProviderKeys {
         Self(RwLock::new(HashMap::default()))
     }
 
-    pub async fn set_all_provider_keys(&self, provider_keys: HashMap<OrgId, ProviderKeyMap>) {
+    pub async fn set_all_provider_keys(
+        &self,
+        provider_keys: HashMap<OrgId, ProviderKeyMap>,
+    ) {
         let mut keys = self.0.write().await;
         *keys = provider_keys;
     }
 
-    pub async fn set_org_provider_keys(&self, org_id: OrgId, provider_keys: ProviderKeyMap) {
+    pub async fn set_org_provider_keys(
+        &self,
+        org_id: OrgId,
+        provider_keys: ProviderKeyMap,
+    ) {
         let mut keys = self.0.write().await;
         keys.insert(org_id, provider_keys);
     }
@@ -313,7 +316,9 @@ impl std::ops::Deref for ProviderKeyMap {
 
 impl ProviderKeyMap {
     #[must_use]
-    pub fn from_db(provider_keys: HashMap<InferenceProvider, ProviderKey>) -> Self {
+    pub fn from_db(
+        provider_keys: HashMap<InferenceProvider, ProviderKey>,
+    ) -> Self {
         Self(Arc::new(provider_keys))
     }
 }
@@ -339,9 +344,15 @@ mod tests {
     #[test]
     fn inference_provider_as_provider_code_uses_db_code_mapping() {
         assert_eq!(InferenceProvider::OpenAI.as_provider_code(), "openai");
-        assert_eq!(InferenceProvider::Anthropic.as_provider_code(), "anthropic");
+        assert_eq!(
+            InferenceProvider::Anthropic.as_provider_code(),
+            "anthropic"
+        );
         assert_eq!(InferenceProvider::Bedrock.as_provider_code(), "bedrock");
-        assert_eq!(InferenceProvider::GoogleGemini.as_provider_code(), "google");
+        assert_eq!(
+            InferenceProvider::GoogleGemini.as_provider_code(),
+            "google"
+        );
         assert_eq!(
             InferenceProvider::Named("mistral".into()).as_provider_code(),
             "mistral"
@@ -363,7 +374,8 @@ mod tests {
             InferenceProvider::GoogleGemini
         );
         assert_eq!(
-            InferenceProvider::from_provider_code("Google AI (Gemini)").unwrap(),
+            InferenceProvider::from_provider_code("Google AI (Gemini)")
+                .unwrap(),
             InferenceProvider::GoogleGemini
         );
         assert_eq!(
@@ -393,6 +405,10 @@ mod tests {
         assert_eq!(
             InferenceProvider::from_provider_code("minimax").unwrap(),
             InferenceProvider::Named("minimax".into())
+        );
+        assert_eq!(
+            InferenceProvider::from_provider_code("minimax-cn").unwrap(),
+            InferenceProvider::Named("minimax-cn".into())
         );
         assert_eq!(
             InferenceProvider::from_provider_code("moonshotai").unwrap(),
@@ -487,9 +503,12 @@ mod tests {
             "nvidia",
             "openai",
             "openrouter",
+            "perceptron",
             "perplexity",
             "prime-intellect",
             "qwen",
+            "qwen-beijing",
+            "qwen-us",
             "reka",
             "rekaai",
             "relace",
@@ -505,12 +524,36 @@ mod tests {
             "x-ai",
             "xiaomi",
             "z-ai",
+            "z-ai-cn",
+            "z-ai-coding-cn",
         ];
 
         for code in provider_codes {
             assert!(
                 InferenceProvider::from_provider_code(code).is_ok(),
                 "provider code should be accepted: {code}"
+            );
+        }
+    }
+
+    #[test]
+    fn from_provider_code_accepts_valid_dynamic_named_provider_codes() {
+        assert_eq!(
+            InferenceProvider::from_provider_code("new-provider-42").unwrap(),
+            InferenceProvider::Named("new-provider-42".into())
+        );
+        assert_eq!(
+            InferenceProvider::from_provider_code("QWEN-BEIJING").unwrap(),
+            InferenceProvider::Named("qwen-beijing".into())
+        );
+    }
+
+    #[test]
+    fn from_provider_code_rejects_invalid_dynamic_named_provider_codes() {
+        for code in ["", " ", "-qwen", "qwen-", "qwen/us", "qwen us"] {
+            assert!(
+                InferenceProvider::from_provider_code(code).is_err(),
+                "provider code should be rejected: {code:?}"
             );
         }
     }

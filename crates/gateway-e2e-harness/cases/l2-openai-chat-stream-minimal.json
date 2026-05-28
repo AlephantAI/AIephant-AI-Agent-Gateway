@@ -3,7 +3,7 @@
   "tier": "L2",
   "intent": "Unified API OpenAI streaming: SSE data frames and terminal chunk with non-null finish_reason (stop/length/…)",
   "profile": ["full"],
-  "curl": "curl -N -X POST \"$GATEWAY_BASE/v1/chat/completions\" -H \"Authorization: Bearer $ALEPHANT_CONTROL_PLANE_API_KEY\" -H \"Content-Type: application/json\" -d '{\"model\":\"openai/gpt-4o-mini\",\"stream\":true,\"messages\":[{\"role\":\"user\",\"content\":\"openai-stream-minimal\"}],\"max_tokens\":16}'",
+  "curl": "curl -N -X POST \"$GATEWAY_BASE/v1/chat/completions\" -H \"Authorization: Bearer $ALEPHANT_CONTROL_OPENROUTER_API_KEY\" -H \"Content-Type: application/json\" -d '{\"model\":\"openai/gpt-4o-mini\",\"stream\":true,\"messages\":[{\"role\":\"user\",\"content\":\"openai-stream-minimal\"}],\"max_tokens\":16}'",
   "assertions": {
     "httpStatus": 200,
     "headers": {

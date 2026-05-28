@@ -1,16 +1,10 @@
-use std::sync::Arc;
-
 use chrono::{DateTime, Utc};
 use futures::future::BoxFuture;
 use meltdown::Token;
 use rustc_hash::{FxHashMap, FxHashMap as HashMap};
 use serde::{Deserialize, Serialize};
 use sqlx::postgres::PgListener;
-use tokio::{
-    sync::mpsc::Sender,
-    time::{Duration, MissedTickBehavior, interval},
-};
-use tower::discover::Change;
+use tokio::time::{Duration, MissedTickBehavior, interval};
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
@@ -19,12 +13,11 @@ use crate::{
     app_state::AppState,
     discover::router::provider_db_config::build_from_db,
     error::{init::InitError, internal::InternalError, runtime::RuntimeError},
-    router::service::Router,
     store::{
         enrichment_redis::enrichment_cache_key,
         router::{DbVirtualKey, RouterStore},
     },
-    types::{org::OrgId, router::RouterId, user::UserId},
+    types::{org::OrgId, user::UserId},
     virtual_key::legacy_key::Key,
 };
 
@@ -35,7 +28,6 @@ pub struct DatabaseListener {
     app_state: AppState,
     pg_listener: PgListener,
     router_store: RouterStore,
-    tx: Sender<Change<RouterId, Router>>,
     /// Track last seen API key `created_at` timestamps to detect missed events
     last_api_key_created_at: HashMap<String, DateTime<Utc>>,
     /// Track last seen `updated_at` timestamps for `virtual_keys` rows
@@ -48,9 +40,10 @@ pub struct DatabaseListener {
     last_poll_time: Option<DateTime<Utc>>,
     /// Interval for reconnecting the listener
     listener_reconnect_interval: Duration,
-    /// Router IDs currently registered in the dynamic router (derived from
-    /// providers table).  Used to diff against the new set on each poll.
-    current_provider_router_ids: std::collections::HashSet<RouterId>,
+    /// Last known fingerprint of the enabled provider gateway catalog.
+    /// When present, provider polling compares fingerprints so hard deletes
+    /// are visible even though they do not update surviving rows.
+    provider_fingerprint_baseline: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize, PartialEq)]
@@ -106,26 +99,18 @@ enum VirtualKeyUpdateAction {
 }
 
 impl DatabaseListener {
-    pub async fn new(database_url: &str, app_state: AppState) -> Result<Self, InitError> {
-        let pg_listener = PgListener::connect(database_url).await.map_err(|e| {
-            error!(error = %e, "failed to create database listener");
-            InitError::DatabaseConnection(e)
-        })?;
+    pub async fn new(
+        database_url: &str,
+        app_state: AppState,
+    ) -> Result<Self, InitError> {
+        let pg_listener =
+            PgListener::connect(database_url).await.map_err(|e| {
+                error!(error = %e, "failed to create database listener");
+                InitError::DatabaseConnection(e)
+            })?;
 
-        // Retry getting router_tx for up to 1 seconds
-        let tx = tokio::time::timeout(Duration::from_secs(1), async {
-            loop {
-                if let Some(tx) = app_state.get_router_tx().await {
-                    break tx;
-                }
-                debug!("router_tx not available, retrying...");
-                tokio::time::sleep(Duration::from_millis(100)).await;
-            }
-        })
-        .await
-        .map_err(|_| InitError::RouterTxNotSet)?;
-
-        let db_poll_interval = app_state.config().deployment_target.db_poll_interval;
+        let db_poll_interval =
+            app_state.config().deployment_target.db_poll_interval;
         let listener_reconnect_interval = app_state
             .config()
             .deployment_target
@@ -137,19 +122,20 @@ impl DatabaseListener {
             .as_ref()
             .ok_or(InitError::StoreNotConfigured("router_store"))?
             .clone();
+        let provider_fingerprint_baseline =
+            app_state.provider_bootstrap_fingerprint();
 
         Ok(Self {
             app_state,
             pg_listener,
             router_store,
-            tx,
             last_api_key_created_at: HashMap::default(),
             last_virtual_key_updated_at: HashMap::default(),
             last_master_key_updated_at: HashMap::default(),
             poll_interval: db_poll_interval,
             last_poll_time: None,
             listener_reconnect_interval,
-            current_provider_router_ids: std::collections::HashSet::new(),
+            provider_fingerprint_baseline,
         })
     }
 
@@ -224,13 +210,15 @@ impl DatabaseListener {
         };
 
         for row in updated_master_keys {
-            let should_process = match self.last_master_key_updated_at.get(&row.id) {
-                None => true,
-                Some(last_seen) => row.updated_at > *last_seen,
-            };
+            let should_process =
+                match self.last_master_key_updated_at.get(&row.id) {
+                    None => true,
+                    Some(last_seen) => row.updated_at > *last_seen,
+                };
 
             if should_process {
-                if let Some(cache) = self.app_state.0.master_key_cache.as_ref() {
+                if let Some(cache) = self.app_state.0.master_key_cache.as_ref()
+                {
                     cache.invalidate(row.id);
                 }
                 self.last_master_key_updated_at
@@ -241,7 +229,25 @@ impl DatabaseListener {
         // -----------------------------------------------------------
         // Poll providers / provider_models for Cloud route hot-updates
         // -----------------------------------------------------------
-        let provider_probe = if let Some(last_poll) = self.last_poll_time {
+        let mut current_provider_fingerprint = None;
+        let provider_probe = if let Some(provider_fingerprint_baseline) =
+            self.provider_fingerprint_baseline.as_deref()
+        {
+            match self.router_store.provider_gateway_fingerprint().await {
+                Ok(current) => {
+                    let changed = current != provider_fingerprint_baseline;
+                    current_provider_fingerprint = Some(current);
+                    Some(changed)
+                }
+                Err(e) => {
+                    error!(
+                        error = %e,
+                        "failed to fingerprint provider gateway catalog; forcing provider reload"
+                    );
+                    Some(true)
+                }
+            }
+        } else if let Some(last_poll) = self.last_poll_time {
             Some(
                 self.router_store
                     .has_providers_updated_since(last_poll)
@@ -254,21 +260,50 @@ impl DatabaseListener {
         } else {
             None
         };
-        let should_reload_providers = should_reload_providers(self.last_poll_time, provider_probe);
+        let should_reload_providers = should_reload_providers(
+            self.last_poll_time,
+            provider_probe,
+            self.provider_fingerprint_baseline.is_some(),
+        );
 
         if should_reload_providers {
             match self.reload_providers().await {
-                Ok(()) => {}
+                Ok(()) => {
+                    if let Some(current) = current_provider_fingerprint.take() {
+                        self.provider_fingerprint_baseline = Some(current);
+                    } else if self.provider_fingerprint_baseline.is_some() {
+                        match self
+                            .router_store
+                            .provider_gateway_fingerprint()
+                            .await
+                        {
+                            Ok(current) => {
+                                self.provider_fingerprint_baseline =
+                                    Some(current);
+                            }
+                            Err(e) => {
+                                error!(
+                                    error = %e,
+                                    "failed to refresh provider gateway fingerprint after reload"
+                                );
+                            }
+                        }
+                    }
+                }
                 Err(e) => {
                     error!(error = %e, "failed to reload providers from DB");
                 }
             }
+        } else if let Some(current) = current_provider_fingerprint.take() {
+            self.provider_fingerprint_baseline = Some(current);
         }
 
         // -----------------------------------------------------------
         // Poll provider_configs for workspace allowlist hot-updates (F-10)
         // -----------------------------------------------------------
-        let provider_configs_changed = if let Some(last_poll) = self.last_poll_time {
+        let provider_configs_changed = if let Some(last_poll) =
+            self.last_poll_time
+        {
             self.router_store
                 .has_provider_configs_updated_since(last_poll)
                 .await
@@ -364,9 +399,8 @@ impl DatabaseListener {
                 ServiceState::HandlingNotification(notification) => {
                     // This runs outside select!, so it can't be cancelled by
                     // other branches
-                    if let Err(e) = self
-                        .handle_notification(&notification, self.tx.clone())
-                        .await
+                    if let Err(e) =
+                        self.handle_notification(&notification).await
                     {
                         error!(error = %e, "failed to handle db listener notification, continuing");
                     }
@@ -379,10 +413,16 @@ impl DatabaseListener {
                     if let Err(e) = self.pg_listener.unlisten_all().await {
                         error!(error = %e, "failed to unlisten all channels");
                     }
-                    if let Err(e) = self.pg_listener.listen("connected_cloud_gateways").await {
+                    if let Err(e) = self
+                        .pg_listener
+                        .listen("connected_cloud_gateways")
+                        .await
+                    {
                         error!(error = %e, "failed to listen on channel after reconnection");
                     } else {
-                        info!("successfully reconnected and listening on channel");
+                        info!(
+                            "successfully reconnected and listening on channel"
+                        );
                     }
                     state = ServiceState::Idle;
                 }
@@ -390,9 +430,8 @@ impl DatabaseListener {
         }
     }
 
-    /// Re-fetches `providers` + `provider_models` from DB, updates
-    /// `AppState::providers_config`, and sends `Change::Insert` /
-    /// `Change::Remove` to the dynamic router for any routing changes.
+    /// Re-fetches `providers` + `provider_models` from DB and updates the
+    /// provider catalog in AppState.
     async fn reload_providers(&mut self) -> Result<(), RuntimeError> {
         let db_providers = self
             .router_store
@@ -411,7 +450,7 @@ impl DatabaseListener {
                 RuntimeError::Internal(InternalError::Internal)
             })?;
 
-        let (providers_config, router_configs, bare_model_expand) =
+        let (providers_config, bare_model_expand) =
             build_from_db(&db_providers, &db_models);
 
         let flags: FxHashMap<String, bool> = db_providers
@@ -420,55 +459,15 @@ impl DatabaseListener {
             .collect();
         self.app_state.set_provider_is_router_flags(flags);
 
-        let new_router_ids: std::collections::HashSet<RouterId> =
-            router_configs.keys().cloned().collect();
-
         // Update the live ProvidersConfig in AppState.
         self.app_state.set_providers_config(providers_config);
         self.app_state
             .set_bare_model_expand_index(bare_model_expand);
 
-        // Diff: send Remove for any router that disappeared.
-        for removed_id in self.current_provider_router_ids.difference(&new_router_ids) {
-            info!(%removed_id, "reload_providers: removing router");
-            self.tx
-                .send(Change::Remove(removed_id.clone()))
-                .await
-                .map_err(|e| {
-                    error!(error = %e, "reload_providers: failed to send Remove");
-                    RuntimeError::Internal(InternalError::Internal)
-                })?;
-        }
-
-        // Diff: send Insert for new or updated routers.
-        for (router_id, router_config) in router_configs {
-            match Router::new(
-                router_id.clone(),
-                Arc::new(router_config),
-                self.app_state.clone(),
-            )
-            .await
-            {
-                Ok(router) => {
-                    info!(%router_id, "reload_providers: inserting/updating router");
-                    self.tx
-                        .send(Change::Insert(router_id.clone(), router))
-                        .await
-                        .map_err(|e| {
-                            error!(error = %e, "reload_providers: failed to send Insert");
-                            RuntimeError::Internal(InternalError::Internal)
-                        })?;
-                }
-                Err(e) => {
-                    error!(%router_id, error = %e, "reload_providers: failed to build Router, skipping");
-                }
-            }
-        }
-
-        self.current_provider_router_ids = new_router_ids;
         info!(
-            routers = self.current_provider_router_ids.len(),
-            "reload_providers: complete"
+            providers = db_providers.len(),
+            models = db_models.len(),
+            "reload providers catalog succeed"
         );
         Ok(())
     }
@@ -499,31 +498,32 @@ impl DatabaseListener {
     async fn handle_notification(
         &mut self,
         notification: &sqlx::postgres::PgNotification,
-        _tx: Sender<Change<RouterId, Router>>,
     ) -> Result<(), RuntimeError> {
         info!(channel = notification.channel(), "processing notification");
 
         if notification.channel() == "connected_cloud_gateways" {
-            let payload =
-                serde_json::from_str::<ConnectedCloudGatewaysNotification>(notification.payload())
-                    .map_err(|e| {
-                        error!(error = %e, "failed to parse connected_cloud_gateways payload");
-                        InternalError::Deserialize {
-                            ty: "ConnectedCloudGatewaysNotification",
-                            error: e,
-                        }
-                    })?;
+            let payload = serde_json::from_str::<
+                ConnectedCloudGatewaysNotification,
+            >(notification.payload()).map_err(|e| {
+                error!(error = %e, "failed to parse connected_cloud_gateways payload");
+                InternalError::Deserialize {
+                    ty: "ConnectedCloudGatewaysNotification",
+                    error: e,
+                }
+            })?;
 
             match payload {
-                ConnectedCloudGatewaysNotification::RouterConfigUpdated { .. } => {
-                    // Cloud routing is now derived from
-                    // providers/provider_models;
-                    // the routers table is no longer used.  RouterConfigUpdated
-                    // notifications are ignored — provider changes are detected
-                    // on the next poll cycle via has_providers_updated_since().
+                ConnectedCloudGatewaysNotification::RouterConfigUpdated {
+                    ..
+                } => {
+                    // Cloud provider catalog changes are detected on the next
+                    // poll cycle via has_providers_updated_since(). The
+                    // routers table is no longer used for provider catalog
+                    // updates, so RouterConfigUpdated notifications are
+                    // ignored here.
                     debug!(
-                        "RouterConfigUpdated NOTIFY ignored (routes derived \
-                         from providers table)"
+                        "RouterConfigUpdated NOTIFY ignored (provider catalog \
+                         changes are detected by polling)"
                     );
                     Ok(())
                 }
@@ -605,7 +605,10 @@ impl DatabaseListener {
                         Ok(())
                     }
                 },
-                ConnectedCloudGatewaysNotification::EnrichmentTouch { scope, id } => {
+                ConnectedCloudGatewaysNotification::EnrichmentTouch {
+                    scope,
+                    id,
+                } => {
                     let ids = self
                         .router_store
                         .list_virtual_key_ids_for_enrichment_touch(scope, id)
@@ -669,13 +672,18 @@ fn classify_virtual_key_update(
 fn should_reload_providers(
     last_poll_time: Option<DateTime<Utc>>,
     provider_probe: Option<bool>,
+    provider_bootstrapped: bool,
 ) -> bool {
-    if last_poll_time.is_none() {
-        // First poll — always reload to populate initial state.
-        return true;
+    if last_poll_time.is_some() {
+        return provider_probe.unwrap_or(false);
     }
 
-    provider_probe.unwrap_or(false)
+    if provider_bootstrapped {
+        return provider_probe.unwrap_or(false);
+    }
+
+    // First poll without initial provider discovery remains the safe fallback.
+    true
 }
 
 impl meltdown::Service for DatabaseListener {
@@ -732,27 +740,50 @@ mod tests {
     }
 
     #[test]
-    fn should_reload_providers_true_on_first_poll() {
-        assert!(should_reload_providers(None, None));
-        assert!(should_reload_providers(None, Some(false)));
-        assert!(should_reload_providers(None, Some(true)));
+    fn should_reload_providers_true_on_first_poll_without_bootstrap() {
+        assert!(should_reload_providers(None, None, false));
+        assert!(should_reload_providers(None, Some(false), false));
+        assert!(should_reload_providers(None, Some(true), false));
     }
 
     #[test]
-    fn should_reload_providers_follows_probe_after_first_poll() {
-        let last_poll = Some(Utc::now());
-        assert!(should_reload_providers(last_poll, Some(true)));
-        assert!(!should_reload_providers(last_poll, Some(false)));
+    fn should_reload_providers_uses_bootstrap_probe_on_first_poll() {
+        assert!(should_reload_providers(None, Some(true), true));
+        assert!(!should_reload_providers(None, Some(false), true));
     }
 
     #[test]
-    fn should_reload_providers_defaults_false_when_probe_missing() {
-        let last_poll = Some(Utc::now());
-        assert!(!should_reload_providers(last_poll, None));
+    fn should_reload_providers_defaults_false_on_first_poll_with_bootstrap_and_missing_probe()
+     {
+        assert!(!should_reload_providers(None, None, true));
     }
 
     #[test]
-    fn classify_virtual_key_update_upserts_newer_active_row_with_fields_intact() {
+    fn should_reload_providers_follows_last_poll_probe_after_first_poll() {
+        let last_poll = Some(
+            DateTime::from_timestamp(1_700_000_100, 0)
+                .expect("valid timestamp"),
+        );
+        assert!(should_reload_providers(last_poll, Some(true), true));
+        assert!(should_reload_providers(last_poll, Some(true), false));
+        assert!(!should_reload_providers(last_poll, Some(false), true));
+        assert!(!should_reload_providers(last_poll, Some(false), false));
+    }
+
+    #[test]
+    fn should_reload_providers_defaults_false_after_first_poll_when_probe_missing()
+     {
+        let last_poll = Some(
+            DateTime::from_timestamp(1_700_000_100, 0)
+                .expect("valid timestamp"),
+        );
+        assert!(!should_reload_providers(last_poll, None, true));
+        assert!(!should_reload_providers(last_poll, None, false));
+    }
+
+    #[test]
+    fn classify_virtual_key_update_upserts_newer_active_row_with_fields_intact()
+    {
         let now = Utc::now();
         let last_seen = now - chrono::Duration::seconds(1);
         let mut vk = sample_vk("kh-upsert", now);
@@ -821,16 +852,21 @@ mod tests {
     #[test]
     fn deserialize_enrichment_touch_notification() {
         let j = r#"{"event":"enrichment_touch","scope":"agent","id":"550e8400-e29b-41d4-a716-446655440000"}"#;
-        let n: ConnectedCloudGatewaysNotification = serde_json::from_str(j).unwrap();
+        let n: ConnectedCloudGatewaysNotification =
+            serde_json::from_str(j).unwrap();
         match n {
-            ConnectedCloudGatewaysNotification::EnrichmentTouch { scope, id } => {
+            ConnectedCloudGatewaysNotification::EnrichmentTouch {
+                scope,
+                id,
+            } => {
                 assert_eq!(
                     scope,
                     crate::store::enrichment_touch::EnrichmentTouchScope::Agent
                 );
                 assert_eq!(
                     id,
-                    Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap()
+                    Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000")
+                        .unwrap()
                 );
             }
             _ => panic!("wrong variant"),

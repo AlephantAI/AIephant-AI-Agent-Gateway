@@ -19,3 +19,4 @@ chrono = { workspace = true, features = ["serde"] }
 reqwest = { workspace = true }
 tokio = { workspace = true }
 regex.workspace = true
+uuid = { workspace = true, features = ["v7"] }

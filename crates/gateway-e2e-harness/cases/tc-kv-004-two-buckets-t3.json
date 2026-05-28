@@ -2,7 +2,7 @@
   "caseId": "KV-004",
   "tier": "L4",
   "intent": "Two-slot bucket: request 3 expect HIT",
-  "curl": "curl -X POST \"$GATEWAY_BASE/v1/chat/completions\" -H \"Authorization: Bearer legend\" -H \"Content-Type: application/json\" -H \"Alephant-Cache-Enabled: true\" -H \"Alephant-Cache-Bucket-Max-Size: 2\" -d '{\"model\":\"openai/gpt-4o-mini\",\"messages\":[{\"role\":\"user\",\"content\":\"kv-two-buckets-$HARNESS_E2E_RUN_TOKEN\"}],\"max_tokens\":4}'",
+  "curl": "curl -X POST \"$GATEWAY_BASE/v1/chat/completions\" -H \"Authorization: Bearer $ALEPHANT_CONTROL_OPENROUTER_API_KEY\" -H \"Content-Type: application/json\" -H \"Alephant-Cache-Enabled: true\" -H \"Alephant-Cache-Bucket-Max-Size: 2\" -d '{\"model\":\"openai/gpt-4o-mini\",\"messages\":[{\"role\":\"user\",\"content\":\"kv-two-buckets-$HARNESS_E2E_RUN_TOKEN\"}],\"max_tokens\":4}'",
   "assertions": {
     "httpStatus": 200,
     "headers": {

@@ -85,11 +85,11 @@ fn api_error_from_object(map: &Map<String, Value>) -> ApiError {
         .or_else(|| map.get("msg"))
         .and_then(value_as_message_fragment)
         .or_else(|| {
-            map.get("detail").and_then(|d| {
+            map.get("detail").map(|d| {
                 if let Value::String(s) = d {
-                    Some(s.clone())
+                    s.clone()
                 } else {
-                    Some(d.to_string())
+                    d.to_string()
                 }
             })
         })

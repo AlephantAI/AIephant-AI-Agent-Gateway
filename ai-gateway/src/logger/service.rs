@@ -23,22 +23,21 @@ use crate::{
     types::{
         body::BodyReader,
         extensions::{
-            AuthContext, LargeContextDecision, MapperContext, PromptCompressionTokenPair,
-            PromptContext, PromptHeaderForRequestLog,
+            AuthContext, LargeContextDecision, MapperContext,
+            PromptCompressionTokenPair, PromptContext,
+            PromptHeaderForRequestLog,
         },
         logger::{
-            AiGatewayBodyMapping, AlephantLogMetadata, Log, LogMessage, RequestLog, ResponseLog,
+            AiGatewayBodyMapping, AlephantLogMetadata, Log, LogMessage,
+            RequestLog, ResponseLog,
         },
         provider::InferenceProvider,
         router::RouterId,
     },
+    utils::debug_log::DebugLogConfig,
 };
 
 const ALEPHANT_HTTP_CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
-
-/// Max bytes of upstream response body included in INFO tracing (remainder
-/// omitted).
-const DISPATCHER_RESPONSE_BODY_LOG_MAX: usize = 16 * 1024;
 
 #[inline]
 fn nonempty_string_opt(s: &str) -> Option<String> {
@@ -49,7 +48,9 @@ fn nonempty_string_opt(s: &str) -> Option<String> {
     }
 }
 
-fn parse_ai_gateway_body_mapping(raw: Option<&String>) -> Option<AiGatewayBodyMapping> {
+fn parse_ai_gateway_body_mapping(
+    raw: Option<&String>,
+) -> Option<AiGatewayBodyMapping> {
     let s = raw.map_or("", String::as_str).trim();
     if s.is_empty() {
         return None;
@@ -62,13 +63,17 @@ fn parse_ai_gateway_body_mapping(raw: Option<&String>) -> Option<AiGatewayBodyMa
     }
 }
 
-fn inference_provider_for_ingest_meta(provider: &InferenceProvider) -> Option<String> {
+fn inference_provider_for_ingest_meta(
+    provider: &InferenceProvider,
+) -> Option<String> {
     match provider {
         InferenceProvider::OpenAI => Some("openai".to_string()),
         InferenceProvider::Anthropic => Some("anthropic".to_string()),
         InferenceProvider::Bedrock => Some("bedrock".to_string()),
         InferenceProvider::GoogleGemini => Some("google-ai-studio".to_string()),
-        InferenceProvider::Ollama | InferenceProvider::Custom | InferenceProvider::Named(_) => None,
+        InferenceProvider::Ollama
+        | InferenceProvider::Custom
+        | InferenceProvider::Named(_) => None,
     }
 }
 
@@ -161,10 +166,15 @@ pub struct LoggerService {
     session_ctx: Option<SessionHeaders>,
     #[builder(default)]
     ai_gateway_body_mapping: Option<String>,
+    #[builder(default = DebugLogConfig::from_env())]
+    debug_log_config: DebugLogConfig,
 }
 
 impl LoggerService {
-    fn build_alephant_metadata(&mut self, model: &str) -> Result<AlephantLogMetadata, LoggerError> {
+    fn build_alephant_metadata(
+        &mut self,
+        model: &str,
+    ) -> Result<AlephantLogMetadata, LoggerError> {
         let mut alephant_metadata = AlephantLogMetadata::from_headers(
             &mut self.request_headers,
             self.router_id.clone(),
@@ -172,7 +182,8 @@ impl LoggerService {
             self.prompt_ctx.clone(),
         )?;
         alephant_metadata.gateway_model = Some(model.to_string());
-        alephant_metadata.gateway_provider = inference_provider_for_ingest_meta(&self.provider);
+        alephant_metadata.gateway_provider =
+            inference_provider_for_ingest_meta(&self.provider);
         alephant_metadata.provider_model_id =
             self.mapper_ctx.model.as_ref().map(ToString::to_string);
         if let Some(ref decision) = self.large_context_decision {
@@ -180,7 +191,9 @@ impl LoggerService {
         }
         alephant_metadata.is_passthrough_billing = Some(true);
         alephant_metadata.ai_gateway_body_mapping =
-            parse_ai_gateway_body_mapping(self.ai_gateway_body_mapping.as_ref());
+            parse_ai_gateway_body_mapping(
+                self.ai_gateway_body_mapping.as_ref(),
+            );
         Ok(alephant_metadata)
     }
 
@@ -196,28 +209,30 @@ impl LoggerService {
         let alephant_metadata = self.build_alephant_metadata(&model)?;
         let tfft_future = TFFTFuture::new(self.start_instant, self.tfft_rx);
         let collect_future = self.response_body.collect();
-        let (response_body, tfft_duration) = tokio::join!(collect_future, tfft_future);
+        let (response_body, tfft_duration) =
+            tokio::join!(collect_future, tfft_future);
         let response_body = response_body
             .inspect_err(|_| tracing::error!("infallible errored"))
             .expect("infallible never errors")
             .to_bytes();
         let target = self.target_url.to_string();
-        tracing::info!("dispatcher response target_url: {target}");
-        let body_preview = if response_body.len() <= DISPATCHER_RESPONSE_BODY_LOG_MAX {
-            String::from_utf8_lossy(&response_body).into_owned()
-        } else {
-            format!(
-                "{}... (truncated, total {} bytes)",
-                String::from_utf8_lossy(&response_body[..DISPATCHER_RESPONSE_BODY_LOG_MAX],),
-                response_body.len()
-            )
-        };
         tracing::info!(
+            target_url = %target,
             response_len = response_body.len(),
             is_stream = self.mapper_ctx.is_stream,
-            body = %body_preview,
-            "dispatcher response body"
+            "dispatcher response collected"
         );
+        if self.debug_log_config.body {
+            let preview =
+                crate::utils::debug_log::debug_body_preview(&response_body);
+            tracing::info!(
+                target_url = %target,
+                body_len = preview.body_len,
+                truncated = preview.truncated,
+                body = %preview.body,
+                "dispatcher response body (debug body enabled)"
+            );
+        }
         let tfft_duration = tfft_duration.unwrap_or_else(|_| {
             tracing::warn!("Failed to get TFFT signal");
             Duration::from_secs(0)
@@ -225,31 +240,44 @@ impl LoggerService {
         tracing::trace!(tfft_duration = ?tfft_duration, "tfft_duration");
         let req_body_len = self.request_body.len();
         let resp_body_len = response_body.len();
-        let usage_counts =
-            usage_counts_from_response_body_for_log(self.mapper_ctx.is_stream, &response_body);
+        let usage_counts = usage_counts_from_response_body_for_log(
+            self.mapper_ctx.is_stream,
+            &response_body,
+        );
         let origin_prompt_tokens = self
             .prompt_compression_tokens
             .as_ref()
-            .map(|p| i64::from(p.origin_prompt_token))
-            .unwrap_or(usage_counts.prompt_tokens);
+            .map_or(usage_counts.prompt_tokens, |p| {
+                i64::from(p.origin_prompt_token)
+            });
         let response_cost = resolved_response_cost(None, &usage_counts);
-        let country_code = header_optional_string(&self.request_headers, "cf-ipcountry")
-            .or_else(|| header_optional_string(&self.request_headers, "x-alephant-country-code"));
+        let country_code =
+            header_optional_string(&self.request_headers, "cf-ipcountry")
+                .or_else(|| {
+                    header_optional_string(
+                        &self.request_headers,
+                        "x-alephant-country-code",
+                    )
+                });
         let request_referrer = self
             .request_headers
             .get(header::REFERER)
             .and_then(|v| v.to_str().ok())
             .map(std::borrow::ToOwned::to_owned);
-        let (request_body_str, response_body_str, body_ttl_days, storage_location) =
-            crate::logger::cloud_bodies::resolve_cloud_log_bodies(
-                &self.app_state.0.s3,
-                self.auth_ctx.body_ttl_days,
-                self.request_id,
-                self.auth_ctx.org_id,
-                &self.request_body,
-                &response_body,
-            )
-            .await?;
+        let (
+            request_body_str,
+            response_body_str,
+            body_ttl_days,
+            storage_location,
+        ) = crate::logger::cloud_bodies::resolve_cloud_log_bodies(
+            &self.app_state.0.s3,
+            self.auth_ctx.body_ttl_days,
+            self.request_id,
+            self.auth_ctx.org_id,
+            &self.request_body,
+            &response_body,
+        )
+        .await?;
 
         let attributes = [
             KeyValue::new("provider", self.provider.to_string()),
@@ -271,11 +299,14 @@ impl LoggerService {
             provider => provider.to_string().to_uppercase(),
         };
 
-        let properties =
-            extract_request_properties(&self.request_headers, self.session_ctx.as_ref());
+        let properties = extract_request_properties(
+            &self.request_headers,
+            self.session_ctx.as_ref(),
+        );
 
         let completed_at = Utc::now();
-        let latency_ms = (completed_at - self.start_time).num_milliseconds().max(0);
+        let latency_ms =
+            (completed_at - self.start_time).num_milliseconds().max(0);
         let log_response_created_at = self.response_created_at;
         let tfft_ms = if self.mapper_ctx.is_stream {
             i64::try_from(tfft_duration.as_millis()).unwrap_or(i64::MAX)
@@ -283,13 +314,14 @@ impl LoggerService {
             0
         };
 
-        let (prompt_id, prompt_version) = if let Some(ref h) = self.prompt_header_for_request_log {
-            (Some(h.prompt_id.clone()), h.prompt_version.clone())
-        } else if let Some(ref ctx) = self.prompt_ctx {
-            (Some(ctx.prompt_id.clone()), ctx.prompt_version_id.clone())
-        } else {
-            (None, None)
-        };
+        let (prompt_id, prompt_version) =
+            if let Some(ref h) = self.prompt_header_for_request_log {
+                (Some(h.prompt_id.clone()), h.prompt_version.clone())
+            } else if let Some(ref ctx) = self.prompt_ctx {
+                (Some(ctx.prompt_id.clone()), ctx.prompt_version_id.clone())
+            } else {
+                (None, None)
+            };
 
         let ai_mapping_internal = self
             .ai_gateway_body_mapping
@@ -301,7 +333,9 @@ impl LoggerService {
             None
         } else if let Some(store) = self.app_state.router_store() {
             match store.fetch_department_name_by_id(department_id).await {
-                Ok(Some(name)) => nonempty_string_opt(name.trim()).or(Some(String::new())),
+                Ok(Some(name)) => {
+                    nonempty_string_opt(name.trim()).or(Some(String::new()))
+                }
                 Ok(None) => Some(String::new()),
                 Err(e) => {
                     tracing::warn!(
@@ -330,8 +364,12 @@ impl LoggerService {
             .properties(properties)
             .alephant_virtual_key_id(self.auth_ctx.virtual_key_id)
             .alephant_master_key_id(self.auth_ctx.master_key_id)
-            .alephant_virtual_key_name(nonempty_string_opt(&self.auth_ctx.entity_name))
-            .alephant_virtual_key_prefix(nonempty_string_opt(&self.auth_ctx.virtual_key_prefix))
+            .alephant_virtual_key_name(nonempty_string_opt(
+                &self.auth_ctx.entity_name,
+            ))
+            .alephant_virtual_key_prefix(nonempty_string_opt(
+                &self.auth_ctx.virtual_key_prefix,
+            ))
             .alephant_department_name(alephant_department_name)
             .department_id(department_id)
             .entity_type(self.auth_ctx.entity_type.clone())
@@ -420,13 +458,19 @@ mod tests {
             ALEPHANT_SESSION_ID_PROPERTY, ALEPHANT_SESSION_NAME_PROPERTY,
             ALEPHANT_SESSION_PATH_PROPERTY, SessionHeaders,
         },
-        types::{extensions::PromptCompressionTokenPair, usage_tokens::UsageTokenCounts},
+        types::{
+            extensions::PromptCompressionTokenPair,
+            usage_tokens::UsageTokenCounts,
+        },
     };
 
     #[test]
     fn extract_request_properties_includes_session_properties() {
         let mut headers = HeaderMap::new();
-        headers.insert("alephant-property-custom", HeaderValue::from_static("keep"));
+        headers.insert(
+            "alephant-property-custom",
+            HeaderValue::from_static("keep"),
+        );
         let session = SessionHeaders {
             session_id: "session-123".to_string(),
             session_path: Some("/workflow/step-1".to_string()),
@@ -507,8 +551,7 @@ mod tests {
         };
         let got = pair
             .as_ref()
-            .map(|p| i64::from(p.origin_prompt_token))
-            .unwrap_or(usage.prompt_tokens);
+            .map_or(usage.prompt_tokens, |p| i64::from(p.origin_prompt_token));
         assert_eq!(got, 100);
     }
 
@@ -524,8 +567,7 @@ mod tests {
         };
         let got = pair
             .as_ref()
-            .map(|p| i64::from(p.origin_prompt_token))
-            .unwrap_or(usage.prompt_tokens);
+            .map_or(usage.prompt_tokens, |p| i64::from(p.origin_prompt_token));
         assert_eq!(got, 4_096);
     }
 }

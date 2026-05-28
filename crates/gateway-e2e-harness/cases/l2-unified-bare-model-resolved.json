@@ -3,7 +3,7 @@
   "tier": "L2",
   "intent": "Unified /v1/chat/completions accepts bare model id when gateway auto-resolves provider (e.g. gpt-4o-mini → openai)",
   "profile": ["full"],
-  "curl": "curl -X POST \"$GATEWAY_BASE/v1/chat/completions\" -H \"Authorization: Bearer $ALEPHANT_CONTROL_PLANE_API_KEY\" -H \"Content-Type: application/json\" -d '{\"model\":\"gpt-4o-mini\",\"messages\":[{\"role\":\"user\",\"content\":\"bare-model-resolved\"}],\"max_tokens\":4}'",
+  "curl": "curl -X POST \"$GATEWAY_BASE/v1/chat/completions\" -H \"Authorization: Bearer $ALEPHANT_CONTROL_OPENROUTER_API_KEY\" -H \"Content-Type: application/json\" -d '{\"model\":\"gpt-4o-mini\",\"messages\":[{\"role\":\"user\",\"content\":\"bare-model-resolved\"}],\"max_tokens\":4}'",
   "assertions": {
     "httpStatus": 200,
     "json": {

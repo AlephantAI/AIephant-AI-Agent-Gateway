@@ -3,9 +3,9 @@
   "tier": "L4",
   "intent": "TIER: A-strict; REQUIRES: Qdrant + OpenAI-compatible embeddings via OPENAI_API_KEY and EMBEDDING_MODEL_NAME, Alephant-Cache, valid VK + model; curlPrelude warms, main curl paraphrased; HTTP HIT alone cannot distinguish semantic from exact KV",
   "curlPrelude": [
-    "curl -f -X POST \"$GATEWAY_BASE/v1/chat/completions\" -H \"Authorization: Bearer legend\" -H \"Content-Type: application/json\" -H \"Alephant-Cache-Enabled: true\" -H \"Alephant-Embeddings-Key: $OPENAI_API_KEY\" -H \"Alephant-Embeddings-Model: $EMBEDDING_MODEL_NAME\" -d '{\"model\":\"openai/gpt-4o-mini\",\"messages\":[{\"role\":\"user\",\"content\":\"sc-2-warm $HARNESS_E2E_RUN_TOKEN: one word answer yes\"}],\"max_tokens\":32}'"
+    "curl -f -X POST \"$GATEWAY_BASE/v1/chat/completions\" -H \"Authorization: Bearer $ALEPHANT_CONTROL_OPENROUTER_API_KEY\" -H \"Content-Type: application/json\" -H \"Alephant-Cache-Enabled: true\" -H \"Alephant-Embeddings-Key: $OPENAI_API_KEY\" -H \"Alephant-Embeddings-Model: $EMBEDDING_MODEL_NAME\" -d '{\"model\":\"openai/gpt-4o-mini\",\"messages\":[{\"role\":\"user\",\"content\":\"sc-2-warm $HARNESS_E2E_RUN_TOKEN: one word answer yes\"}],\"max_tokens\":32}'"
   ],
-  "curl": "curl -f -X POST \"$GATEWAY_BASE/v1/chat/completions\" -H \"Authorization: Bearer legend\" -H \"Content-Type: application/json\" -H \"Alephant-Cache-Enabled: true\" -H \"Alephant-Embeddings-Key: $OPENAI_API_KEY\" -H \"Alephant-Embeddings-Model: $EMBEDDING_MODEL_NAME\" -d '{\"model\":\"openai/gpt-4o-mini\",\"messages\":[{\"role\":\"user\",\"content\":\"sc-2 paraphrase $HARNESS_E2E_RUN_TOKEN: reply in one word yes\"}],\"max_tokens\":32}'",
+  "curl": "curl -f -X POST \"$GATEWAY_BASE/v1/chat/completions\" -H \"Authorization: Bearer $ALEPHANT_CONTROL_OPENROUTER_API_KEY\" -H \"Content-Type: application/json\" -H \"Alephant-Cache-Enabled: true\" -H \"Alephant-Embeddings-Key: $OPENAI_API_KEY\" -H \"Alephant-Embeddings-Model: $EMBEDDING_MODEL_NAME\" -d '{\"model\":\"openai/gpt-4o-mini\",\"messages\":[{\"role\":\"user\",\"content\":\"sc-2 paraphrase $HARNESS_E2E_RUN_TOKEN: reply in one word yes\"}],\"max_tokens\":32}'",
   "requiredEnv": [
     "OPENAI_API_KEY",
     "EMBEDDING_MODEL_NAME"

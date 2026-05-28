@@ -37,7 +37,10 @@ impl BaseS3Client {
             .tcp_nodelay(true)
             .build()
             .map_err(InitError::CreateReqwestClient)?;
-        let credentials = Credentials::new(config.access_key.expose(), config.secret_key.expose());
+        let credentials = Credentials::new(
+            config.access_key.expose(),
+            config.secret_key.expose(),
+        );
         Ok(Self {
             bucket,
             client,
@@ -46,7 +49,10 @@ impl BaseS3Client {
     }
 
     #[must_use]
-    pub fn put_object<'obj, 'client>(&'client self, object: &'obj str) -> PutObject<'obj>
+    pub fn put_object<'obj, 'client>(
+        &'client self,
+        object: &'obj str,
+    ) -> PutObject<'obj>
     where
         'client: 'obj,
     {
@@ -54,7 +60,10 @@ impl BaseS3Client {
     }
 
     #[must_use]
-    pub fn get_object<'obj, 'client>(&'client self, object: &'obj str) -> GetObject<'obj>
+    pub fn get_object<'obj, 'client>(
+        &'client self,
+        object: &'obj str,
+    ) -> GetObject<'obj>
     where
         'client: 'obj,
     {

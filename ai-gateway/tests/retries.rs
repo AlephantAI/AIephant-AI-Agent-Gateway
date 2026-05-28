@@ -66,7 +66,7 @@ async fn unified_api() {
     let request = Request::builder()
         .method(Method::POST)
         // Route to the fake endpoint through the default router
-        .uri("http://router.alephant.test/ai/chat/completions")
+        .uri("http://router.alephant.test/v1/chat/completions")
         .header("content-type", "application/json")
         .header("authorization", "Bearer sk-alephant-test-key")
         .body(request_body)
