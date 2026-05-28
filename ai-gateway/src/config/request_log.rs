@@ -6,12 +6,9 @@ use url::Url;
 
 /// Default stream key aligned with collector consumption when
 /// `QUEUE_PROVIDER=redis`.
-pub const DEFAULT_REQUEST_RESPONSE_STREAM_KEY: &str =
-    "lc:stream:alephant-request-response-logs";
+pub const DEFAULT_REQUEST_RESPONSE_STREAM_KEY: &str = "lc:stream:alephant-request-response-logs";
 
-#[derive(
-    Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq, Default,
-)]
+#[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "kebab-case")]
 pub enum RequestLogTransport {
     Http,

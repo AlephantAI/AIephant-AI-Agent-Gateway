@@ -7,8 +7,7 @@ use ai_gateway::store::router::RouterStore;
 use sqlx::PgPool;
 use tracing::info;
 
-const DEFAULT_TEST_DB_URL: &str =
-    "postgres://postgres:postgres@localhost:54322/postgres";
+const DEFAULT_TEST_DB_URL: &str = "postgres://postgres:postgres@localhost:54322/postgres";
 
 fn preferred_test_db_url(default_url: &str) -> String {
     std::env::var("POSTGRES_DATABASE_URL")

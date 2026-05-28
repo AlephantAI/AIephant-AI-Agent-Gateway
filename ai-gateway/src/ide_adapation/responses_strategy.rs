@@ -40,40 +40,34 @@ pub(crate) fn maybe_preconvert_responses_to_chat(
     target_endpoint: &ApiEndpoint,
     body: Bytes,
 ) -> Result<(Bytes, ApiEndpoint), ApiError> {
-    let should_preconvert =
-        matches!(&source_endpoint, ApiEndpoint::OpenAI(OpenAI::Responses(_)))
-            && !matches!(
-                target_endpoint,
-                ApiEndpoint::OpenAI(OpenAI::Responses(_))
-                    | ApiEndpoint::OpenAICompatible {
-                        openai_endpoint: OpenAI::Responses(_),
-                        ..
-                    }
-            );
+    let should_preconvert = matches!(&source_endpoint, ApiEndpoint::OpenAI(OpenAI::Responses(_)))
+        && !matches!(
+            target_endpoint,
+            ApiEndpoint::OpenAI(OpenAI::Responses(_))
+                | ApiEndpoint::OpenAICompatible {
+                    openai_endpoint: OpenAI::Responses(_),
+                    ..
+                }
+        );
 
     if !should_preconvert {
         return Ok((body, source_endpoint));
     }
 
     let create_response: async_openai::types::responses::CreateResponse =
-        serde_json::from_slice(&body).map_err(|error| {
-            InternalError::Deserialize {
-                ty: "CreateResponse",
-                error,
-            }
+        serde_json::from_slice(&body).map_err(|error| InternalError::Deserialize {
+            ty: "CreateResponse",
+            error,
         })?;
     let chat_request =
-        crate::middleware::mapper::responses_to_chat_request::convert(
-            create_response,
-        )
-        .map_err(InternalError::MapperError)?;
-    let new_body =
-        Bytes::from(serde_json::to_vec(&chat_request).map_err(|error| {
-            InternalError::Serialize {
-                ty: "CreateChatCompletionRequest",
-                error,
-            }
-        })?);
+        crate::middleware::mapper::responses_to_chat_request::convert(create_response)
+            .map_err(InternalError::MapperError)?;
+    let new_body = Bytes::from(serde_json::to_vec(&chat_request).map_err(|error| {
+        InternalError::Serialize {
+            ty: "CreateChatCompletionRequest",
+            error,
+        }
+    })?);
     tracing::debug!(
         "mapper: pre-converted Responses request to ChatCompletions for \
          cross-protocol target"
@@ -106,13 +100,8 @@ mod tests {
         let source = ApiEndpoint::OpenAI(OpenAI::responses());
         let target = ApiEndpoint::OpenAI(OpenAI::responses());
 
-        let out = normalize_responses_for_target(
-            &source,
-            &target,
-            body,
-            ClientProfile::Unknown,
-        )
-        .expect("normalize should accept routing fields");
+        let out = normalize_responses_for_target(&source, &target, body, ClientProfile::Unknown)
+            .expect("normalize should accept routing fields");
 
         let v: serde_json::Value = serde_json::from_slice(&out).unwrap();
         assert_eq!(v["model"], "gpt-5.5");
@@ -139,13 +128,8 @@ mod tests {
             openai_endpoint: OpenAI::responses(),
         };
 
-        let out = normalize_responses_for_target(
-            &source,
-            &target,
-            body,
-            ClientProfile::CodexCli,
-        )
-        .expect("normalize should rewrite Codex tool_search");
+        let out = normalize_responses_for_target(&source, &target, body, ClientProfile::CodexCli)
+            .expect("normalize should rewrite Codex tool_search");
 
         let v: serde_json::Value = serde_json::from_slice(&out).unwrap();
         assert_eq!(v["tools"][0]["type"], "function");
@@ -163,13 +147,10 @@ mod tests {
             .unwrap(),
         );
         let source = ApiEndpoint::OpenAI(OpenAI::responses());
-        let target = ApiEndpoint::Anthropic(
-            crate::endpoints::anthropic::Anthropic::messages(),
-        );
+        let target = ApiEndpoint::Anthropic(crate::endpoints::anthropic::Anthropic::messages());
 
-        let (out, new_source) =
-            maybe_preconvert_responses_to_chat(source, &target, body)
-                .expect("preconvert should succeed");
+        let (out, new_source) = maybe_preconvert_responses_to_chat(source, &target, body)
+            .expect("preconvert should succeed");
 
         assert!(matches!(
             new_source,

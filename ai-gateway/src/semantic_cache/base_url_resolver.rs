@@ -69,8 +69,7 @@ impl EmbeddingBaseUrlResolver {
         }
 
         if let Some(redis) = &self.redis
-            && let Ok(Some(v)) =
-                redis.get_string(REDIS_KEY_OPENAI_BASE_URL).await
+            && let Ok(Some(v)) = redis.get_string(REDIS_KEY_OPENAI_BASE_URL).await
             && let Some(v) = normalize(Some(v.as_str()))
         {
             self.set_memory_openai_base_url(v.clone()).await;
@@ -115,11 +114,7 @@ impl EmbeddingBaseUrlResolver {
     async fn backfill_redis(&self, url: String) {
         if let Some(redis) = &self.redis {
             let _ = redis
-                .set_ex(
-                    REDIS_KEY_OPENAI_BASE_URL,
-                    &url,
-                    REDIS_BACKFILL_TTL_SECONDS,
-                )
+                .set_ex(REDIS_KEY_OPENAI_BASE_URL, &url, REDIS_BACKFILL_TTL_SECONDS)
                 .await;
         }
     }

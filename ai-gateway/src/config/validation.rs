@@ -41,9 +41,7 @@ pub enum ModelMappingValidationError {
 impl Config {
     /// Validate that model mappings are complete for all possible routing
     /// scenarios
-    pub fn validate_model_mappings(
-        &self,
-    ) -> Result<(), ModelMappingValidationError> {
+    pub fn validate_model_mappings(&self) -> Result<(), ModelMappingValidationError> {
         // Validate each router
         for (router_id, router_config) in self.routers.as_ref() {
             // Get all providers this router might use
@@ -52,18 +50,14 @@ impl Config {
             // Validate each provider exists in global config
             for provider in &router_providers {
                 if !self.providers.contains_key(provider) {
-                    return Err(
-                        ModelMappingValidationError::ProviderNotConfigured {
-                            router: router_id.clone(),
-                            provider: provider.clone(),
-                        },
-                    );
+                    return Err(ModelMappingValidationError::ProviderNotConfigured {
+                        router: router_id.clone(),
+                        provider: provider.clone(),
+                    });
                 }
             }
 
-            let all_models_offered_by_configured_providers: IndexSet<
-                ModelName,
-            > = router_providers
+            let all_models_offered_by_configured_providers: IndexSet<ModelName> = router_providers
                 .iter()
                 .flat_map(|provider| {
                     self.providers[provider]
@@ -83,8 +77,7 @@ impl Config {
                     .map(|m| m.clone().with_latest_version())
                     .collect::<IndexSet<ModelId>>();
 
-                for source_model in &all_models_offered_by_configured_providers
-                {
+                for source_model in &all_models_offered_by_configured_providers {
                     self.can_map_model(
                         source_model,
                         target_provider.clone(),
@@ -112,31 +105,25 @@ impl Config {
             return Ok(());
         }
         // 1. Direct support - target provider offers this model directly
-        let source_model_id = ModelId::from_str_and_provider(
-            target_provider.clone(),
-            source_model.as_ref(),
-        )
-        .map_err(|_| {
-            ModelMappingValidationError::ModelIdParseError {
-                model: source_model.to_string(),
-            }
-        })?;
+        let source_model_id =
+            ModelId::from_str_and_provider(target_provider.clone(), source_model.as_ref())
+                .map_err(|_| ModelMappingValidationError::ModelIdParseError {
+                    model: source_model.to_string(),
+                })?;
         if target_models.contains(&source_model_id) {
             return Ok(());
         }
 
         // 2. Router-specific mapping
         if let Some(router_mappings) = &router_config.model_mappings
-            && let Some(alternatives) =
-                router_mappings.as_ref().get(source_model)
+            && let Some(alternatives) = router_mappings.as_ref().get(source_model)
             && alternatives.iter().any(|m| target_models.contains(m))
         {
             return Ok(());
         }
 
         // 3. Default mapping
-        if let Some(alternatives) =
-            self.default_model_mapping.as_ref().get(source_model)
+        if let Some(alternatives) = self.default_model_mapping.as_ref().get(source_model)
             && alternatives.iter().any(|m| target_models.contains(m))
         {
             return Ok(());
@@ -174,13 +161,8 @@ mod tests {
         };
 
         let target_models = indexmap::IndexSet::from([
-            ModelId::from_str_and_provider(InferenceProvider::OpenAI, "gpt-4")
-                .unwrap(),
-            ModelId::from_str_and_provider(
-                InferenceProvider::OpenAI,
-                "gpt-3.5-turbo",
-            )
-            .unwrap(),
+            ModelId::from_str_and_provider(InferenceProvider::OpenAI, "gpt-4").unwrap(),
+            ModelId::from_str_and_provider(InferenceProvider::OpenAI, "gpt-3.5-turbo").unwrap(),
         ]);
 
         let source_model = ModelName::owned("claude-3-opus".to_string());
@@ -207,8 +189,7 @@ mod tests {
             ..Default::default()
         };
         let target_models = IndexSet::default();
-        let source_model =
-            ModelName::owned("nonexistent-model-xyz".to_string());
+        let source_model = ModelName::owned("nonexistent-model-xyz".to_string());
 
         let result = config.can_map_model(
             &source_model,

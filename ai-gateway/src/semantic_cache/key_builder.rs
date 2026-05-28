@@ -13,10 +13,8 @@ pub fn build_cache_key(
     body: &[u8],
     embedder_identity: &str,
 ) -> Result<BuiltKey, String> {
-    let root: Value = serde_json::from_slice(body)
-        .map_err(|_| "invalid json body".to_string())?;
-    let embed_text = extract_last_user_text(&root)
-        .ok_or_else(|| "no user text".to_string())?;
+    let root: Value = serde_json::from_slice(body).map_err(|_| "invalid json body".to_string())?;
+    let embed_text = extract_last_user_text(&root).ok_or_else(|| "no user text".to_string())?;
     let params_hash = compute_params_hash(path, &root, embedder_identity);
     let cache_key = sha256_hex(&format!("{embed_text}\0{params_hash}"));
     Ok(BuiltKey {
@@ -27,16 +25,11 @@ pub fn build_cache_key(
 }
 
 pub fn extract_embed_text_from_body(body: &[u8]) -> Result<String, String> {
-    let root: Value = serde_json::from_slice(body)
-        .map_err(|_| "invalid json body".to_string())?;
+    let root: Value = serde_json::from_slice(body).map_err(|_| "invalid json body".to_string())?;
     extract_last_user_text(&root).ok_or_else(|| "no user text".to_string())
 }
 
-fn compute_params_hash(
-    path: &str,
-    root: &Value,
-    embedder_identity: &str,
-) -> String {
+fn compute_params_hash(path: &str, root: &Value, embedder_identity: &str) -> String {
     let model = root
         .get("model")
         .and_then(Value::as_str)
@@ -169,8 +162,7 @@ mod tests {
 
     #[test]
     fn params_hash_changes_when_embedding_dimension_changes() {
-        let body =
-            br#"{"model":"gpt-4o-mini","messages":[{"role":"user","content":"hello"}]}"#;
+        let body = br#"{"model":"gpt-4o-mini","messages":[{"role":"user","content":"hello"}]}"#;
         let k1 = build_cache_key(
             "/v1/chat/completions",
             body,

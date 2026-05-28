@@ -20,20 +20,14 @@ pub struct ResponseHeaderService<S> {
 }
 
 impl<S> ResponseHeaderService<S> {
-    pub const fn new(
-        config: ResponseHeadersConfig,
-        inner: S,
-    ) -> ResponseHeaderService<S> {
+    pub const fn new(config: ResponseHeadersConfig, inner: S) -> ResponseHeaderService<S> {
         ResponseHeaderService { config, inner }
     }
 }
 
-impl<S, ReqBody, RespBody> tower::Service<Request<ReqBody>>
-    for ResponseHeaderService<S>
+impl<S, ReqBody, RespBody> tower::Service<Request<ReqBody>> for ResponseHeaderService<S>
 where
-    S: tower::Service<Request<ReqBody>, Response = Response<RespBody>>
-        + Send
-        + 'static,
+    S: tower::Service<Request<ReqBody>, Response = Response<RespBody>> + Send + 'static,
     S::Future: Send + 'static,
 {
     type Response = S::Response;
@@ -41,10 +35,7 @@ where
     type Future = ResponseFuture<S::Future>;
 
     #[inline]
-    fn poll_ready(
-        &mut self,
-        cx: &mut Context<'_>,
-    ) -> Poll<Result<(), Self::Error>> {
+    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         self.inner.poll_ready(cx)
     }
 
@@ -97,11 +88,9 @@ where
             }
         };
         if this.config.provider {
-            let inference_provider =
-                response.extensions().get::<InferenceProvider>();
+            let inference_provider = response.extensions().get::<InferenceProvider>();
             if let Some(inference_provider) = inference_provider
-                && let Ok(header_value) =
-                    http::HeaderValue::from_str(inference_provider.as_ref())
+                && let Ok(header_value) = http::HeaderValue::from_str(inference_provider.as_ref())
             {
                 response
                     .headers_mut()
@@ -110,8 +99,7 @@ where
         }
 
         if this.config.provider_request_id {
-            let provider_request_id =
-                response.extensions().get::<ProviderRequestId>().cloned();
+            let provider_request_id = response.extensions().get::<ProviderRequestId>().cloned();
             if let Some(provider_request_id) = provider_request_id {
                 response
                     .headers_mut()
@@ -160,16 +148,15 @@ mod tests {
             create_mock_service(|| {
                 let mut response = Response::new("test".to_string());
                 response.extensions_mut().insert(InferenceProvider::OpenAI);
-                response.extensions_mut().insert(ProviderRequestId(
-                    HeaderValue::from_static("test-req-id"),
-                ));
+                response
+                    .extensions_mut()
+                    .insert(ProviderRequestId(HeaderValue::from_static("test-req-id")));
                 response
             }),
         );
 
         let request = Request::new(());
-        let response =
-            service.ready().await.unwrap().call(request).await.unwrap();
+        let response = service.ready().await.unwrap().call(request).await.unwrap();
 
         assert!(!response.headers().contains_key("alephant-provider"));
         assert!(!response.headers().contains_key("alephant-provider-req-id"));
@@ -194,8 +181,7 @@ mod tests {
         );
 
         let request = Request::new(());
-        let response =
-            service.ready().await.unwrap().call(request).await.unwrap();
+        let response = service.ready().await.unwrap().call(request).await.unwrap();
 
         assert_eq!(
             response.headers().get("alephant-provider").unwrap(),
@@ -215,16 +201,15 @@ mod tests {
             config,
             create_mock_service(|| {
                 let mut response = Response::new("test".to_string());
-                response.extensions_mut().insert(ProviderRequestId(
-                    HeaderValue::from_static("req-123"),
-                ));
+                response
+                    .extensions_mut()
+                    .insert(ProviderRequestId(HeaderValue::from_static("req-123")));
                 response
             }),
         );
 
         let request = Request::new(());
-        let response =
-            service.ready().await.unwrap().call(request).await.unwrap();
+        let response = service.ready().await.unwrap().call(request).await.unwrap();
 
         assert!(!response.headers().contains_key("alephant-provider"));
         assert_eq!(
@@ -247,16 +232,17 @@ mod tests {
                 response
                     .extensions_mut()
                     .insert(InferenceProvider::GoogleGemini);
-                response.extensions_mut().insert(ProviderRequestId(
-                    HeaderValue::from_static("google-req-456"),
-                ));
+                response
+                    .extensions_mut()
+                    .insert(ProviderRequestId(HeaderValue::from_static(
+                        "google-req-456",
+                    )));
                 response
             }),
         );
 
         let request = Request::new(());
-        let response =
-            service.ready().await.unwrap().call(request).await.unwrap();
+        let response = service.ready().await.unwrap().call(request).await.unwrap();
 
         assert_eq!(
             response.headers().get("alephant-provider").unwrap(),
@@ -281,8 +267,7 @@ mod tests {
         );
 
         let request = Request::new(());
-        let response =
-            service.ready().await.unwrap().call(request).await.unwrap();
+        let response = service.ready().await.unwrap().call(request).await.unwrap();
 
         assert!(!response.headers().contains_key("alephant-provider"));
     }
@@ -300,8 +285,7 @@ mod tests {
         );
 
         let request = Request::new(());
-        let response =
-            service.ready().await.unwrap().call(request).await.unwrap();
+        let response = service.ready().await.unwrap().call(request).await.unwrap();
 
         assert!(!response.headers().contains_key("alephant-provider-req-id"));
     }

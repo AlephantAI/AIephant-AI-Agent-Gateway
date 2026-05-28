@@ -68,8 +68,7 @@ async fn decr_floor_never_negative() {
 }
 
 async fn mq_test_conn() -> redis::aio::MultiplexedConnection {
-    let client =
-        redis::Client::open(test_redis_url().as_str()).expect("redis client");
+    let client = redis::Client::open(test_redis_url().as_str()).expect("redis client");
     client
         .get_multiplexed_async_connection()
         .await

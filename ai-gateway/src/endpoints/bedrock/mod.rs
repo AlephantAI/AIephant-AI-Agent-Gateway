@@ -93,8 +93,7 @@ mod tests {
 
     #[test]
     fn bedrock_unknown_model_path_segment_is_percent_encoded() {
-        let model_id =
-            ModelId::Unknown("anthropic/claude sonnet?x#y".to_string());
+        let model_id = ModelId::Unknown("anthropic/claude sonnet?x#y".to_string());
 
         let path = Bedrock::converse().path(&model_id, false);
 

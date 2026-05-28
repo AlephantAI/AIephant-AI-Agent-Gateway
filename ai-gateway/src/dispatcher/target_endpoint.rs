@@ -63,18 +63,12 @@ impl TargetEndpointResolver {
             });
         }
 
-        if let Some(router_config) =
-            request.request_context.router_config.as_ref()
-            && let Some(router_provider_config) =
-                router_config.providers.as_ref()
-            && let Some(provider_config) =
-                router_provider_config.get(request.target_provider)
+        if let Some(router_config) = request.request_context.router_config.as_ref()
+            && let Some(router_provider_config) = router_config.providers.as_ref()
+            && let Some(provider_config) = router_provider_config.get(request.target_provider)
         {
             return Ok(TargetEndpoint {
-                url: join_provider_upstream_url(
-                    &provider_config.base_url,
-                    request.path_and_query,
-                ),
+                url: join_provider_upstream_url(&provider_config.base_url, request.path_and_query),
                 source: TargetEndpointSource::RouterProviderBaseUrl,
                 cn_retry_url: None,
             });
@@ -83,22 +77,12 @@ impl TargetEndpointResolver {
         let providers_config = self.app_state.get_providers_config();
         let selected_provider_config = providers_config
             .get(request.target_provider)
-            .ok_or_else(|| {
-                InternalError::ProviderNotConfigured(
-                    request.target_provider.clone(),
-                )
-            })?;
+            .ok_or_else(|| InternalError::ProviderNotConfigured(request.target_provider.clone()))?;
         let base_url = selected_provider_config.base_url.clone();
-        let cn_retry_url =
-            selected_provider_config
-                .cn_base_url
-                .clone()
-                .map(|cn_base_url| {
-                    join_provider_upstream_url(
-                        &cn_base_url,
-                        request.path_and_query,
-                    )
-                });
+        let cn_retry_url = selected_provider_config
+            .cn_base_url
+            .clone()
+            .map(|cn_base_url| join_provider_upstream_url(&cn_base_url, request.path_and_query));
         drop(providers_config);
 
         let learned_region = if request.allow_learned_region
@@ -183,8 +167,7 @@ fn adjust_upstream_path_for_versioned_base<'a>(
         Some((p, q)) => (p, Some(q)),
         None => (path_and_query, None),
     };
-    let Some(stripped) = strip_leading_numeric_v_revision_prefix(path_only)
-    else {
+    let Some(stripped) = strip_leading_numeric_v_revision_prefix(path_only) else {
         return Cow::Borrowed(path_and_query);
     };
     let mut out = stripped.to_string();
@@ -195,12 +178,8 @@ fn adjust_upstream_path_for_versioned_base<'a>(
     Cow::Owned(out)
 }
 
-pub(crate) fn join_provider_upstream_url(
-    base_url: &url::Url,
-    path_and_query: &str,
-) -> url::Url {
-    let adjusted =
-        adjust_upstream_path_for_versioned_base(base_url, path_and_query);
+pub(crate) fn join_provider_upstream_url(base_url: &url::Url, path_and_query: &str) -> url::Url {
+    let adjusted = adjust_upstream_path_for_versioned_base(base_url, path_and_query);
     let slice = match &adjusted {
         Cow::Borrowed(s) => *s,
         Cow::Owned(s) => s.as_str(),
@@ -246,9 +225,7 @@ mod tests {
             Config,
             router::{RouterConfig, RouterProviderConfig},
         },
-        types::{
-            extensions::AuthContext, org::OrgId, secret::Secret, user::UserId,
-        },
+        types::{extensions::AuthContext, org::OrgId, secret::Secret, user::UserId},
     };
 
     fn auth_ctx_with_base_url(base_url: Option<&str>) -> AuthContext {
@@ -290,8 +267,8 @@ mod tests {
     #[test]
     fn resolve_master_key_target_url_uses_valid_override() {
         let auth = auth_ctx_with_base_url(Some("https://example.com"));
-        let url = resolve_master_key_target_url(Some(&auth), "/v1/chat")
-            .expect("valid url expected");
+        let url =
+            resolve_master_key_target_url(Some(&auth), "/v1/chat").expect("valid url expected");
         assert_eq!(url.as_str(), "https://example.com/v1/chat");
     }
 
@@ -311,8 +288,7 @@ mod tests {
 
     #[test]
     fn join_url_strips_api_revision_from_versioned_base() {
-        let base_url: url::Url =
-            "https://open.bigmodel.cn/api/paas/v4/".parse().unwrap();
+        let base_url: url::Url = "https://open.bigmodel.cn/api/paas/v4/".parse().unwrap();
 
         for path in ["v1/chat/completions", "/v1/chat/completions"] {
             let target_url = join_provider_upstream_url(&base_url, path);
@@ -326,11 +302,9 @@ mod tests {
 
     #[test]
     fn join_url_strips_v_prefix_for_master_key_base() {
-        let base_url: url::Url =
-            "https://mk.example/api/service/v2/".parse().unwrap();
+        let base_url: url::Url = "https://mk.example/api/service/v2/".parse().unwrap();
 
-        let target_url =
-            join_provider_upstream_url(&base_url, "v1/embeddings?user=a");
+        let target_url = join_provider_upstream_url(&base_url, "v1/embeddings?user=a");
 
         assert_eq!(
             target_url.as_str(),
@@ -340,11 +314,9 @@ mod tests {
 
     #[test]
     fn join_url_keeps_revision_without_trailing_slash() {
-        let base_url: url::Url =
-            "https://open.bigmodel.cn/api/paas/v4".parse().unwrap();
+        let base_url: url::Url = "https://open.bigmodel.cn/api/paas/v4".parse().unwrap();
 
-        let target_url =
-            join_provider_upstream_url(&base_url, "v1/chat/completions");
+        let target_url = join_provider_upstream_url(&base_url, "v1/chat/completions");
 
         assert_eq!(
             target_url.as_str(),
@@ -368,9 +340,7 @@ mod tests {
                 providers: Some(HashMap::from([(
                     InferenceProvider::OpenAI,
                     RouterProviderConfig {
-                        base_url: "https://router-provider.test/"
-                            .parse()
-                            .unwrap(),
+                        base_url: "https://router-provider.test/".parse().unwrap(),
                         version: None,
                     },
                 )])),
@@ -412,9 +382,7 @@ mod tests {
                 providers: Some(HashMap::from([(
                     InferenceProvider::OpenAI,
                     RouterProviderConfig {
-                        base_url: "https://router-provider.test/"
-                            .parse()
-                            .unwrap(),
+                        base_url: "https://router-provider.test/".parse().unwrap(),
                         version: None,
                     },
                 )])),
@@ -436,10 +404,7 @@ mod tests {
             endpoint.url.as_str(),
             "https://router-provider.test/v1/chat/completions"
         );
-        assert_eq!(
-            endpoint.source,
-            TargetEndpointSource::RouterProviderBaseUrl
-        );
+        assert_eq!(endpoint.source, TargetEndpointSource::RouterProviderBaseUrl);
         assert_eq!(endpoint.cn_retry_url, None);
     }
 
@@ -468,10 +433,7 @@ mod tests {
             endpoint.url.as_str(),
             "https://global-provider.test/v1/chat/completions"
         );
-        assert_eq!(
-            endpoint.source,
-            TargetEndpointSource::GlobalProviderBaseUrl
-        );
+        assert_eq!(endpoint.source, TargetEndpointSource::GlobalProviderBaseUrl);
     }
 
     #[tokio::test]
@@ -507,8 +469,7 @@ mod tests {
             .get_mut(&InferenceProvider::OpenAI)
             .expect("openai config");
         openai_config.base_url = "https://global.openai.test/".parse().unwrap();
-        openai_config.cn_base_url =
-            Some("https://cn.openai.test/".parse().unwrap());
+        openai_config.cn_base_url = Some("https://cn.openai.test/".parse().unwrap());
         let resolver = resolver(config).await;
         let auth = auth_ctx_with_base_url(None);
         let master_key_id = auth.master_key_id;
@@ -549,8 +510,7 @@ mod tests {
             .get_mut(&InferenceProvider::OpenAI)
             .expect("openai config");
         openai_config.base_url = "https://global.openai.test/".parse().unwrap();
-        openai_config.cn_base_url =
-            Some("https://cn.openai.test/".parse().unwrap());
+        openai_config.cn_base_url = Some("https://cn.openai.test/".parse().unwrap());
         let resolver = resolver(config).await;
         let auth = auth_ctx_with_base_url(None);
         let master_key_id = auth.master_key_id;
@@ -576,10 +536,7 @@ mod tests {
             endpoint.url.as_str(),
             "https://global.openai.test/v1/chat/completions"
         );
-        assert_eq!(
-            endpoint.source,
-            TargetEndpointSource::GlobalProviderBaseUrl
-        );
+        assert_eq!(endpoint.source, TargetEndpointSource::GlobalProviderBaseUrl);
         assert_eq!(
             endpoint.cn_retry_url.as_ref().map(url::Url::as_str),
             Some("https://cn.openai.test/v1/chat/completions")
@@ -594,8 +551,7 @@ mod tests {
             .get_mut(&InferenceProvider::OpenAI)
             .expect("openai config");
         openai_config.base_url = "https://global.openai.test/".parse().unwrap();
-        openai_config.cn_base_url =
-            Some("https://cn.openai.test/".parse().unwrap());
+        openai_config.cn_base_url = Some("https://cn.openai.test/".parse().unwrap());
         let resolver = resolver(config).await;
         let auth = auth_ctx_with_base_url(Some("https://master-key.test/"));
         let master_key_id = auth.master_key_id;

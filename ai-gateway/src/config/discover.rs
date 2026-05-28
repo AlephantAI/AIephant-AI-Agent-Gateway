@@ -4,9 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use super::monitor::MonitorConfig;
 
-#[derive(
-    Debug, Default, Clone, Copy, PartialEq, Eq, Deserialize, Serialize,
-)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub enum ProviderKeysSource {
     #[default]
@@ -70,8 +68,7 @@ mod tests {
     fn discover_config_round_trip() {
         let config = DiscoverConfig::default();
         let serialized = serde_json::to_string(&config).unwrap();
-        let deserialized =
-            serde_json::from_str::<DiscoverConfig>(&serialized).unwrap();
+        let deserialized = serde_json::from_str::<DiscoverConfig>(&serialized).unwrap();
         assert_eq!(config, deserialized);
     }
 }

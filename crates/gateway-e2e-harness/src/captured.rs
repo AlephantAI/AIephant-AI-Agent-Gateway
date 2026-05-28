@@ -34,9 +34,9 @@ impl CapturedResponse {
     /// `__HARNESS_TIME__:<seconds>`
     pub fn parse_curl_stdout(raw: &str) -> anyhow::Result<Self> {
         let marker = "__HARNESS_STATUS__:";
-        let idx = raw.rfind(marker).ok_or_else(|| {
-            anyhow::anyhow!("missing __HARNESS_STATUS__ trailer; check curl -w")
-        })?;
+        let idx = raw
+            .rfind(marker)
+            .ok_or_else(|| anyhow::anyhow!("missing __HARNESS_STATUS__ trailer; check curl -w"))?;
         let prefix = raw[..idx].trim_end();
         let trailer = &raw[idx..];
 
@@ -49,10 +49,9 @@ impl CapturedResponse {
                 time_total = Some(v.trim().parse()?);
             }
         }
-        let status =
-            status.ok_or_else(|| anyhow::anyhow!("trailer missing status"))?;
-        let time_total_sec = time_total
-            .ok_or_else(|| anyhow::anyhow!("trailer missing time_total"))?;
+        let status = status.ok_or_else(|| anyhow::anyhow!("trailer missing status"))?;
+        let time_total_sec =
+            time_total.ok_or_else(|| anyhow::anyhow!("trailer missing time_total"))?;
 
         let (hdr_block, body) = split_headers_body(prefix);
 
@@ -80,9 +79,7 @@ fn split_headers_body(prefix: &str) -> (&str, &str) {
     }
 }
 
-fn parse_headers_block(
-    hdr_block: &str,
-) -> anyhow::Result<HashMap<String, String>> {
+fn parse_headers_block(hdr_block: &str) -> anyhow::Result<HashMap<String, String>> {
     let mut m = HashMap::new();
     let mut lines = hdr_block.lines();
     let status_line = lines.next().unwrap_or("");

@@ -40,8 +40,7 @@ impl MemoryLimiter {
         }
         let now = Instant::now();
         let window = Duration::from_secs(1);
-        let mut guard =
-            self.inner.lock().expect("memory limiter mutex poisoned");
+        let mut guard = self.inner.lock().expect("memory limiter mutex poisoned");
         if guard.map.len() >= MAX_TRACKED_IPS && !guard.map.contains_key(&ip) {
             // Simple eviction: remove any entry (approximately random from hash
             // iteration order).

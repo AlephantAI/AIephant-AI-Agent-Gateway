@@ -496,8 +496,7 @@ impl RouterStore {
             .iter()
             .map(|(provider, _)| provider.clone())
             .collect();
-        let model_ids: Vec<String> =
-            models.iter().map(|(_, model)| model.clone()).collect();
+        let model_ids: Vec<String> = models.iter().map(|(_, model)| model.clone()).collect();
 
         let rows = sqlx::query_as::<_, DbGatewayModelSelectionInfoBatchRow>(
             r#"SELECT req.ord,
@@ -760,9 +759,7 @@ impl RouterStore {
     /// skip a redundant full provider reload. The fingerprint includes enabled
     /// providers and enabled provider_models so hard deletes and enable/disable
     /// changes are visible without relying on application clock watermarks.
-    pub async fn provider_gateway_fingerprint(
-        &self,
-    ) -> Result<String, InternalError> {
+    pub async fn provider_gateway_fingerprint(&self) -> Result<String, InternalError> {
         let catalog = sqlx::query_scalar::<_, String>(
             r"SELECT COALESCE(string_agg(entry, E'\n' ORDER BY entry), '')
                 FROM (
@@ -812,10 +809,7 @@ impl RouterStore {
     /// the in-memory snapshot from `AppState` instead.
     pub async fn get_workspace_provider_allowlist(
         &self,
-    ) -> Result<
-        rustc_hash::FxHashMap<Uuid, HashSet<InferenceProvider>>,
-        InternalError,
-    > {
+    ) -> Result<rustc_hash::FxHashMap<Uuid, HashSet<InferenceProvider>>, InternalError> {
         #[derive(sqlx::FromRow)]
         struct Row {
             workspace_id: Uuid,
@@ -837,9 +831,7 @@ impl RouterStore {
         let mut map: rustc_hash::FxHashMap<Uuid, HashSet<InferenceProvider>> =
             rustc_hash::FxHashMap::default();
         for row in rows {
-            if let Ok(provider) =
-                InferenceProvider::from_provider_code(&row.provider_code)
-            {
+            if let Ok(provider) = InferenceProvider::from_provider_code(&row.provider_code) {
                 map.entry(row.workspace_id).or_default().insert(provider);
             } else {
                 warn!(
@@ -882,9 +874,7 @@ impl RouterStore {
         note = "Cloud routing now uses providers/provider_models. Will be \
                 removed once the routers table is dropped."
     )]
-    pub async fn get_all_routers(
-        &self,
-    ) -> Result<Vec<DbRouterConfig>, InternalError> {
+    pub async fn get_all_routers(&self) -> Result<Vec<DbRouterConfig>, InternalError> {
         let res = sqlx::query_as::<_, DbRouterConfig>(
             r"SELECT DISTINCT ON (routers.id)
                      routers.hash as router_hash,
@@ -937,16 +927,13 @@ impl RouterStore {
     // ------------------------------------------------------------------
 
     /// Fetch all active, non-deleted virtual keys for in-memory cache load.
-    pub async fn get_all_db_virtual_keys(
-        &self,
-    ) -> Result<Vec<DbVirtualKey>, InternalError> {
-        let res =
-            sqlx::query_as::<_, DbVirtualKey>(GET_ALL_DB_VIRTUAL_KEYS_SQL)
-                .fetch_all(&self.pool)
-                .await
-                .inspect_err(|e| {
-                    error!(error = %e, "failed to get all virtual keys");
-                })?;
+    pub async fn get_all_db_virtual_keys(&self) -> Result<Vec<DbVirtualKey>, InternalError> {
+        let res = sqlx::query_as::<_, DbVirtualKey>(GET_ALL_DB_VIRTUAL_KEYS_SQL)
+            .fetch_all(&self.pool)
+            .await
+            .inspect_err(|e| {
+                error!(error = %e, "failed to get all virtual keys");
+            })?;
         Ok(res)
     }
 
@@ -955,19 +942,17 @@ impl RouterStore {
         &self,
         key_hash: &str,
     ) -> Result<Option<DbVirtualKey>, InternalError> {
-        let row = sqlx::query_as::<_, DbVirtualKey>(
-            GET_DB_VIRTUAL_KEY_BY_KEY_HASH_SQL,
-        )
-        .bind(key_hash)
-        .fetch_optional(&self.pool)
-        .await
-        .inspect_err(|e| {
-            error!(
-                error = %e,
-                key_hash_len = key_hash.len(),
-                "failed to load virtual key by hash",
-            );
-        })?;
+        let row = sqlx::query_as::<_, DbVirtualKey>(GET_DB_VIRTUAL_KEY_BY_KEY_HASH_SQL)
+            .bind(key_hash)
+            .fetch_optional(&self.pool)
+            .await
+            .inspect_err(|e| {
+                error!(
+                    error = %e,
+                    key_hash_len = key_hash.len(),
+                    "failed to load virtual key by hash",
+                );
+            })?;
         Ok(row)
     }
 
@@ -979,15 +964,13 @@ impl RouterStore {
         &self,
         since: DateTime<Utc>,
     ) -> Result<Vec<DbVirtualKey>, InternalError> {
-        let res = sqlx::query_as::<_, DbVirtualKey>(
-            GET_DB_VIRTUAL_KEYS_UPDATED_AFTER_SQL,
-        )
-        .bind(since)
-        .fetch_all(&self.pool)
-        .await
-        .inspect_err(|e| {
-            error!(error = %e, "failed to get virtual keys updated after");
-        })?;
+        let res = sqlx::query_as::<_, DbVirtualKey>(GET_DB_VIRTUAL_KEYS_UPDATED_AFTER_SQL)
+            .bind(since)
+            .fetch_all(&self.pool)
+            .await
+            .inspect_err(|e| {
+                error!(error = %e, "failed to get virtual keys updated after");
+            })?;
         Ok(res)
     }
 
@@ -997,20 +980,19 @@ impl RouterStore {
         &self,
         workspace_id: Uuid,
     ) -> Result<Option<DbPolicyConfigModelAccessRow>, InternalError> {
-        let row = sqlx::query_as::<_, DbPolicyConfigModelAccessRow>(
-            GET_POLICY_CONFIG_MODEL_ACCESS_SQL,
-        )
-        .bind(workspace_id)
-        .bind(POLICY_NAME_MODEL_ALLOWLIST)
-        .fetch_optional(&self.pool)
-        .await
-        .inspect_err(|e| {
-            error!(
-                error = %e,
-                workspace_id = %workspace_id,
-                "failed to get policy_config Model Allowlist",
-            );
-        })?;
+        let row =
+            sqlx::query_as::<_, DbPolicyConfigModelAccessRow>(GET_POLICY_CONFIG_MODEL_ACCESS_SQL)
+                .bind(workspace_id)
+                .bind(POLICY_NAME_MODEL_ALLOWLIST)
+                .fetch_optional(&self.pool)
+                .await
+                .inspect_err(|e| {
+                    error!(
+                        error = %e,
+                        workspace_id = %workspace_id,
+                        "failed to get policy_config Model Allowlist",
+                    );
+                })?;
         Ok(row)
     }
 
@@ -1022,21 +1004,19 @@ impl RouterStore {
         workspace_id: Uuid,
         virtual_key_id: Uuid,
     ) -> Result<Option<DbPolicyOverrideRow>, InternalError> {
-        let row = sqlx::query_as::<_, DbPolicyOverrideRow>(
-            GET_POLICY_OVERRIDES_BY_VIRTUAL_KEY_SQL,
-        )
-        .bind(workspace_id)
-        .bind(virtual_key_id)
-        .fetch_optional(&self.pool)
-        .await
-        .inspect_err(|e| {
-            error!(
-                error = %e,
-                workspace_id = %workspace_id,
-                virtual_key_id = %virtual_key_id,
-                "failed to get policy_overrides for virtual key",
-            );
-        })?;
+        let row = sqlx::query_as::<_, DbPolicyOverrideRow>(GET_POLICY_OVERRIDES_BY_VIRTUAL_KEY_SQL)
+            .bind(workspace_id)
+            .bind(virtual_key_id)
+            .fetch_optional(&self.pool)
+            .await
+            .inspect_err(|e| {
+                error!(
+                    error = %e,
+                    workspace_id = %workspace_id,
+                    virtual_key_id = %virtual_key_id,
+                    "failed to get policy_overrides for virtual key",
+                );
+            })?;
         Ok(row)
     }
 
@@ -1071,19 +1051,18 @@ impl RouterStore {
         &self,
         workspace_id: Uuid,
     ) -> Result<Option<DbPolicyOverrideRow>, InternalError> {
-        let row = sqlx::query_as::<_, DbPolicyOverrideRow>(
-            GET_POLICY_OVERRIDES_WORKSPACE_DEFAULT_SQL,
-        )
-        .bind(workspace_id)
-        .fetch_optional(&self.pool)
-        .await
-        .inspect_err(|e| {
-            error!(
-                error = %e,
-                workspace_id = %workspace_id,
-                "failed to get policy_overrides workspace default",
-            );
-        })?;
+        let row =
+            sqlx::query_as::<_, DbPolicyOverrideRow>(GET_POLICY_OVERRIDES_WORKSPACE_DEFAULT_SQL)
+                .bind(workspace_id)
+                .fetch_optional(&self.pool)
+                .await
+                .inspect_err(|e| {
+                    error!(
+                        error = %e,
+                        workspace_id = %workspace_id,
+                        "failed to get policy_overrides workspace default",
+                    );
+                })?;
         Ok(row)
     }
 
@@ -1232,9 +1211,7 @@ impl RouterStore {
     ///
     /// `workspace_id` → `organization_id`, `entity_id` → `owner_id`
     /// (falls back to `workspace_id` when `entity_id` is `NULL`).
-    pub async fn get_all_virtual_keys(
-        &self,
-    ) -> Result<HashSet<Key>, InternalError> {
+    pub async fn get_all_virtual_keys(&self) -> Result<HashSet<Key>, InternalError> {
         let rows = self.get_all_db_virtual_keys().await?;
         let keys = rows
             .into_iter()
@@ -1253,9 +1230,7 @@ impl RouterStore {
         note = "replaced by get_all_virtual_keys(); will be removed after \
                 Task J"
     )]
-    pub async fn get_all_alephant_api_keys(
-        &self,
-    ) -> Result<HashSet<Key>, InternalError> {
+    pub async fn get_all_alephant_api_keys(&self) -> Result<HashSet<Key>, InternalError> {
         let res = self.get_all_db_alephant_api_keys().await?;
         let keys = res
             .into_iter()
@@ -1273,9 +1248,7 @@ impl RouterStore {
     /// compatibility with NOTIFY and legacy callers. Uses `virtual_keys` table;
     /// `owner_id` = `COALESCE(entity_id, workspace_id)`, `organization_id` =
     /// `workspace_id`.
-    pub async fn get_all_db_alephant_api_keys(
-        &self,
-    ) -> Result<Vec<DbApiKey>, InternalError> {
+    pub async fn get_all_db_alephant_api_keys(&self) -> Result<Vec<DbApiKey>, InternalError> {
         let res = sqlx::query_as::<_, DbApiKey>(
             r"SELECT
                 key_hash,
@@ -1397,21 +1370,19 @@ impl RouterStore {
         workspace_id: Uuid,
         provider_code: &str,
     ) -> Result<Vec<Uuid>, InternalError> {
-        let rows = sqlx::query_scalar::<_, Uuid>(
-            GET_MASTER_KEY_IDS_BY_WORKSPACE_AND_PROVIDER_SQL,
-        )
-        .bind(workspace_id)
-        .bind(provider_code)
-        .fetch_all(&self.pool)
-        .await
-        .inspect_err(|e| {
-            error!(
-                error = %e,
-                workspace_id = %workspace_id,
-                provider_code = %provider_code,
-                "failed to get master_key ids by workspace and provider"
-            );
-        })?;
+        let rows = sqlx::query_scalar::<_, Uuid>(GET_MASTER_KEY_IDS_BY_WORKSPACE_AND_PROVIDER_SQL)
+            .bind(workspace_id)
+            .bind(provider_code)
+            .fetch_all(&self.pool)
+            .await
+            .inspect_err(|e| {
+                error!(
+                    error = %e,
+                    workspace_id = %workspace_id,
+                    provider_code = %provider_code,
+                    "failed to get master_key ids by workspace and provider"
+                );
+            })?;
         Ok(rows)
     }
 
@@ -1431,37 +1402,28 @@ impl RouterStore {
             error!(error = %e, "failed to get all provider keys");
             InitError::DatabaseConnection(e)
         })?;
-        let mut provider_keys: FxHashMap<
-            OrgId,
-            FxHashMap<InferenceProvider, ProviderKey>,
-        > = FxHashMap::default();
+        let mut provider_keys: FxHashMap<OrgId, FxHashMap<InferenceProvider, ProviderKey>> =
+            FxHashMap::default();
         for key in res {
-            let provider_key =
-                ProviderKey::Secret(Secret::from(key.decrypted_provider_key));
-            let Ok(inference_provider) =
-                InferenceProvider::from_provider_code(&key.provider_name)
+            let provider_key = ProviderKey::Secret(Secret::from(key.decrypted_provider_key));
+            let Ok(inference_provider) = InferenceProvider::from_provider_code(&key.provider_name)
             else {
                 continue;
             };
-            let existing_provider_keys =
-                provider_keys.entry(OrgId::new(key.org_id)).or_default();
+            let existing_provider_keys = provider_keys.entry(OrgId::new(key.org_id)).or_default();
             existing_provider_keys.insert(inference_provider, provider_key);
         }
 
         let mut final_provider_keys = FxHashMap::default();
         for (org_id, provider_keys) in provider_keys.drain() {
-            let provider_key_map =
-                ProviderKeyMap::from_db(provider_keys.clone());
+            let provider_key_map = ProviderKeyMap::from_db(provider_keys.clone());
             final_provider_keys.insert(org_id, provider_key_map);
         }
 
         Ok(final_provider_keys)
     }
 
-    pub async fn get_org_provider_keys(
-        &self,
-        org_id: OrgId,
-    ) -> Result<ProviderKeyMap, InitError> {
+    pub async fn get_org_provider_keys(&self, org_id: OrgId) -> Result<ProviderKeyMap, InitError> {
         let res = sqlx::query_as::<_, DbProviderKey>(
             "SELECT decrypted_provider_keys.provider_name, \
              decrypted_provider_keys.decrypted_provider_key, \
@@ -1480,17 +1442,15 @@ impl RouterStore {
         let mut unknown_providers = HashSet::new();
 
         for key in res {
-            let provider_key =
-                ProviderKey::Secret(Secret::from(key.decrypted_provider_key));
-            let inference_provider =
-                match InferenceProvider::from_provider_code(&key.provider_name)
-                {
-                    Ok(provider) => provider,
-                    Err(_e) => {
-                        unknown_providers.insert(key.provider_name);
-                        continue;
-                    }
-                };
+            let provider_key = ProviderKey::Secret(Secret::from(key.decrypted_provider_key));
+            let inference_provider = match InferenceProvider::from_provider_code(&key.provider_name)
+            {
+                Ok(provider) => provider,
+                Err(_e) => {
+                    unknown_providers.insert(key.provider_name);
+                    continue;
+                }
+            };
             provider_keys.insert(inference_provider, provider_key);
         }
         if !unknown_providers.is_empty() {
@@ -1523,11 +1483,7 @@ mod tests {
             .unwrap_or_else(|_| default_url.to_string())
     }
 
-    fn sample_vk(
-        workspace_id: Uuid,
-        entity_id: Option<Uuid>,
-        key_hash: &str,
-    ) -> DbVirtualKey {
+    fn sample_vk(workspace_id: Uuid, entity_id: Option<Uuid>, key_hash: &str) -> DbVirtualKey {
         DbVirtualKey {
             id: Uuid::new_v4(),
             workspace_id,
@@ -1639,8 +1595,7 @@ mod tests {
     #[tokio::test]
     #[allow(clippy::too_many_lines)]
     async fn get_master_key_ids_by_workspace_and_provider_filters_correctly() {
-        const DEFAULT_TEST_DB_URL: &str =
-            "postgres://postgres:postgres@localhost:54322/postgres";
+        const DEFAULT_TEST_DB_URL: &str = "postgres://postgres:postgres@localhost:54322/postgres";
         let db_url = preferred_test_db_url(DEFAULT_TEST_DB_URL);
 
         let pool = match PgPool::connect(&db_url).await {
@@ -1657,10 +1612,8 @@ mod tests {
         let store = RouterStore::new(pool.clone()).expect("router store init");
 
         // Reuse a seeded workspace to avoid creating more FK fixtures.
-        let workspace_id =
-            Uuid::parse_str("08a417ef-0f6a-4e8b-8819-5dea8608be72").unwrap();
-        let other_workspace_id =
-            Uuid::parse_str("f9e87d88-39f3-42ef-b485-4991737db6cf").unwrap();
+        let workspace_id = Uuid::parse_str("08a417ef-0f6a-4e8b-8819-5dea8608be72").unwrap();
+        let other_workspace_id = Uuid::parse_str("f9e87d88-39f3-42ef-b485-4991737db6cf").unwrap();
         let provider_id = Uuid::new_v4();
         let other_provider_id = Uuid::new_v4();
         let provider_code = format!("it{}", Uuid::new_v4().simple());
@@ -1738,10 +1691,7 @@ mod tests {
         .expect("mark inactive test key");
 
         let actual = store
-            .get_master_key_ids_by_workspace_and_provider(
-                workspace_id,
-                &provider_code,
-            )
+            .get_master_key_ids_by_workspace_and_provider(workspace_id, &provider_code)
             .await
             .expect("query master key ids");
 
@@ -1773,9 +1723,8 @@ mod tests {
 
     #[tokio::test]
     async fn get_master_key_ids_by_workspace_and_provider_returns_empty_for_unknown_provider_code()
-     {
-        const DEFAULT_TEST_DB_URL: &str =
-            "postgres://postgres:postgres@localhost:54322/postgres";
+    {
+        const DEFAULT_TEST_DB_URL: &str = "postgres://postgres:postgres@localhost:54322/postgres";
         let db_url = preferred_test_db_url(DEFAULT_TEST_DB_URL);
 
         let pool = match PgPool::connect(&db_url).await {
@@ -1790,8 +1739,7 @@ mod tests {
         };
 
         let store = RouterStore::new(pool.clone()).expect("router store init");
-        let workspace_id =
-            Uuid::parse_str("08a417ef-0f6a-4e8b-8819-5dea8608be72").unwrap();
+        let workspace_id = Uuid::parse_str("08a417ef-0f6a-4e8b-8819-5dea8608be72").unwrap();
 
         let provider_id = Uuid::new_v4();
         let provider_code = format!("it{}", Uuid::new_v4().simple());
@@ -1826,10 +1774,7 @@ mod tests {
         .expect("insert test master key");
 
         let actual = store
-            .get_master_key_ids_by_workspace_and_provider(
-                workspace_id,
-                &unknown_provider_code,
-            )
+            .get_master_key_ids_by_workspace_and_provider(workspace_id, &unknown_provider_code)
             .await
             .expect("query master key ids");
 
@@ -1850,8 +1795,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_all_providers_for_gateway_returns_only_enabled_rows() {
-        const DEFAULT_TEST_DB_URL: &str =
-            "postgres://postgres:postgres@localhost:54322/postgres";
+        const DEFAULT_TEST_DB_URL: &str = "postgres://postgres:postgres@localhost:54322/postgres";
         let db_url = preferred_test_db_url(DEFAULT_TEST_DB_URL);
         let pool = match PgPool::connect(&db_url).await {
             Ok(pool) => pool,
@@ -1903,8 +1847,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_all_provider_models_for_gateway_returns_only_enabled_rows() {
-        const DEFAULT_TEST_DB_URL: &str =
-            "postgres://postgres:postgres@localhost:54322/postgres";
+        const DEFAULT_TEST_DB_URL: &str = "postgres://postgres:postgres@localhost:54322/postgres";
         let db_url = preferred_test_db_url(DEFAULT_TEST_DB_URL);
         let pool = match PgPool::connect(&db_url).await {
             Ok(pool) => pool,
@@ -1950,8 +1893,7 @@ mod tests {
             .get_all_provider_models_for_gateway()
             .await
             .expect("query provider models");
-        let model_ids: HashSet<_> =
-            rows.into_iter().map(|row| row.model_id).collect();
+        let model_ids: HashSet<_> = rows.into_iter().map(|row| row.model_id).collect();
 
         assert!(model_ids.contains("model-enabled"));
         assert!(!model_ids.contains("model-disabled"));
@@ -1972,8 +1914,7 @@ mod tests {
 
     #[tokio::test]
     async fn has_providers_updated_since_detects_provider_and_model_changes() {
-        const DEFAULT_TEST_DB_URL: &str =
-            "postgres://postgres:postgres@localhost:54322/postgres";
+        const DEFAULT_TEST_DB_URL: &str = "postgres://postgres:postgres@localhost:54322/postgres";
         let db_url = preferred_test_db_url(DEFAULT_TEST_DB_URL);
         let pool = match PgPool::connect(&db_url).await {
             Ok(pool) => pool,
@@ -2041,10 +1982,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn provider_gateway_fingerprint_changes_for_effective_catalog_changes()
-     {
-        const DEFAULT_TEST_DB_URL: &str =
-            "postgres://postgres:postgres@localhost:54322/postgres";
+    async fn provider_gateway_fingerprint_changes_for_effective_catalog_changes() {
+        const DEFAULT_TEST_DB_URL: &str = "postgres://postgres:postgres@localhost:54322/postgres";
         let db_url = preferred_test_db_url(DEFAULT_TEST_DB_URL);
         let pool = match PgPool::connect(&db_url).await {
             Ok(pool) => pool,
@@ -2190,8 +2129,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_model_info_for_gateway_model_returns_json_when_set() {
-        const DEFAULT_TEST_DB_URL: &str =
-            "postgres://postgres:postgres@localhost:54322/postgres";
+        const DEFAULT_TEST_DB_URL: &str = "postgres://postgres:postgres@localhost:54322/postgres";
         let db_url = preferred_test_db_url(DEFAULT_TEST_DB_URL);
         let pool = match PgPool::connect(&db_url).await {
             Ok(pool) => pool,
@@ -2278,10 +2216,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn get_model_info_for_gateway_model_returns_none_when_provider_model_disabled()
-     {
-        const DEFAULT_TEST_DB_URL: &str =
-            "postgres://postgres:postgres@localhost:54322/postgres";
+    async fn get_model_info_for_gateway_model_returns_none_when_provider_model_disabled() {
+        const DEFAULT_TEST_DB_URL: &str = "postgres://postgres:postgres@localhost:54322/postgres";
         let db_url = preferred_test_db_url(DEFAULT_TEST_DB_URL);
         let pool = match PgPool::connect(&db_url).await {
             Ok(pool) => pool,
@@ -2350,19 +2286,13 @@ mod tests {
         .expect("insert row under disabled provider");
 
         let disabled_model_result = store
-            .get_model_info_for_gateway_model(
-                &enabled_provider_code,
-                "disabled-model-row",
-            )
+            .get_model_info_for_gateway_model(&enabled_provider_code, "disabled-model-row")
             .await
             .expect("query disabled model row");
         assert_eq!(disabled_model_result, None);
 
         let disabled_provider_result = store
-            .get_model_info_for_gateway_model(
-                &disabled_provider_code,
-                "disabled-provider-row",
-            )
+            .get_model_info_for_gateway_model(&disabled_provider_code, "disabled-provider-row")
             .await
             .expect("query disabled provider row");
         assert_eq!(disabled_provider_result, None);
@@ -2390,10 +2320,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn get_gateway_model_selection_info_batch_returns_only_requested_enabled_rows()
-     {
-        const DEFAULT_TEST_DB_URL: &str =
-            "postgres://postgres:postgres@localhost:54322/postgres";
+    async fn get_gateway_model_selection_info_batch_returns_only_requested_enabled_rows() {
+        const DEFAULT_TEST_DB_URL: &str = "postgres://postgres:postgres@localhost:54322/postgres";
         let db_url = preferred_test_db_url(DEFAULT_TEST_DB_URL);
         let pool = match PgPool::connect(&db_url).await {
             Ok(pool) => pool,
@@ -2517,8 +2445,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_db_virtual_key_by_key_hash_finds_active_row() {
-        const DEFAULT_TEST_DB_URL: &str =
-            "postgres://postgres:postgres@localhost:54322/postgres";
+        const DEFAULT_TEST_DB_URL: &str = "postgres://postgres:postgres@localhost:54322/postgres";
         let db_url = preferred_test_db_url(DEFAULT_TEST_DB_URL);
         let pool = match PgPool::connect(&db_url).await {
             Ok(pool) => pool,
@@ -2545,15 +2472,12 @@ mod tests {
         .flatten();
 
         let Some((master_key_id, workspace_id)) = anchor else {
-            tracing::info!(
-                "skip get_db_virtual_key_by_key_hash: no active master_key"
-            );
+            tracing::info!("skip get_db_virtual_key_by_key_hash: no active master_key");
             return;
         };
 
         let vk_id = Uuid::new_v4();
-        let key_hash =
-            format!("{}{}", Uuid::new_v4().simple(), Uuid::new_v4().simple());
+        let key_hash = format!("{}{}", Uuid::new_v4().simple(), Uuid::new_v4().simple());
         assert_eq!(key_hash.len(), 64);
 
         sqlx::query(
@@ -2582,13 +2506,11 @@ mod tests {
         assert_eq!(found.id, vk_id);
         assert_eq!(found.key_hash, key_hash);
 
-        sqlx::query(
-            r"UPDATE virtual_keys SET deleted_at = now() WHERE id = $1",
-        )
-        .bind(vk_id)
-        .execute(&pool)
-        .await
-        .expect("soft-delete test vk");
+        sqlx::query(r"UPDATE virtual_keys SET deleted_at = now() WHERE id = $1")
+            .bind(vk_id)
+            .execute(&pool)
+            .await
+            .expect("soft-delete test vk");
 
         assert!(
             store

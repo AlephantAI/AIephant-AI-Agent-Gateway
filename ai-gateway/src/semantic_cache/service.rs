@@ -4,10 +4,9 @@ use async_trait::async_trait;
 use http::HeaderMap;
 
 use super::{
-    EmbeddingBaseUrlResolver, EmbeddingIdentity, OpenAiEmbedderClient,
-    QdrantEnsureCollection, QdrantStore, SemanticPolicy, build_cache_key,
-    collection_name_for_embedding, extract_embed_text_from_body,
-    parse_embedding_identity,
+    EmbeddingBaseUrlResolver, EmbeddingIdentity, OpenAiEmbedderClient, QdrantEnsureCollection,
+    QdrantStore, SemanticPolicy, build_cache_key, collection_name_for_embedding,
+    extract_embed_text_from_body, parse_embedding_identity,
 };
 
 const ALEPHANT_EMBEDDINGS_MODEL: &str = "Alephant-Embeddings-Model";
@@ -210,13 +209,11 @@ impl SemanticCacheService {
         if !semantic_path_supported(path) {
             return Ok(None);
         }
-        let Some(raw_model) = header_value(headers, ALEPHANT_EMBEDDINGS_MODEL)
-        else {
+        let Some(raw_model) = header_value(headers, ALEPHANT_EMBEDDINGS_MODEL) else {
             return Ok(None);
         };
         let embedding_identity = parse_embedding_identity(&raw_model)?;
-        let Some(api_key) = header_value(headers, ALEPHANT_EMBEDDINGS_KEY)
-        else {
+        let Some(api_key) = header_value(headers, ALEPHANT_EMBEDDINGS_KEY) else {
             return Ok(None);
         };
         let policy = SemanticPolicy::from_headers(
@@ -239,9 +236,7 @@ impl SemanticCacheService {
         &self,
         req: &SemanticLookupRequest<'_>,
     ) -> Result<Option<SemanticHit>, String> {
-        let Some(prepared) =
-            self.prepare_request(req.path, req.headers, req.body)?
-        else {
+        let Some(prepared) = self.prepare_request(req.path, req.headers, req.body)? else {
             return Ok(None);
         };
         Ok(self.try_hit_prepared(&prepared).await?.hit)
@@ -391,10 +386,7 @@ impl SemanticCacheService {
             )
             .await?;
         let dimension = vector.len();
-        let collection = collection_name_for_embedding(
-            &prepared.embedding_identity,
-            dimension,
-        )?;
+        let collection = collection_name_for_embedding(&prepared.embedding_identity, dimension)?;
         self.vector_store
             .ensure_collection(&collection, dimension)
             .await?;
@@ -473,8 +465,8 @@ mod tests {
     use http::HeaderMap;
 
     use super::{
-        EmbeddingBaseUrlResolver, SemanticCacheService, SemanticEmbedder,
-        SemanticLookupRequest, SemanticVectorStore, SemanticWriteContext,
+        EmbeddingBaseUrlResolver, SemanticCacheService, SemanticEmbedder, SemanticLookupRequest,
+        SemanticVectorStore, SemanticWriteContext,
     };
     use crate::semantic_cache::{QdrantEnsureCollection, SemanticVectorHit};
 
@@ -498,8 +490,7 @@ mod tests {
         hit: Mutex<Option<SemanticVectorHit>>,
         ensure_calls: Mutex<Vec<(String, usize)>>,
         search_calls: Mutex<Vec<(String, String)>>,
-        upsert_calls:
-            Mutex<Vec<(String, String, String, Vec<f32>, Vec<u8>, u64)>>,
+        upsert_calls: Mutex<Vec<(String, String, String, Vec<f32>, Vec<u8>, u64)>>,
     }
     #[async_trait]
     impl SemanticVectorStore for MockStore {
@@ -549,10 +540,7 @@ mod tests {
         }
     }
 
-    fn test_chat_request<'a>(
-        body: &'a [u8],
-        headers: &'a HeaderMap,
-    ) -> SemanticLookupRequest<'a> {
+    fn test_chat_request<'a>(body: &'a [u8], headers: &'a HeaderMap) -> SemanticLookupRequest<'a> {
         SemanticLookupRequest {
             path: "/v1/chat/completions",
             headers,
@@ -575,11 +563,7 @@ mod tests {
                 vector: vec![0.1; dimension],
             }),
             store.clone(),
-            EmbeddingBaseUrlResolver::new(
-                Some("https://mem.openai.local".to_string()),
-                None,
-                None,
-            ),
+            EmbeddingBaseUrlResolver::new(Some("https://mem.openai.local".to_string()), None, None),
             0.9,
             3600,
         );
@@ -691,8 +675,7 @@ mod tests {
         assert_eq!(
             store.ensure_calls.lock().unwrap().as_slice(),
             [(
-                "semantic_cache__openai__text-embedding-3-small__1536"
-                    .to_string(),
+                "semantic_cache__openai__text-embedding-3-small__1536".to_string(),
                 1536
             )]
         );
@@ -710,8 +693,7 @@ mod tests {
     async fn store_response_with_context_upserts_using_context_collection() {
         let (svc, store) = test_service(None, 1536);
         let write = SemanticWriteContext {
-            collection: "semantic_cache__openai__text-embedding-3-small__1536"
-                .to_string(),
+            collection: "semantic_cache__openai__text-embedding-3-small__1536".to_string(),
             cache_key: "cache-key".to_string(),
             params_hash: "params-hash".to_string(),
             vector: vec![0.1; 1536],

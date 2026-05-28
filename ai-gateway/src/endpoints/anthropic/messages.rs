@@ -1,6 +1,4 @@
-use anthropic_ai_sdk::types::message::{
-    self, CreateMessageParams, CreateMessageResponse,
-};
+use anthropic_ai_sdk::types::message::{self, CreateMessageParams, CreateMessageResponse};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -26,10 +24,7 @@ impl AiRequest for CreateMessageParams {
     }
 
     fn model(&self) -> Result<ModelId, MapperError> {
-        ModelId::from_str_and_provider(
-            InferenceProvider::Anthropic,
-            &self.model,
-        )
+        ModelId::from_str_and_provider(InferenceProvider::Anthropic, &self.model)
     }
 }
 

@@ -8,13 +8,10 @@ use tower::{Layer, Service};
 
 use crate::{
     app_state::AppState,
-    error::{
-        api::ApiError, internal::InternalError,
-        invalid_req::InvalidRequestError,
-    },
+    error::{api::ApiError, internal::InternalError, invalid_req::InvalidRequestError},
     middleware::model_support::parse::{
-        MODEL_SUPPORT_MAX_BODY_BYTES, catalog_redis_key,
-        model_field_from_json_body, split_provider_model,
+        MODEL_SUPPORT_MAX_BODY_BYTES, catalog_redis_key, model_field_from_json_body,
+        split_provider_model,
     },
     types::{
         extensions::{AuthContext, RequestKind},
@@ -65,8 +62,7 @@ pub(crate) async fn gateway_model_supported(
             if canonical_provider.eq_ignore_ascii_case(provider_raw) {
                 false
             } else {
-                let canonical_key =
-                    catalog_redis_key(canonical_provider, model_raw);
+                let canonical_key = catalog_redis_key(canonical_provider, model_raw);
                 match client.key_exists(&canonical_key).await {
                     Ok(v) => v,
                     Err(e) => {
@@ -120,8 +116,7 @@ fn restrict_bare_model_candidates_to_allowed_providers(
     candidates: Vec<String>,
     allowed_providers: Option<&[InferenceProvider]>,
 ) -> Vec<String> {
-    let Some(allowed_providers) = allowed_providers.filter(|p| !p.is_empty())
-    else {
+    let Some(allowed_providers) = allowed_providers.filter(|p| !p.is_empty()) else {
         return candidates;
     };
 
@@ -191,16 +186,11 @@ async fn resolve_bare_model(
             .collect();
     }
 
-    candidates = restrict_bare_model_candidates_to_allowed_providers(
-        candidates,
-        allowed_providers,
-    );
+    candidates = restrict_bare_model_candidates_to_allowed_providers(candidates, allowed_providers);
 
     match candidates.len() {
         0 => Err(ApiError::InvalidRequest(
-            InvalidRequestError::UnsupportedGatewayModel(
-                bare_model_id.to_string(),
-            ),
+            InvalidRequestError::UnsupportedGatewayModel(bare_model_id.to_string()),
         )),
         1 => Ok(candidates.into_iter().next().expect("len checked")),
         _ => Err(ApiError::InvalidRequest(
@@ -239,10 +229,7 @@ fn normalize_async_openai_claude_model(model: &str) -> Option<String> {
     Some(format!("{prefix}-{major}.{minor}"))
 }
 
-fn maybe_rewrite_async_openai_claude_model(
-    user_agent: &str,
-    body: &[u8],
-) -> Option<bytes::Bytes> {
+fn maybe_rewrite_async_openai_claude_model(user_agent: &str, body: &[u8]) -> Option<bytes::Bytes> {
     if !user_agent.contains("AsyncOpenAI") {
         return None;
     }
@@ -258,20 +245,17 @@ mod tests {
 
     use axum_core::body::Body;
     use bytes::Bytes;
-    use http::{
-        Extensions, HeaderValue, Method, StatusCode, header::USER_AGENT,
-    };
+    use http::{Extensions, HeaderValue, Method, StatusCode, header::USER_AGENT};
     use http_body_util::BodyExt;
     use rustc_hash::FxHashMap;
     use tower::{Service, ServiceExt, service_fn};
     use uuid::Uuid;
 
     use super::{
-        ModelSupportService, canonical_provider_code,
-        is_router_master_key_bare_model_passthrough,
+        ModelSupportService, canonical_provider_code, is_router_master_key_bare_model_passthrough,
         maybe_rewrite_async_openai_claude_model,
-        restrict_bare_model_candidates_to_allowed_providers,
-        rewrite_model_in_body, should_inspect_post_body,
+        restrict_bare_model_candidates_to_allowed_providers, rewrite_model_in_body,
+        should_inspect_post_body,
     };
     use crate::{
         error::{api::ApiError, invalid_req::InvalidRequestError},
@@ -286,9 +270,7 @@ mod tests {
         },
     };
 
-    fn auth_context_with_allowed(
-        providers: Option<Vec<InferenceProvider>>,
-    ) -> AuthContext {
+    fn auth_context_with_allowed(providers: Option<Vec<InferenceProvider>>) -> AuthContext {
         AuthContext {
             api_key: Secret::from("sk-test".to_string()),
             user_id: UserId::new(Uuid::new_v4()),
@@ -340,8 +322,7 @@ mod tests {
                     .await
                     .expect("collect forwarded body")
                     .to_bytes();
-                *forwarded_body.lock().expect("lock forwarded body") =
-                    Some(bytes);
+                *forwarded_body.lock().expect("lock forwarded body") = Some(bytes);
                 Ok::<Response, ApiError>(
                     http::Response::builder()
                         .status(StatusCode::OK)
@@ -358,8 +339,7 @@ mod tests {
             .method(Method::POST)
             .uri("/v1/chat/completions");
         if let Some(user_agent) = user_agent {
-            builder = builder
-                .header(USER_AGENT, HeaderValue::from_static(user_agent));
+            builder = builder.header(USER_AGENT, HeaderValue::from_static(user_agent));
         }
         let mut req = builder
             .body(Body::new(http_body_util::Full::new(Bytes::from_static(
@@ -375,8 +355,7 @@ mod tests {
             .expect("lock forwarded body")
             .clone()
             .expect("inner service called");
-        let v: serde_json::Value =
-            serde_json::from_slice(&forwarded).expect("valid json");
+        let v: serde_json::Value = serde_json::from_slice(&forwarded).expect("valid json");
         Ok(v.get("model")
             .and_then(|model| model.as_str())
             .map(ToOwned::to_owned))
@@ -392,10 +371,7 @@ mod tests {
 
     #[test]
     fn canonical_provider_code_maps_gemini_to_google() {
-        assert_eq!(
-            canonical_provider_code("gemini").as_deref(),
-            Some("google")
-        );
+        assert_eq!(canonical_provider_code("gemini").as_deref(), Some("google"));
     }
 
     #[test]
@@ -415,8 +391,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn router_master_key_bare_model_passthrough_matches_single_router_provider()
-     {
+    async fn router_master_key_bare_model_passthrough_matches_single_router_provider() {
         let app = app_with_router_flags([("openrouter", true)]).await;
         let mut extensions = Extensions::new();
         extensions.insert(auth_context_with_allowed(Some(vec![
@@ -440,18 +415,13 @@ mod tests {
 
         let candidate = "gpt-5.4";
         let should_skip_bare_resolution =
-            is_router_master_key_bare_model_passthrough(
-                &app.state,
-                &extensions,
-                candidate,
-            );
+            is_router_master_key_bare_model_passthrough(&app.state, &extensions, candidate);
 
         assert!(should_skip_bare_resolution);
     }
 
     #[tokio::test]
-    async fn router_master_key_bare_model_passthrough_rejects_provider_prefixed_model()
-     {
+    async fn router_master_key_bare_model_passthrough_rejects_provider_prefixed_model() {
         let app = app_with_router_flags([("openrouter", true)]).await;
         let mut extensions = Extensions::new();
         extensions.insert(auth_context_with_allowed(Some(vec![
@@ -466,8 +436,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn router_master_key_bare_model_passthrough_rejects_non_router_provider()
-     {
+    async fn router_master_key_bare_model_passthrough_rejects_non_router_provider() {
         let app = app_with_router_flags([("openrouter", false)]).await;
         let mut extensions = Extensions::new();
         extensions.insert(auth_context_with_allowed(Some(vec![
@@ -482,11 +451,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn router_master_key_bare_model_passthrough_rejects_multi_provider_key()
-     {
-        let app =
-            app_with_router_flags([("openrouter", true), ("anthropic", false)])
-                .await;
+    async fn router_master_key_bare_model_passthrough_rejects_multi_provider_key() {
+        let app = app_with_router_flags([("openrouter", true), ("anthropic", false)]).await;
         let mut extensions = Extensions::new();
         extensions.insert(auth_context_with_allowed(Some(vec![
             InferenceProvider::Named("openrouter".into()),
@@ -503,10 +469,8 @@ mod tests {
     #[test]
     fn rewrite_model_replaces_field() {
         let body = br#"{"model":"gpt-4o-mini","messages":[]}"#;
-        let rewritten = rewrite_model_in_body(body, "openai/gpt-4o-mini")
-            .expect("should rewrite");
-        let v: serde_json::Value =
-            serde_json::from_slice(&rewritten).expect("valid json");
+        let rewritten = rewrite_model_in_body(body, "openai/gpt-4o-mini").expect("should rewrite");
+        let v: serde_json::Value = serde_json::from_slice(&rewritten).expect("valid json");
         assert_eq!(v["model"], "openai/gpt-4o-mini");
         assert!(v["messages"].is_array());
     }
@@ -526,10 +490,8 @@ mod tests {
     #[test]
     fn rewrite_model_preserves_other_fields() {
         let body = br#"{"model":"GPT-5","temperature":0.7,"max_tokens":100}"#;
-        let rewritten = rewrite_model_in_body(body, "openai/gpt-5")
-            .expect("should rewrite");
-        let v: serde_json::Value =
-            serde_json::from_slice(&rewritten).expect("valid json");
+        let rewritten = rewrite_model_in_body(body, "openai/gpt-5").expect("should rewrite");
+        let v: serde_json::Value = serde_json::from_slice(&rewritten).expect("valid json");
         assert_eq!(v["model"], "openai/gpt-5");
         assert_eq!(v["temperature"], 0.7);
         assert_eq!(v["max_tokens"], 100);
@@ -538,11 +500,9 @@ mod tests {
     #[test]
     fn async_openai_rewrites_claude_sonnet_dash_version_to_dot() {
         let body = br#"{"model":"anthropic/claude-sonnet-4-6","messages":[]}"#;
-        let rewritten =
-            maybe_rewrite_async_openai_claude_model("AsyncOpenAI/0.29.0", body)
-                .expect("should rewrite");
-        let v: serde_json::Value =
-            serde_json::from_slice(&rewritten).expect("valid json");
+        let rewritten = maybe_rewrite_async_openai_claude_model("AsyncOpenAI/0.29.0", body)
+            .expect("should rewrite");
+        let v: serde_json::Value = serde_json::from_slice(&rewritten).expect("valid json");
         assert_eq!(v["model"], "anthropic/claude-sonnet-4.6");
     }
 
@@ -597,9 +557,7 @@ mod tests {
 
         assert!(matches!(
             err,
-            ApiError::InvalidRequest(
-                InvalidRequestError::UnsupportedGatewayModel(_)
-            )
+            ApiError::InvalidRequest(InvalidRequestError::UnsupportedGatewayModel(_))
         ));
     }
 
@@ -623,8 +581,7 @@ mod tests {
             br#"{"model":"claude-opus-4-6"}"#,
         )
         .expect("should rewrite opus");
-        let opus: serde_json::Value =
-            serde_json::from_slice(&opus).expect("valid json");
+        let opus: serde_json::Value = serde_json::from_slice(&opus).expect("valid json");
         assert_eq!(opus["model"], "claude-opus-4.6");
 
         let haiku = maybe_rewrite_async_openai_claude_model(
@@ -632,8 +589,7 @@ mod tests {
             br#"{"model":"claude-haiku-4-5"}"#,
         )
         .expect("should rewrite haiku");
-        let haiku: serde_json::Value =
-            serde_json::from_slice(&haiku).expect("valid json");
+        let haiku: serde_json::Value = serde_json::from_slice(&haiku).expect("valid json");
         assert_eq!(haiku["model"], "claude-haiku-4.5");
     }
 
@@ -644,18 +600,14 @@ mod tests {
             br#"{"model":"anthropic/claude-sonnet-4-7"}"#,
         )
         .expect("should rewrite future claude version");
-        let v: serde_json::Value =
-            serde_json::from_slice(&rewritten).expect("valid json");
+        let v: serde_json::Value = serde_json::from_slice(&rewritten).expect("valid json");
         assert_eq!(v["model"], "anthropic/claude-sonnet-4.7");
     }
 
     #[test]
     fn non_async_openai_user_agent_does_not_rewrite_claude_dash_version() {
         let body = br#"{"model":"anthropic/claude-sonnet-4-6","messages":[]}"#;
-        assert!(
-            maybe_rewrite_async_openai_claude_model("curl/8.0.0", body)
-                .is_none()
-        );
+        assert!(maybe_rewrite_async_openai_claude_model("curl/8.0.0", body).is_none());
     }
 }
 
@@ -683,20 +635,14 @@ pub struct ModelSupportService<S> {
 
 impl<S> Service<Request> for ModelSupportService<S>
 where
-    S: Service<Request, Response = Response, Error = ApiError>
-        + Clone
-        + Send
-        + 'static,
+    S: Service<Request, Response = Response, Error = ApiError> + Clone + Send + 'static,
     S::Future: Send + 'static,
 {
     type Response = Response;
     type Error = ApiError;
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
-    fn poll_ready(
-        &mut self,
-        cx: &mut Context<'_>,
-    ) -> Poll<Result<(), Self::Error>> {
+    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         self.inner.poll_ready(cx)
     }
 
@@ -715,30 +661,26 @@ where
                 return inner.call(req).await;
             }
 
-            let mut bytes =
-                match Limited::new(body, MODEL_SUPPORT_MAX_BODY_BYTES)
-                    .collect()
-                    .await
-                {
-                    Ok(c) => c.to_bytes(),
-                    Err(e) => {
-                        tracing::warn!(
-                            error = %e,
-                            "model_support: failed to collect request body"
-                        );
-                        return Err(ApiError::Internal(
-                            InternalError::Internal,
-                        ));
-                    }
-                };
+            let mut bytes = match Limited::new(body, MODEL_SUPPORT_MAX_BODY_BYTES)
+                .collect()
+                .await
+            {
+                Ok(c) => c.to_bytes(),
+                Err(e) => {
+                    tracing::warn!(
+                        error = %e,
+                        "model_support: failed to collect request body"
+                    );
+                    return Err(ApiError::Internal(InternalError::Internal));
+                }
+            };
 
             if let Some(user_agent) = parts
                 .headers
                 .get(USER_AGENT)
                 .and_then(|value| value.to_str().ok())
             {
-                if let Some(rewritten) =
-                    maybe_rewrite_async_openai_claude_model(user_agent, &bytes)
+                if let Some(rewritten) = maybe_rewrite_async_openai_claude_model(user_agent, &bytes)
                 {
                     bytes = rewritten;
                 }
@@ -746,8 +688,7 @@ where
 
             let request_kind = parts.extensions.get::<RequestKind>().copied();
             if matches!(request_kind, Some(RequestKind::UnifiedApi)) {
-                let req =
-                    Request::from_parts(parts, Body::new(Full::new(bytes)));
+                let req = Request::from_parts(parts, Body::new(Full::new(bytes)));
                 return inner.call(req).await;
             }
 
@@ -758,19 +699,16 @@ where
                 .unwrap_or_default();
 
             if model_candidates.is_empty() {
-                let req =
-                    Request::from_parts(parts, Body::new(Full::new(bytes)));
+                let req = Request::from_parts(parts, Body::new(Full::new(bytes)));
                 return inner.call(req).await;
             }
 
             if matches!(request_kind, Some(RequestKind::CustomProvider)) {
-                let req =
-                    Request::from_parts(parts, Body::new(Full::new(bytes)));
+                let req = Request::from_parts(parts, Body::new(Full::new(bytes)));
                 return inner.call(req).await;
             }
 
-            let is_direct_proxy =
-                matches!(request_kind, Some(RequestKind::DirectProxy));
+            let is_direct_proxy = matches!(request_kind, Some(RequestKind::DirectProxy));
             let allowed_providers = parts
                 .extensions
                 .get::<AuthContext>()
@@ -781,22 +719,15 @@ where
                 if is_direct_proxy || candidate.contains('/') {
                     let Ok(parsed) = split_provider_model(candidate) else {
                         return Err(ApiError::InvalidRequest(
-                            InvalidRequestError::UnsupportedGatewayModel(
-                                candidate.clone(),
-                            ),
+                            InvalidRequestError::UnsupportedGatewayModel(candidate.clone()),
                         ));
                     };
-                    let supported = gateway_model_supported(
-                        &app_state,
-                        parsed.provider_raw,
-                        parsed.model_raw,
-                    )
-                    .await?;
+                    let supported =
+                        gateway_model_supported(&app_state, parsed.provider_raw, parsed.model_raw)
+                            .await?;
                     if !supported {
                         return Err(ApiError::InvalidRequest(
-                            InvalidRequestError::UnsupportedGatewayModel(
-                                candidate.clone(),
-                            ),
+                            InvalidRequestError::UnsupportedGatewayModel(candidate.clone()),
                         ));
                     }
                 } else if is_router_master_key_bare_model_passthrough(
@@ -806,35 +737,22 @@ where
                 ) {
                     continue;
                 } else {
-                    let resolved = resolve_bare_model(
-                        &app_state,
-                        candidate,
-                        allowed_providers,
-                    )
-                    .await?;
-                    if let Some(rewritten) =
-                        rewrite_model_in_body(&bytes, &resolved)
-                    {
+                    let resolved =
+                        resolve_bare_model(&app_state, candidate, allowed_providers).await?;
+                    if let Some(rewritten) = rewrite_model_in_body(&bytes, &resolved) {
                         bytes = rewritten;
                     }
                     let Ok(parsed) = split_provider_model(&resolved) else {
                         return Err(ApiError::InvalidRequest(
-                            InvalidRequestError::UnsupportedGatewayModel(
-                                resolved,
-                            ),
+                            InvalidRequestError::UnsupportedGatewayModel(resolved),
                         ));
                     };
-                    let supported = gateway_model_supported(
-                        &app_state,
-                        parsed.provider_raw,
-                        parsed.model_raw,
-                    )
-                    .await?;
+                    let supported =
+                        gateway_model_supported(&app_state, parsed.provider_raw, parsed.model_raw)
+                            .await?;
                     if !supported {
                         return Err(ApiError::InvalidRequest(
-                            InvalidRequestError::UnsupportedGatewayModel(
-                                resolved,
-                            ),
+                            InvalidRequestError::UnsupportedGatewayModel(resolved),
                         ));
                     }
                 }

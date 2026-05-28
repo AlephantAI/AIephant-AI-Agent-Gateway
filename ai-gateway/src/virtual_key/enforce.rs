@@ -22,10 +22,7 @@ use crate::{
 /// the model is explicitly blocked.
 ///
 /// The caller is responsible for emitting metrics/logs on denial.
-pub fn check_model_access(
-    extensions: &Extensions,
-    model_str: &str,
-) -> Result<(), ApiError> {
+pub fn check_model_access(extensions: &Extensions, model_str: &str) -> Result<(), ApiError> {
     let Some(policy) = extensions.get::<VkPolicy>() else {
         return Ok(());
     };

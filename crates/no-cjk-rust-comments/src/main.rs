@@ -4,9 +4,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use no_cjk_rust_comments::{
-    any_comment_contains_han, diagnostics_for_comments_with_han,
-};
+use no_cjk_rust_comments::{any_comment_contains_han, diagnostics_for_comments_with_han};
 
 fn main() -> std::process::ExitCode {
     let root = std::env::args_os()

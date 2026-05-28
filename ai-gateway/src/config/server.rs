@@ -39,9 +39,7 @@ fn default_port() -> u16 {
     8080
 }
 
-#[derive(
-    Default, Debug, Clone, Deserialize, Serialize, PartialEq, Eq, Hash,
-)]
+#[derive(Default, Debug, Clone, Deserialize, Serialize, PartialEq, Eq, Hash)]
 #[serde(deny_unknown_fields)]
 pub enum TlsConfig {
     Enabled {

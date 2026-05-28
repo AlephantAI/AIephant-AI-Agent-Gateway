@@ -16,8 +16,7 @@ mod profile;
 pub use profile::{EstimateProfile, resolve_profile};
 
 use crate::{
-    middleware::large_context::parse::ChatCompletionsPayload,
-    types::provider::InferenceProvider,
+    middleware::large_context::parse::ChatCompletionsPayload, types::provider::InferenceProvider,
 };
 
 /// Estimates input tokens for a parsed Chat Completions payload.
@@ -32,18 +31,13 @@ pub fn estimate_chat_completion_input_tokens(
     }
 
     let profile = match resolve_profile(provider_hint, primary_model) {
-        EstimateProfile::BedrockMultiFoundation => {
-            bedrock::refine_bedrock_profile(primary_model)
-        }
+        EstimateProfile::BedrockMultiFoundation => bedrock::refine_bedrock_profile(primary_model),
         p => p,
     };
 
     match profile {
         EstimateProfile::OpenAiCompatible => {
-            let tik = openai_tiktoken::count_tokens_openai_profile(
-                payload,
-                primary_model,
-            );
+            let tik = openai_tiktoken::count_tokens_openai_profile(payload, primary_model);
             let heur = heuristic_layer_d::estimate_heuristic_layer_d(payload);
             match (tik, heur) {
                 (Some(t), Some(h)) => Some(t.max(h)),

@@ -71,10 +71,7 @@ use std::{
 
 use ai_gateway::{
     config::s3::{Config, UrlStyle},
-    logger::{
-        body_storage::LARGE_BODY_THRESHOLD_BYTES,
-        cloud_bodies::resolve_cloud_log_bodies,
-    },
+    logger::{body_storage::LARGE_BODY_THRESHOLD_BYTES, cloud_bodies::resolve_cloud_log_bodies},
     store::s3::BaseS3Client,
     types::{org::OrgId, secret::Secret},
 };
@@ -99,8 +96,7 @@ fn main() -> Result<(), String> {
         return Ok(());
     }
 
-    let backend = std::env::var("STORAGE_BACKEND")
-        .unwrap_or_else(|_| "minio".to_string());
+    let backend = std::env::var("STORAGE_BACKEND").unwrap_or_else(|_| "minio".to_string());
     let backends: Vec<&str> = match backend.as_str() {
         "both" => vec!["minio", "oss"],
         "minio" | "oss" => vec![backend.as_str()],
@@ -154,8 +150,8 @@ async fn run_backends(backends: &[&str]) -> Result<(), String> {
             }
         }
 
-        let client = BaseS3Client::new(config.clone())
-            .map_err(|e| format!("BaseS3Client::new: {e}"))?;
+        let client =
+            BaseS3Client::new(config.clone()).map_err(|e| format!("BaseS3Client::new: {e}"))?;
         run_scenarios(b, &config, &client).await?;
     }
     eprintln!("\nAll scenarios finished.");
@@ -163,10 +159,7 @@ async fn run_backends(backends: &[&str]) -> Result<(), String> {
 }
 
 /// S3 CreateBucket: PUT `https://endpoint/bucket/` (path-style).
-async fn ensure_bucket_exists(
-    cfg: &Config,
-    http_client: &Client,
-) -> Result<(), String> {
+async fn ensure_bucket_exists(cfg: &Config, http_client: &Client) -> Result<(), String> {
     let bucket_url = bucket_root_url(cfg)?;
     let identity = Credentials::new(
         cfg.access_key.expose(),
@@ -201,10 +194,9 @@ async fn ensure_bucket_exists(
     )
     .map_err(|e| e.to_string())?;
 
-    let (signing_output, _) =
-        aws_sigv4::http_request::sign(signable, &signing_params)
-            .map_err(|e| e.to_string())?
-            .into_parts();
+    let (signing_output, _) = aws_sigv4::http_request::sign(signable, &signing_params)
+        .map_err(|e| e.to_string())?
+        .into_parts();
 
     let mut req = ::http::Request::builder()
         .method(Method::PUT)
@@ -233,8 +225,7 @@ async fn ensure_bucket_exists(
 fn bucket_root_url(cfg: &Config) -> Result<Url, String> {
     let base = cfg.endpoint.as_str().trim_end_matches('/');
     let name = cfg.bucket_name.trim_matches('/');
-    Url::parse(&format!("{base}/{name}/"))
-        .map_err(|e| format!("bucket URL: {e}"))
+    Url::parse(&format!("{base}/{name}/")).map_err(|e| format!("bucket URL: {e}"))
 }
 
 fn s3_compatible_console_hint(api: &Url) -> String {
@@ -320,11 +311,7 @@ fn assert_both_under_1_mib(
     Ok(())
 }
 
-async fn run_scenarios(
-    backend: &str,
-    cfg: &Config,
-    client: &BaseS3Client,
-) -> Result<(), String> {
+async fn run_scenarios(backend: &str, cfg: &Config, client: &BaseS3Client) -> Result<(), String> {
     let rid = Uuid::now_v7();
     let org = OrgId::new(Uuid::nil());
     let ttl_days = 7_u16;
@@ -341,15 +328,12 @@ async fn run_scenarios(
         );
     }
 
-    eprintln!(
-        "--- Scenario 1: large request body (≥ 1 MiB), small response ---"
-    );
+    eprintln!("--- Scenario 1: large request body (≥ 1 MiB), small response ---");
     let req_b = Bytes::copy_from_slice(&large_buf);
     let resp_b = Bytes::from_static(br#"{"ok":true}"#);
-    let out =
-        resolve_cloud_log_bodies(client, ttl_days, rid, org, &req_b, &resp_b)
-            .await
-            .map_err(|e| format!("resolve: {e}"))?;
+    let out = resolve_cloud_log_bodies(client, ttl_days, rid, org, &req_b, &resp_b)
+        .await
+        .map_err(|e| format!("resolve: {e}"))?;
     print_log_fields_summary("request>=1MiB", &out);
     assert_either_side_at_least_1_mib("scenario1", &out)?;
     eprintln!(
@@ -359,15 +343,12 @@ async fn run_scenarios(
     print_upload_hint(backend, cfg, org, ttl_days, rid, "scenario1", &out);
     drop(req_b);
 
-    eprintln!(
-        "--- Scenario 2: small request body, large response (≥ 1 MiB) ---"
-    );
+    eprintln!("--- Scenario 2: small request body, large response (≥ 1 MiB) ---");
     let req_b = Bytes::from_static(br#"{"x":1}"#);
     let resp_b = Bytes::copy_from_slice(&large_buf);
-    let out =
-        resolve_cloud_log_bodies(client, ttl_days, rid, org, &req_b, &resp_b)
-            .await
-            .map_err(|e| format!("resolve: {e}"))?;
+    let out = resolve_cloud_log_bodies(client, ttl_days, rid, org, &req_b, &resp_b)
+        .await
+        .map_err(|e| format!("resolve: {e}"))?;
     print_log_fields_summary("response>=1MiB", &out);
     assert_either_side_at_least_1_mib("scenario2", &out)?;
     eprintln!(
@@ -379,10 +360,9 @@ async fn run_scenarios(
     eprintln!("--- Scenario 3: both sides < 1 MiB (no PUT) ---");
     let req_b = Bytes::from_static(b"hi");
     let resp_b = Bytes::from_static(b"bye");
-    let out =
-        resolve_cloud_log_bodies(client, ttl_days, rid, org, &req_b, &resp_b)
-            .await
-            .map_err(|e| format!("resolve: {e}"))?;
+    let out = resolve_cloud_log_bodies(client, ttl_days, rid, org, &req_b, &resp_b)
+        .await
+        .map_err(|e| format!("resolve: {e}"))?;
     print_log_fields_summary("both<1MiB", &out);
     assert_both_under_1_mib("scenario3", &out)?;
     eprintln!(
@@ -407,8 +387,7 @@ fn print_upload_hint(
         return;
     }
     let req_url = req_s.starts_with("http://") || req_s.starts_with("https://");
-    let resp_url =
-        resp_s.starts_with("http://") || resp_s.starts_with("https://");
+    let resp_url = resp_s.starts_with("http://") || resp_s.starts_with("https://");
     if backend != "minio" {
         return;
     }
@@ -426,10 +405,7 @@ fn print_upload_hint(
     let _ = io::stderr().flush();
 }
 
-fn print_log_fields_summary(
-    scenario: &str,
-    out: &(String, String, u16, String),
-) {
+fn print_log_fields_summary(scenario: &str, out: &(String, String, u16, String)) {
     let (req_s, resp_s, ttl, loc) = out;
     let summarize = |s: &str| -> serde_json::Value {
         if s.starts_with("http://") || s.starts_with("https://") {
@@ -453,8 +429,7 @@ fn print_log_fields_summary(
         "log.request.requestBody": summarize(req_s),
         "log.request.responseBody": summarize(resp_s),
     });
-    let pretty = serde_json::to_string_pretty(&payload)
-        .unwrap_or_else(|_| "{}".to_string());
+    let pretty = serde_json::to_string_pretty(&payload).unwrap_or_else(|_| "{}".to_string());
     eprintln!("{pretty}");
     let _ = io::stderr().flush();
 }
@@ -474,28 +449,23 @@ fn env_s3_optional(flat: &str, nested: &str) -> Option<String> {
 }
 
 fn env_s3_required(flat: &str, nested: &str) -> Result<String, String> {
-    env_s3_optional(flat, nested)
-        .ok_or_else(|| format!("missing {flat} or {nested}"))
+    env_s3_optional(flat, nested).ok_or_else(|| format!("missing {flat} or {nested}"))
 }
 
 fn s3_compatible_config_from_env() -> Result<Config, String> {
     let endpoint = env_s3_optional("S3_ENDPOINT", "AI_GATEWAY__S3__ENDPOINT")
         .unwrap_or_else(|| "http://127.0.0.1:9000".to_string());
-    let access =
-        env_s3_required("S3_ACCESS_KEY", "AI_GATEWAY__S3__ACCESS_KEY")?;
-    let secret =
-        env_s3_required("S3_SECRET_KEY", "AI_GATEWAY__S3__SECRET_KEY")?;
-    let bucket =
-        env_s3_optional("S3_BUCKET_NAME", "AI_GATEWAY__S3__BUCKET_NAME")
-            .unwrap_or_else(|| "request-response-storage".to_string());
+    let access = env_s3_required("S3_ACCESS_KEY", "AI_GATEWAY__S3__ACCESS_KEY")?;
+    let secret = env_s3_required("S3_SECRET_KEY", "AI_GATEWAY__S3__SECRET_KEY")?;
+    let bucket = env_s3_optional("S3_BUCKET_NAME", "AI_GATEWAY__S3__BUCKET_NAME")
+        .unwrap_or_else(|| "request-response-storage".to_string());
     let region = env_s3_optional("S3_REGION", "AI_GATEWAY__S3__REGION")
         .unwrap_or_else(|| "us-east-1".to_string());
     Ok(Config {
         url_style: UrlStyle::Path,
         bucket_name: bucket,
-        endpoint: Url::parse(&endpoint).map_err(|e| {
-            format!("S3_ENDPOINT/AI_GATEWAY__S3__ENDPOINT: {e}")
-        })?,
+        endpoint: Url::parse(&endpoint)
+            .map_err(|e| format!("S3_ENDPOINT/AI_GATEWAY__S3__ENDPOINT: {e}"))?,
         region,
         access_key: Secret::from(access),
         secret_key: Secret::from(secret),
@@ -514,21 +484,17 @@ fn oss_url_style() -> Result<UrlStyle, String> {
 }
 
 fn oss_config() -> Result<Config, String> {
-    let host = std::env::var("OSS_ENDPOINT")
-        .map_err(|_| "missing OSS_ENDPOINT".to_string())?;
-    let access = std::env::var("OSS_ACCESS_KEY_ID")
-        .map_err(|_| "missing OSS_ACCESS_KEY_ID".to_string())?;
+    let host = std::env::var("OSS_ENDPOINT").map_err(|_| "missing OSS_ENDPOINT".to_string())?;
+    let access =
+        std::env::var("OSS_ACCESS_KEY_ID").map_err(|_| "missing OSS_ACCESS_KEY_ID".to_string())?;
     let secret = std::env::var("OSS_ACCESS_KEY_SECRET")
         .map_err(|_| "missing OSS_ACCESS_KEY_SECRET".to_string())?;
-    let bucket = std::env::var("OSS_BUCKET")
-        .map_err(|_| "missing OSS_BUCKET".to_string())?;
-    let region = std::env::var("OSS_REGION")
-        .unwrap_or_else(|_| "oss-cn-hangzhou".to_string());
+    let bucket = std::env::var("OSS_BUCKET").map_err(|_| "missing OSS_BUCKET".to_string())?;
+    let region = std::env::var("OSS_REGION").unwrap_or_else(|_| "oss-cn-hangzhou".to_string());
     Ok(Config {
         url_style: oss_url_style()?,
         bucket_name: bucket,
-        endpoint: Url::parse(&host)
-            .map_err(|e| format!("OSS_ENDPOINT: {e}"))?,
+        endpoint: Url::parse(&host).map_err(|e| format!("OSS_ENDPOINT: {e}"))?,
         region,
         access_key: Secret::from(access),
         secret_key: Secret::from(secret),

@@ -57,10 +57,7 @@ impl HarnessBuilder {
 
     /// No-op in Cloud-only mode.
     #[must_use]
-    pub fn with_auth_keys(
-        self,
-        _keys: Vec<crate::virtual_key::legacy_key::Key>,
-    ) -> Self {
+    pub fn with_auth_keys(self, _keys: Vec<crate::virtual_key::legacy_key::Key>) -> Self {
         self
     }
 
@@ -127,8 +124,7 @@ impl tower::Service<Request> for Harness {
         let socket_addr = self.socket_addr;
         std::mem::swap(&mut self.app_factory, &mut factory);
         Box::pin(async move {
-            let mut app =
-                factory.into_service().call(socket_addr).await.unwrap();
+            let mut app = factory.into_service().call(socket_addr).await.unwrap();
             poll_fn(|cx| tower::Service::poll_ready(&mut app, cx))
                 .await
                 .unwrap();

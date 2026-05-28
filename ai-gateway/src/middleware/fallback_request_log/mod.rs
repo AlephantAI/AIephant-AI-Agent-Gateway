@@ -61,10 +61,7 @@ pub struct FallbackRequestLogService<S> {
 
 impl<S> tower::Service<Request> for FallbackRequestLogService<S>
 where
-    S: tower::Service<Request, Response = Response, Error = ApiError>
-        + Clone
-        + Send
-        + 'static,
+    S: tower::Service<Request, Response = Response, Error = ApiError> + Clone + Send + 'static,
     S::Future: Send + 'static,
 {
     type Response = Response;
@@ -237,8 +234,8 @@ fn error_status_code(api_err: &ApiError) -> http::StatusCode {
     match api_err {
         ApiError::InvalidRequest(_) => http::StatusCode::BAD_REQUEST,
         ApiError::Authentication(_) => http::StatusCode::UNAUTHORIZED,
-        ApiError::Internal(_)
-        | ApiError::StreamError(_)
-        | ApiError::Panic(_) => http::StatusCode::INTERNAL_SERVER_ERROR,
+        ApiError::Internal(_) | ApiError::StreamError(_) | ApiError::Panic(_) => {
+            http::StatusCode::INTERNAL_SERVER_ERROR
+        }
     }
 }

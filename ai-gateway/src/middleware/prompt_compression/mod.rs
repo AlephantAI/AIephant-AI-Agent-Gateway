@@ -6,23 +6,13 @@ use crate::{
     error::invalid_req::InvalidRequestError,
     middleware::large_context::{
         headers::parse_large_context_headers,
-        heuristics::{
-            estimate_input_tokens, normalize_text, resolve_primary_model,
-        },
-        parse::{
-            ChatCompletionsPayload, parse_chat_completions_payload,
-            serialize_payload,
-        },
+        heuristics::{estimate_input_tokens, normalize_text, resolve_primary_model},
+        parse::{ChatCompletionsPayload, parse_chat_completions_payload, serialize_payload},
     },
-    types::{
-        extensions::PromptCompressionTokenPair, provider::InferenceProvider,
-    },
+    types::{extensions::PromptCompressionTokenPair, provider::InferenceProvider},
 };
 
-fn patch_messages_whitespace(
-    raw: &mut Value,
-    payload: &ChatCompletionsPayload,
-) {
+fn patch_messages_whitespace(raw: &mut Value, payload: &ChatCompletionsPayload) {
     let Some(object) = raw.as_object_mut() else {
         return;
     };
@@ -64,30 +54,24 @@ pub fn apply_chat_completions(
 
     let headers = parse_large_context_headers(&parts.headers)?;
     let model_in_body = payload.model.as_deref();
-    let Some(primary) =
-        resolve_primary_model(model_in_body, headers.model_override.as_deref())
+    let Some(primary) = resolve_primary_model(model_in_body, headers.model_override.as_deref())
     else {
         return Ok(body);
     };
     if payload.has_non_text_message_content || payload.messages.is_empty() {
         return Ok(body);
     }
-    let Some(before) =
-        estimate_input_tokens(&payload, &primary, Some(provider))
-    else {
+    let Some(before) = estimate_input_tokens(&payload, &primary, Some(provider)) else {
         return Ok(body);
     };
     let mut raw = payload.raw.clone();
     patch_messages_whitespace(&mut raw, &payload);
-    let after_bytes = serialize_payload(&raw)
-        .map_err(InvalidRequestError::InvalidRequestBody)?;
+    let after_bytes = serialize_payload(&raw).map_err(InvalidRequestError::InvalidRequestBody)?;
     let after_pl = match parse_chat_completions_payload(&after_bytes) {
         Ok(Some(payload)) => payload,
         Ok(None) | Err(_) => return Ok(body),
     };
-    let Some(after) =
-        estimate_input_tokens(&after_pl, &primary, Some(provider))
-    else {
+    let Some(after) = estimate_input_tokens(&after_pl, &primary, Some(provider)) else {
         return Ok(body);
     };
 
@@ -104,9 +88,7 @@ mod tests {
     use http::Request;
 
     use super::apply_chat_completions;
-    use crate::types::{
-        extensions::PromptCompressionTokenPair, provider::InferenceProvider,
-    };
+    use crate::types::{extensions::PromptCompressionTokenPair, provider::InferenceProvider};
 
     fn empty_parts() -> http::request::Parts {
         Request::new(()).into_parts().0
@@ -114,7 +96,8 @@ mod tests {
 
     #[test]
     fn compresses_whitespace_and_inserts_token_pair() {
-        const BODY: &[u8] = br#"{"model":"openai/gpt-4o-mini","messages":[{"role":"user","content":"  a   b  "}]}"#;
+        const BODY: &[u8] =
+            br#"{"model":"openai/gpt-4o-mini","messages":[{"role":"user","content":"  a   b  "}]}"#;
         let mut parts = empty_parts();
         let out = apply_chat_completions(
             &mut parts,
@@ -136,12 +119,8 @@ mod tests {
     fn invalid_json_leaves_body_and_extension_unchanged() {
         let mut parts = empty_parts();
         let body = Bytes::from_static(b"not json {");
-        let out = apply_chat_completions(
-            &mut parts,
-            body.clone(),
-            &InferenceProvider::OpenAI,
-        )
-        .expect("ok body passthrough");
+        let out = apply_chat_completions(&mut parts, body.clone(), &InferenceProvider::OpenAI)
+            .expect("ok body passthrough");
         assert_eq!(out, body);
         assert!(
             parts

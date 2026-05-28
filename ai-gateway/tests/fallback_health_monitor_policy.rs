@@ -31,21 +31,16 @@ fn config_with_policy_health(
         },
         ..Config::default()
     };
-    config.fallback_policy.provider_failover.health =
-        ProviderFailoverHealthPolicy {
-            enabled: health_enabled,
-            error_ratio_threshold: threshold,
-            interval,
-            grace_period: GracePeriod::Requests { min_requests },
-        };
+    config.fallback_policy.provider_failover.health = ProviderFailoverHealthPolicy {
+        enabled: health_enabled,
+        error_ratio_threshold: threshold,
+        interval,
+        grace_period: GracePeriod::Requests { min_requests },
+    };
     config
 }
 
-fn config_with_discover_monitor(
-    threshold: f64,
-    interval: Duration,
-    min_requests: u32,
-) -> Config {
+fn config_with_discover_monitor(threshold: f64, interval: Duration, min_requests: u32) -> Config {
     use rust_decimal::prelude::FromPrimitive;
     let mut config = Config::default();
     // Disable policy so discover.monitor is used.
@@ -109,13 +104,8 @@ fn discover_monitor_used_when_policy_disabled() {
 /// discover.monitor.
 #[test]
 fn discover_monitor_used_when_health_subblock_disabled() {
-    let mut config = config_with_policy_health(
-        true,
-        false,
-        Decimal::new(5, 2),
-        Duration::from_secs(1),
-        5,
-    );
+    let mut config =
+        config_with_policy_health(true, false, Decimal::new(5, 2), Duration::from_secs(1), 5);
     config.discover.monitor = MonitorConfig {
         health: HealthMonitorConfig::ErrorRatio {
             ratio: Decimal::from_f64(0.25).unwrap(),
@@ -154,8 +144,7 @@ fn compat_golden_defaults_match_legacy_monitor_defaults() {
     let legacy_params = resolved_health_monitor_config(&legacy_config);
 
     assert!(
-        (policy_params.error_threshold - legacy_params.error_threshold).abs()
-            < 1e-9,
+        (policy_params.error_threshold - legacy_params.error_threshold).abs() < 1e-9,
         "compat: policy default threshold {:.4} != legacy {:.4}",
         policy_params.error_threshold,
         legacy_params.error_threshold

@@ -3,9 +3,7 @@ use std::path::PathBuf;
 use ai_gateway::{
     app::App,
     config::{Config, fallback_bridge},
-    discover::monitor::{
-        health::provider::HealthMonitor, rate_limit::RateLimitMonitor,
-    },
+    discover::monitor::{health::provider::HealthMonitor, rate_limit::RateLimitMonitor},
     error::{init::InitError, runtime::RuntimeError},
     metrics::system::SystemMetrics,
     store::db_listener::DatabaseListener,
@@ -14,8 +12,7 @@ use ai_gateway::{
 use clap::Parser;
 use meltdown::Meltdown;
 use opentelemetry_sdk::{
-    logs::SdkLoggerProvider, metrics::SdkMeterProvider,
-    trace::SdkTracerProvider,
+    logs::SdkLoggerProvider, metrics::SdkMeterProvider, trace::SdkTracerProvider,
 };
 use tracing::{debug, info};
 
@@ -42,8 +39,7 @@ async fn main() -> Result<(), RuntimeError> {
         .install_default()
         .expect("Failed to install rustls crypto provider");
     let config = load_and_validate_config()?;
-    let (logger_provider, tracer_provider, metrics_provider) =
-        init_telemetry(&config)?;
+    let (logger_provider, tracer_provider, metrics_provider) = init_telemetry(&config)?;
 
     run_app(config).await?;
 
@@ -94,8 +90,8 @@ fn init_telemetry(
         telemetry::init_telemetry(&config.telemetry)?;
 
     debug!("telemetry initialized");
-    let pretty_config = serde_yml::to_string(&config)
-        .expect("config should always be serializable");
+    let pretty_config =
+        serde_yml::to_string(&config).expect("config should always be serializable");
     tracing::debug!(config = pretty_config, "Creating app with config");
 
     #[cfg(debug_assertions)]
@@ -127,11 +123,7 @@ async fn run_app(config: Config) -> Result<(), RuntimeError> {
     if !config.compat_mode {
         meltdown = meltdown.register(TaggedService::new(
             "database-listener",
-            DatabaseListener::new(
-                config.database.url.expose(),
-                app_state.clone(),
-            )
-            .await?,
+            DatabaseListener::new(config.database.url.expose(), app_state.clone()).await?,
         ));
         tasks.push("database-listener");
     }

@@ -104,13 +104,9 @@ mod tests {
             http::header::AUTHORIZATION,
             HeaderValue::from_static("Bearer user-key"),
         );
-        headers.insert(
-            http::header::CONTENT_LENGTH,
-            HeaderValue::from_static("9"),
-        );
+        headers.insert(http::header::CONTENT_LENGTH, HeaderValue::from_static("9"));
         headers.insert("alephant-api-key", HeaderValue::from_static("new"));
-        headers
-            .insert("alephant-debug-headers", HeaderValue::from_static("true"));
+        headers.insert("alephant-debug-headers", HeaderValue::from_static("true"));
         headers.insert("alephant-debug-body", HeaderValue::from_static("true"));
 
         UpstreamAuthApplier::sanitize_headers(&mut headers);
@@ -155,14 +151,9 @@ mod tests {
             HeaderValue::from_static("0.8"),
         );
         headers.insert("Alephant-Cache-Ttl", HeaderValue::from_static("3600"));
-        headers
-            .insert("alephant-session-id", HeaderValue::from_static("session"));
-        headers
-            .insert("alephant-session-path", HeaderValue::from_static("/repo"));
-        headers.insert(
-            "alephant-session-name",
-            HeaderValue::from_static("coding"),
-        );
+        headers.insert("alephant-session-id", HeaderValue::from_static("session"));
+        headers.insert("alephant-session-path", HeaderValue::from_static("/repo"));
+        headers.insert("alephant-session-name", HeaderValue::from_static("coding"));
 
         UpstreamAuthApplier::sanitize_headers(&mut headers);
 

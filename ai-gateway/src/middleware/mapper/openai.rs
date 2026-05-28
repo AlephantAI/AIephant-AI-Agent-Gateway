@@ -34,10 +34,7 @@ impl
     fn try_convert(
         &self,
         value: anthropic_ai_sdk::types::message::CreateMessageParams,
-    ) -> std::result::Result<
-        async_openai::types::CreateChatCompletionRequest,
-        Self::Error,
-    > {
+    ) -> std::result::Result<async_openai::types::CreateChatCompletionRequest, Self::Error> {
         use anthropic_ai_sdk::types::message as anthropic;
         use async_openai::types as openai;
         let source_model = ModelId::from_str(&value.model)?;
@@ -50,8 +47,8 @@ impl
             match thinking.type_ {
                 anthropic::ThinkingType::Enabled => {
                     #[allow(clippy::cast_precision_loss)]
-                    let reasoning_budget = thinking.budget_tokens as f64
-                        / f64::from(value.max_tokens);
+                    let reasoning_budget =
+                        thinking.budget_tokens as f64 / f64::from(value.max_tokens);
                     match reasoning_budget {
                         reasoning_budget if reasoning_budget < 0.33 => {
                             Some(openai::ReasoningEffort::Low)
@@ -84,23 +81,16 @@ impl
         let top_p = value.top_p;
         let tool_choice = match value.tool_choice {
             Some(tool_choice) => match tool_choice {
-                anthropic::ToolChoice::Auto => {
-                    Some(openai::ChatCompletionToolChoiceOption::Auto)
-                }
-                anthropic::ToolChoice::None => {
-                    Some(openai::ChatCompletionToolChoiceOption::None)
-                }
+                anthropic::ToolChoice::Auto => Some(openai::ChatCompletionToolChoiceOption::Auto),
+                anthropic::ToolChoice::None => Some(openai::ChatCompletionToolChoiceOption::None),
                 anthropic::ToolChoice::Any => {
                     Some(openai::ChatCompletionToolChoiceOption::Required)
                 }
                 anthropic::ToolChoice::Tool { name } => {
-                    let named_tool_choice =
-                        openai::ChatCompletionNamedToolChoice {
-                            r#type: openai::ChatCompletionToolType::Function,
-                            function: openai::FunctionName {
-                                name: name.clone(),
-                            },
-                        };
+                    let named_tool_choice = openai::ChatCompletionNamedToolChoice {
+                        r#type: openai::ChatCompletionToolType::Function,
+                        function: openai::FunctionName { name: name.clone() },
+                    };
                     Some(openai::ChatCompletionToolChoiceOption::Named(
                         named_tool_choice,
                     ))
@@ -108,56 +98,58 @@ impl
             },
             None => None,
         };
-        let tools: Option<Vec<openai::ChatCompletionTool>> =
-            if let Some(tools) = value.tools {
-                let mapped_tools: Vec<_> = tools
-                    .into_iter()
-                    .map(|tool| openai::ChatCompletionTool {
-                        r#type: openai::ChatCompletionToolType::Function,
-                        function: Some(openai::FunctionObject {
-                            name: tool.name,
-                            description: tool.description,
-                            parameters: Some(tool.input_schema),
-                            strict: None,
-                        }),
-                        extra: Default::default(),
-                    })
-                    .collect();
+        let tools: Option<Vec<openai::ChatCompletionTool>> = if let Some(tools) = value.tools {
+            let mapped_tools: Vec<_> = tools
+                .into_iter()
+                .map(|tool| openai::ChatCompletionTool {
+                    r#type: openai::ChatCompletionToolType::Function,
+                    function: Some(openai::FunctionObject {
+                        name: tool.name,
+                        description: tool.description,
+                        parameters: Some(tool.input_schema),
+                        strict: None,
+                    }),
+                    extra: Default::default(),
+                })
+                .collect();
 
-                Some(mapped_tools)
-            } else {
-                None
-            };
+            Some(mapped_tools)
+        } else {
+            None
+        };
         let mut metadata = value.metadata;
         let user = metadata
             .as_mut()
             .and_then(|metadata| metadata.fields.remove("user_id"));
         let metadata = match metadata {
-            Some(metadata) => Some(
-                serde_json::to_value(metadata)
-                    .map_err(|_| MapperError::InvalidRequest)?,
-            ),
+            Some(metadata) => {
+                Some(serde_json::to_value(metadata).map_err(|_| MapperError::InvalidRequest)?)
+            }
             None => None,
         };
 
         let mut messages: Vec<openai::ChatCompletionRequestMessage> =
             Vec::with_capacity(value.messages.len());
         if let Some(system_prompt) = value.system {
-            messages.push(openai::ChatCompletionRequestMessage::Developer(openai::ChatCompletionRequestDeveloperMessage {
-                content: openai::ChatCompletionRequestDeveloperMessageContent::Text(system_prompt),
-                name: None,
-            }));
+            messages.push(openai::ChatCompletionRequestMessage::Developer(
+                openai::ChatCompletionRequestDeveloperMessage {
+                    content: openai::ChatCompletionRequestDeveloperMessageContent::Text(
+                        system_prompt,
+                    ),
+                    name: None,
+                },
+            ));
         }
         for message in value.messages {
-            let mapped_message: openai::ChatCompletionRequestMessage =
-                match message.role {
-                    anthropic::Role::Assistant => {
-                        let mapped_content: openai::ChatCompletionRequestAssistantMessageContent = match message.content {
-                        anthropic::MessageContent::Text { content } => {
-                            openai::ChatCompletionRequestAssistantMessageContent::Text(content)
-                        }
-                        anthropic::MessageContent::Blocks { content } => {
-                            let blocks = content.into_iter().filter_map(|block| {
+            let mapped_message: openai::ChatCompletionRequestMessage = match message.role {
+                anthropic::Role::Assistant => {
+                    let mapped_content: openai::ChatCompletionRequestAssistantMessageContent =
+                        match message.content {
+                            anthropic::MessageContent::Text { content } => {
+                                openai::ChatCompletionRequestAssistantMessageContent::Text(content)
+                            }
+                            anthropic::MessageContent::Blocks { content } => {
+                                let blocks = content.into_iter().filter_map(|block| {
                                 match block {
                                     anthropic::ContentBlock::Text { text, .. } => {
                                         Some(openai::ChatCompletionRequestAssistantMessageContentPart::Text(openai::ChatCompletionRequestMessageContentPartText {
@@ -173,23 +165,25 @@ impl
                                     }
                                 }
                             }).collect();
-                            openai::ChatCompletionRequestAssistantMessageContent::Array(blocks)
-                        }
-                    };
-                        #[allow(deprecated)]
-                        openai::ChatCompletionRequestMessage::Assistant(
-                            openai::ChatCompletionRequestAssistantMessage {
-                                content: Some(mapped_content),
-                                tool_calls: None,
-                                refusal: None,
-                                name: None,
-                                audio: None,
-                                function_call: None,
-                            },
-                        )
-                    }
-                    anthropic::Role::User => {
-                        let content: openai::ChatCompletionRequestUserMessageContent  = match message.content {
+                                openai::ChatCompletionRequestAssistantMessageContent::Array(blocks)
+                            }
+                        };
+                    #[allow(deprecated)]
+                    openai::ChatCompletionRequestMessage::Assistant(
+                        openai::ChatCompletionRequestAssistantMessage {
+                            content: Some(mapped_content),
+                            tool_calls: None,
+                            refusal: None,
+                            name: None,
+                            audio: None,
+                            function_call: None,
+                        },
+                    )
+                }
+                anthropic::Role::User => {
+                    let content: openai::ChatCompletionRequestUserMessageContent = match message
+                        .content
+                    {
                         anthropic::MessageContent::Text { content } => {
                             openai::ChatCompletionRequestUserMessageContent::Text(content)
                         }
@@ -221,14 +215,14 @@ impl
                             openai::ChatCompletionRequestUserMessageContent::Array(blocks)
                         }
                     };
-                        openai::ChatCompletionRequestMessage::User(
-                            openai::ChatCompletionRequestUserMessage {
-                                content,
-                                name: None,
-                            },
-                        )
-                    }
-                };
+                    openai::ChatCompletionRequestMessage::User(
+                        openai::ChatCompletionRequestUserMessage {
+                            content,
+                            name: None,
+                        },
+                    )
+                }
+            };
             messages.push(mapped_message);
         }
 
@@ -284,10 +278,8 @@ impl
     fn try_convert(
         &self,
         mut value: async_openai::types::CreateChatCompletionResponse,
-    ) -> std::result::Result<
-        anthropic_ai_sdk::types::message::CreateMessageResponse,
-        Self::Error,
-    > {
+    ) -> std::result::Result<anthropic_ai_sdk::types::message::CreateMessageResponse, Self::Error>
+    {
         use anthropic_ai_sdk::types::message as anthropic;
         let id = value.id;
         let model = value.model;
@@ -319,9 +311,7 @@ impl
 
         if let Some(tool_uses) = openai_message.message.tool_calls {
             for tool_use in tool_uses {
-                if let Ok(input) =
-                    serde_json::from_str(&tool_use.function.arguments)
-                {
+                if let Ok(input) = serde_json::from_str(&tool_use.function.arguments) {
                     let tool_use = anthropic::ContentBlock::ToolUse {
                         id: tool_use.id,
                         name: tool_use.function.name,
@@ -361,13 +351,9 @@ impl
     fn try_convert_chunk(
         &self,
         value: async_openai::types::CreateChatCompletionStreamResponse,
-        _anthropic_openai_usage: Option<
-            &crate::types::extensions::AnthropicOpenAiUsageCell,
-        >,
-    ) -> std::result::Result<
-        Option<anthropic_ai_sdk::types::message::StreamEvent>,
-        Self::Error,
-    > {
+        _anthropic_openai_usage: Option<&crate::types::extensions::AnthropicOpenAiUsageCell>,
+    ) -> std::result::Result<Option<anthropic_ai_sdk::types::message::StreamEvent>, Self::Error>
+    {
         use anthropic_ai_sdk::types::message as anthropic;
         use async_openai::types as openai;
 
@@ -390,8 +376,7 @@ impl
 
             // Add text content if present in the MessageStart delta
             if let Some(text) = &delta.content {
-                content_blocks
-                    .push(anthropic::ContentBlock::Text { text: text.clone() });
+                content_blocks.push(anthropic::ContentBlock::Text { text: text.clone() });
             }
 
             // Add tool_calls if present in the MessageStart delta
@@ -400,21 +385,15 @@ impl
                     if let (Some(id), Some(func), Some(name)) = (
                         tc_chunk.id.as_ref(),
                         tc_chunk.function.as_ref(),
-                        tc_chunk
-                            .function
-                            .as_ref()
-                            .and_then(|f| f.name.as_ref()),
+                        tc_chunk.function.as_ref().and_then(|f| f.name.as_ref()),
                     ) {
-                        let input_str =
-                            func.arguments.as_deref().unwrap_or("{}");
-                        if let Ok(input_json) = serde_json::from_str(input_str)
-                        {
-                            let tool_use_block =
-                                anthropic::ContentBlock::ToolUse {
-                                    id: id.clone(),
-                                    name: name.clone(),
-                                    input: input_json,
-                                };
+                        let input_str = func.arguments.as_deref().unwrap_or("{}");
+                        if let Ok(input_json) = serde_json::from_str(input_str) {
+                            let tool_use_block = anthropic::ContentBlock::ToolUse {
+                                id: id.clone(),
+                                name: name.clone(),
+                                input: input_json,
+                            };
                             content_blocks.push(tool_use_block);
                         }
                         // Handle error or default for bad JSON
@@ -457,16 +436,11 @@ impl
         if let Some(finish_reason) = first_choice.finish_reason {
             let anthropic_stop_reason = match finish_reason {
                 openai::FinishReason::Stop => anthropic::StopReason::EndTurn,
-                openai::FinishReason::Length => {
-                    anthropic::StopReason::MaxTokens
-                }
-                openai::FinishReason::ToolCalls
-                | openai::FinishReason::FunctionCall => {
+                openai::FinishReason::Length => anthropic::StopReason::MaxTokens,
+                openai::FinishReason::ToolCalls | openai::FinishReason::FunctionCall => {
                     anthropic::StopReason::ToolUse
                 }
-                openai::FinishReason::ContentFilter => {
-                    anthropic::StopReason::Refusal
-                }
+                openai::FinishReason::ContentFilter => anthropic::StopReason::Refusal,
             };
 
             let stream_usage = value.usage.map_or_else(
@@ -515,12 +489,10 @@ impl
                         name: name.clone(),
                         input: input_json,
                     };
-                    return Ok(Some(
-                        anthropic::StreamEvent::ContentBlockStart {
-                            index: anthropic_block_idx,
-                            content_block: tool_use_block,
-                        },
-                    ));
+                    return Ok(Some(anthropic::StreamEvent::ContentBlockStart {
+                        index: anthropic_block_idx,
+                        content_block: tool_use_block,
+                    }));
                 }
                 // Handle error or default for bad JSON
                 let tool_use_block = anthropic::ContentBlock::ToolUse {
@@ -539,10 +511,9 @@ impl
             {
                 // Check if it's a delta for an existing tool call's arguments
                 // (ContentBlockDelta)
-                let input_json_delta =
-                    anthropic::ContentBlockDelta::InputJsonDelta {
-                        partial_json: func_args.clone(),
-                    };
+                let input_json_delta = anthropic::ContentBlockDelta::InputJsonDelta {
+                    partial_json: func_args.clone(),
+                };
                 return Ok(Some(anthropic::StreamEvent::ContentBlockDelta {
                     index: anthropic_block_idx,
                     delta: input_json_delta,
@@ -590,8 +561,7 @@ impl
     fn try_convert(
         &self,
         mut value: async_openai::types::CreateChatCompletionRequest,
-    ) -> Result<async_openai::types::CreateChatCompletionRequest, Self::Error>
-    {
+    ) -> Result<async_openai::types::CreateChatCompletionRequest, Self::Error> {
         let source_model = ModelId::from_str(&value.model)?;
         let target_model = self
             .model_mapper
@@ -604,10 +574,9 @@ impl
         // it, downstream logs cannot populate token fields from SSE
         // (see `usage_parse`).
         if value.stream.is_some_and(|s| s) {
-            value.stream_options =
-                Some(async_openai::types::ChatCompletionStreamOptions {
-                    include_usage: true,
-                });
+            value.stream_options = Some(async_openai::types::ChatCompletionStreamOptions {
+                include_usage: true,
+            });
         }
 
         Ok(value)
@@ -616,13 +585,11 @@ impl
     fn try_convert_model_passthrough(
         &self,
         mut value: async_openai::types::CreateChatCompletionRequest,
-    ) -> Result<async_openai::types::CreateChatCompletionRequest, Self::Error>
-    {
+    ) -> Result<async_openai::types::CreateChatCompletionRequest, Self::Error> {
         if value.stream.is_some_and(|s| s) {
-            value.stream_options =
-                Some(async_openai::types::ChatCompletionStreamOptions {
-                    include_usage: true,
-                });
+            value.stream_options = Some(async_openai::types::ChatCompletionStreamOptions {
+                include_usage: true,
+            });
         }
 
         Ok(value)
@@ -639,8 +606,7 @@ impl
     fn try_convert(
         &self,
         value: async_openai::types::CreateChatCompletionResponse,
-    ) -> Result<async_openai::types::CreateChatCompletionResponse, Self::Error>
-    {
+    ) -> Result<async_openai::types::CreateChatCompletionResponse, Self::Error> {
         Ok(value)
     }
 }
@@ -664,22 +630,14 @@ impl
     fn try_convert_chunk(
         &self,
         value: async_openai::types::CreateChatCompletionStreamResponse,
-        _anthropic_openai_usage: Option<
-            &crate::types::extensions::AnthropicOpenAiUsageCell,
-        >,
-    ) -> Result<
-        Option<async_openai::types::CreateChatCompletionStreamResponse>,
-        Self::Error,
-    > {
+        _anthropic_openai_usage: Option<&crate::types::extensions::AnthropicOpenAiUsageCell>,
+    ) -> Result<Option<async_openai::types::CreateChatCompletionStreamResponse>, Self::Error> {
         Ok(Some(value))
     }
 }
 
-impl
-    TryConvertError<
-        async_openai::error::WrappedError,
-        async_openai::error::WrappedError,
-    > for OpenAIConverter
+impl TryConvertError<async_openai::error::WrappedError, async_openai::error::WrappedError>
+    for OpenAIConverter
 {
     type Error = MapperError;
 
@@ -731,8 +689,7 @@ impl
     fn try_convert(
         &self,
         value: async_openai::types::CreateCompletionResponse,
-    ) -> Result<async_openai::types::CreateCompletionResponse, Self::Error>
-    {
+    ) -> Result<async_openai::types::CreateCompletionResponse, Self::Error> {
         Ok(value)
     }
 }
@@ -757,10 +714,7 @@ impl
         &self,
         value: async_openai::types::CreateCompletionResponse,
         _au: Option<&crate::types::extensions::AnthropicOpenAiUsageCell>,
-    ) -> Result<
-        Option<async_openai::types::CreateCompletionResponse>,
-        Self::Error,
-    > {
+    ) -> Result<Option<async_openai::types::CreateCompletionResponse>, Self::Error> {
         Ok(Some(value))
     }
 }
@@ -826,8 +780,7 @@ impl
         &self,
         value: async_openai::types::CreateEmbeddingResponse,
         _au: Option<&crate::types::extensions::AnthropicOpenAiUsageCell>,
-    ) -> Result<Option<async_openai::types::CreateEmbeddingResponse>, Self::Error>
-    {
+    ) -> Result<Option<async_openai::types::CreateEmbeddingResponse>, Self::Error> {
         Ok(Some(value))
     }
 }
@@ -842,8 +795,7 @@ impl
     fn try_convert(
         &self,
         mut value: async_openai::types::responses::CreateResponse,
-    ) -> Result<async_openai::types::responses::CreateResponse, Self::Error>
-    {
+    ) -> Result<async_openai::types::responses::CreateResponse, Self::Error> {
         let source_model = ModelId::from_str(&value.model)?;
         let target_model = self
             .model_mapper
@@ -856,18 +808,14 @@ impl
     fn try_convert_model_passthrough(
         &self,
         mut value: async_openai::types::responses::CreateResponse,
-    ) -> Result<async_openai::types::responses::CreateResponse, Self::Error>
-    {
+    ) -> Result<async_openai::types::responses::CreateResponse, Self::Error> {
         value.extra.remove("stream_options");
         Ok(value)
     }
 }
 
-impl
-    TryConvert<
-        async_openai::types::responses::Response,
-        async_openai::types::responses::Response,
-    > for OpenAIConverter
+impl TryConvert<async_openai::types::responses::Response, async_openai::types::responses::Response>
+    for OpenAIConverter
 {
     type Error = MapperError;
     fn try_convert(
@@ -897,17 +845,13 @@ impl
         &self,
         value: async_openai::types::responses::Response,
         _au: Option<&crate::types::extensions::AnthropicOpenAiUsageCell>,
-    ) -> Result<Option<async_openai::types::responses::Response>, Self::Error>
-    {
+    ) -> Result<Option<async_openai::types::responses::Response>, Self::Error> {
         Ok(Some(value))
     }
 }
 
-impl
-    TryConvert<
-        async_openai::types::CreateImageRequest,
-        async_openai::types::CreateImageRequest,
-    > for OpenAIConverter
+impl TryConvert<async_openai::types::CreateImageRequest, async_openai::types::CreateImageRequest>
+    for OpenAIConverter
 {
     type Error = MapperError;
     fn try_convert(
@@ -938,11 +882,8 @@ impl
     }
 }
 
-impl
-    TryConvert<
-        async_openai::types::ImagesResponse,
-        async_openai::types::ImagesResponse,
-    > for OpenAIConverter
+impl TryConvert<async_openai::types::ImagesResponse, async_openai::types::ImagesResponse>
+    for OpenAIConverter
 {
     type Error = MapperError;
     fn try_convert(
@@ -953,19 +894,13 @@ impl
     }
 }
 
-impl
-    ResponseBodyConverter<
-        async_openai::types::ImagesResponse,
-        async_openai::types::ImagesResponse,
-    > for OpenAIConverter
+impl ResponseBodyConverter<async_openai::types::ImagesResponse, async_openai::types::ImagesResponse>
+    for OpenAIConverter
 {
 }
 
-impl
-    TryConvertStreamData<
-        async_openai::types::ImagesResponse,
-        async_openai::types::ImagesResponse,
-    > for OpenAIConverter
+impl TryConvertStreamData<async_openai::types::ImagesResponse, async_openai::types::ImagesResponse>
+    for OpenAIConverter
 {
     type Error = MapperError;
     fn try_convert_chunk(
@@ -988,9 +923,7 @@ pub(super) fn get_error_type(status_code: StatusCode) -> String {
 }
 
 pub(super) fn get_error_code(status_code: StatusCode) -> Option<String> {
-    if status_code == StatusCode::UNAUTHORIZED
-        || status_code == StatusCode::FORBIDDEN
-    {
+    if status_code == StatusCode::UNAUTHORIZED || status_code == StatusCode::FORBIDDEN {
         Some("invalid_api_key".to_string())
     } else if status_code == StatusCode::TOO_MANY_REQUESTS {
         Some("rate_limit_exceeded".to_string())
@@ -1006,9 +939,7 @@ pub(crate) const INVALID_REQUEST_ERROR_TYPE: &str = "invalid_request_error";
 mod tests {
     use serde_json::json;
 
-    use crate::middleware::mapper::{
-        TryConvert, model::ModelMapper, openai::OpenAIConverter,
-    };
+    use crate::middleware::mapper::{TryConvert, model::ModelMapper, openai::OpenAIConverter};
 
     async fn converter() -> OpenAIConverter {
         let app = crate::app::build_test_app(crate::config::Config::default())
@@ -1028,9 +959,8 @@ mod tests {
             }))
             .expect("request should deserialize");
 
-        let converted =
-            TryConvert::try_convert_model_passthrough(&converter, request)
-                .expect("passthrough conversion should succeed");
+        let converted = TryConvert::try_convert_model_passthrough(&converter, request)
+            .expect("passthrough conversion should succeed");
 
         assert_eq!(converted.model, "future-openai-chat-model");
         assert_eq!(
@@ -1051,9 +981,8 @@ mod tests {
                 "prompt": "hello"
             }))
             .expect("completion should deserialize");
-        let completion =
-            TryConvert::try_convert_model_passthrough(&converter, completion)
-                .expect("completion passthrough should succeed");
+        let completion = TryConvert::try_convert_model_passthrough(&converter, completion)
+            .expect("completion passthrough should succeed");
         assert_eq!(completion.model, "future-openai-completion-model");
 
         let embedding: async_openai::types::CreateEmbeddingRequest =
@@ -1062,9 +991,8 @@ mod tests {
                 "input": "hello"
             }))
             .expect("embedding should deserialize");
-        let embedding =
-            TryConvert::try_convert_model_passthrough(&converter, embedding)
-                .expect("embedding passthrough should succeed");
+        let embedding = TryConvert::try_convert_model_passthrough(&converter, embedding)
+            .expect("embedding passthrough should succeed");
         assert_eq!(embedding.model, "future-openai-embedding-model");
 
         let response: async_openai::types::responses::CreateResponse =
@@ -1074,9 +1002,8 @@ mod tests {
                 "stream_options": {"include_usage": true}
             }))
             .expect("response should deserialize");
-        let response =
-            TryConvert::try_convert_model_passthrough(&converter, response)
-                .expect("response passthrough should succeed");
+        let response = TryConvert::try_convert_model_passthrough(&converter, response)
+            .expect("response passthrough should succeed");
         assert_eq!(response.model, "future-openai-response-model");
         assert!(!response.extra.contains_key("stream_options"));
     }

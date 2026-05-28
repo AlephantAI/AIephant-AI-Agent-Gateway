@@ -8,8 +8,7 @@
 //! validating.
 
 use tiktoken_rs::{
-    ChatCompletionRequestMessage, bpe_for_model, num_tokens_from_messages,
-    tokenizer::get_tokenizer,
+    ChatCompletionRequestMessage, bpe_for_model, num_tokens_from_messages, tokenizer::get_tokenizer,
 };
 
 use crate::middleware::large_context::parse::ChatCompletionsPayload;
@@ -22,8 +21,7 @@ fn chat_tokens_cookbook_fallback(
 ) -> Option<usize> {
     let bpe = bpe_for_model(model).ok()?;
     const REPLY_PRIMING: i32 = 3;
-    let (tokens_per_message, tokens_per_name) = if model == "gpt-3.5-turbo-0301"
-    {
+    let (tokens_per_message, tokens_per_name) = if model == "gpt-3.5-turbo-0301" {
         (4, -1)
     } else {
         (3, 1)
@@ -119,8 +117,7 @@ mod tests {
         )
         .unwrap()
         .expect("payload");
-        let tik = count_tokens_openai_profile(&payload, "openai/gpt-4")
-            .expect("tiktoken");
+        let tik = count_tokens_openai_profile(&payload, "openai/gpt-4").expect("tiktoken");
         let chars = payload.messages[0].content.chars().count();
         let naive = u32::try_from(chars.div_ceil(4)).unwrap_or(u32::MAX);
         assert!(tik > naive, "tik={tik} naive={naive}");

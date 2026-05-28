@@ -1,12 +1,7 @@
 //! Exponential backoff for on-demand LLM KV backends (spec 2026-04-21).
 
 /// Milliseconds until the next attempt, given consecutive failure count.
-pub fn next_delay_ms(
-    failures: u32,
-    base_ms: u64,
-    cap_ms: u64,
-    max_shift: u32,
-) -> u64 {
+pub fn next_delay_ms(failures: u32, base_ms: u64, cap_ms: u64, max_shift: u32) -> u64 {
     let shift = failures.min(max_shift);
     let mult = 1u64.checked_shl(shift).unwrap_or(u64::MAX);
     let raw = base_ms.saturating_mul(mult);

@@ -1,6 +1,5 @@
 use async_openai::types::{
-    CreateChatCompletionRequest, CreateChatCompletionResponse,
-    CreateChatCompletionStreamResponse,
+    CreateChatCompletionRequest, CreateChatCompletionResponse, CreateChatCompletionStreamResponse,
 };
 use serde::{Deserialize, Serialize};
 
@@ -23,9 +22,7 @@ impl crate::endpoints::Endpoint for ChatCompletions {
 }
 
 #[derive(Clone, Serialize, Default, Debug, Deserialize, PartialEq)]
-pub struct CreateChatCompletionRequestOllama(
-    pub(crate) CreateChatCompletionRequest,
-);
+pub struct CreateChatCompletionRequestOllama(pub(crate) CreateChatCompletionRequest);
 
 impl AiRequest for CreateChatCompletionRequestOllama {
     fn is_stream(&self) -> bool {

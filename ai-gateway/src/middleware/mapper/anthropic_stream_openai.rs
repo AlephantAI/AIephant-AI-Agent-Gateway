@@ -1,8 +1,7 @@
 //! Helpers for Anthropic Messages SSE → OpenAI stream `usage` aggregation.
 
 use async_openai::types::{
-    CacheWriteDetails, CompletionTokensDetails, CompletionUsage,
-    PromptTokensDetails,
+    CacheWriteDetails, CompletionTokensDetails, CompletionUsage, PromptTokensDetails,
 };
 
 use crate::types::extensions::AnthropicStreamOpenAiUsageState;
@@ -17,8 +16,7 @@ impl AnthropicStreamOpenAiUsageState {
         let u = &message.usage;
         self.input_tokens = u.input_tokens;
         self.cache_read_input_tokens = u.cache_read_input_tokens.unwrap_or(0);
-        self.cache_creation_input_tokens =
-            u.cache_creation_input_tokens.unwrap_or(0);
+        self.cache_creation_input_tokens = u.cache_creation_input_tokens.unwrap_or(0);
         if let Some(c) = &u.cache_creation {
             self.cache_ephemeral_5m = c.ephemeral_5m_input_tokens;
             self.cache_ephemeral_1h = c.ephemeral_1h_input_tokens;
@@ -70,16 +68,14 @@ impl AnthropicStreamOpenAiUsageState {
                 audio_tokens: None,
                 cached_tokens: (cached > 0).then_some(cached),
                 cache_write_tokens: (cache_write > 0).then_some(cache_write),
-                cache_write_details: (cache_write > 0).then_some(
-                    CacheWriteDetails {
-                        write_5m_tokens: if self.cache_ephemeral_5m > 0 {
-                            self.cache_ephemeral_5m
-                        } else {
-                            cache_write
-                        },
-                        write_1h_tokens: self.cache_ephemeral_1h,
+                cache_write_details: (cache_write > 0).then_some(CacheWriteDetails {
+                    write_5m_tokens: if self.cache_ephemeral_5m > 0 {
+                        self.cache_ephemeral_5m
+                    } else {
+                        cache_write
                     },
-                ),
+                    write_1h_tokens: self.cache_ephemeral_1h,
+                }),
             })
         } else {
             None

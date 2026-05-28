@@ -8,8 +8,8 @@ use tracing::{Instrument, info_span};
 use crate::{
     app_state::AppState,
     error::{
-        api::ApiError, internal::InternalError,
-        invalid_req::InvalidRequestError, prompts::PromptError,
+        api::ApiError, internal::InternalError, invalid_req::InvalidRequestError,
+        prompts::PromptError,
     },
     middleware::prompts::templating::apply_prompt_inputs_to_body,
     store::s3::S3Client,
@@ -64,10 +64,7 @@ where
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
     #[inline]
-    fn poll_ready(
-        &mut self,
-        cx: &mut Context<'_>,
-    ) -> Poll<Result<(), Self::Error>> {
+    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         self.inner.poll_ready(cx)
     }
 
@@ -96,10 +93,7 @@ struct Prompt2025Version {
     id: String,
 }
 
-async fn build_prompt_request(
-    app_state: AppState,
-    req: Request,
-) -> Result<Request, ApiError> {
+async fn build_prompt_request(app_state: AppState, req: Request) -> Result<Request, ApiError> {
     let (parts, body) = req.into_parts();
     let body_bytes = body
         .collect()
@@ -108,19 +102,15 @@ async fn build_prompt_request(
         .to_bytes();
 
     let request_json: serde_json::Value = serde_json::from_slice(&body_bytes)
-        .map_err(|e| {
-        ApiError::InvalidRequest(InvalidRequestError::InvalidRequestBody(e))
-    })?;
+        .map_err(|e| ApiError::InvalidRequest(InvalidRequestError::InvalidRequestBody(e)))?;
 
     if request_json.pointer("/prompt_id").is_none() {
-        let req =
-            Request::from_parts(parts, axum_core::body::Body::from(body_bytes));
+        let req = Request::from_parts(parts, axum_core::body::Body::from(body_bytes));
         return Ok(req);
     }
 
     let Ok(mut prompt_ctx) = get_prompt_params(&request_json) else {
-        let req =
-            Request::from_parts(parts, axum_core::body::Body::from(body_bytes));
+        let req = Request::from_parts(parts, axum_core::body::Body::from(body_bytes));
         return Ok(req);
     };
     // TODO: Insert to extensions later and process in RequestLog
@@ -131,23 +121,18 @@ async fn build_prompt_request(
         .cloned()
         .ok_or(InternalError::ExtensionNotFound("AuthContext"))?;
 
-    let version_id = if let Some(ref version_id) = prompt_ctx.prompt_version_id
-    {
+    let version_id = if let Some(ref version_id) = prompt_ctx.prompt_version_id {
         version_id.clone()
     } else {
-        let version_response = get_prompt_version(
-            &app_state,
-            &prompt_ctx.prompt_id,
-            &auth_ctx,
-        )
-        .await?
-        .data()
-        .map_err(|e| {
-            tracing::error!(error = %e, "failed to get production version");
-            ApiError::Internal(InternalError::PromptError(
-                PromptError::UnexpectedResponse(e),
-            ))
-        })?;
+        let version_response = get_prompt_version(&app_state, &prompt_ctx.prompt_id, &auth_ctx)
+            .await?
+            .data()
+            .map_err(|e| {
+                tracing::error!(error = %e, "failed to get production version");
+                ApiError::Internal(InternalError::PromptError(PromptError::UnexpectedResponse(
+                    e,
+                )))
+            })?;
         prompt_ctx.prompt_version_id = Some(version_response.id.clone());
         version_response.id
     };
@@ -155,17 +140,11 @@ async fn build_prompt_request(
     let s3_client = S3Client::cloud(&app_state.0.s3);
 
     let prompt_body_json = s3_client
-        .pull_prompt_body(
-            &app_state,
-            &auth_ctx,
-            &prompt_ctx.prompt_id,
-            &version_id,
-        )
+        .pull_prompt_body(&app_state, &auth_ctx, &prompt_ctx.prompt_id, &version_id)
         .await
         .map_err(|e| ApiError::Internal(InternalError::PromptError(e)))?;
 
-    let merged_body =
-        merge_prompt_with_request(prompt_body_json, &request_json)?;
+    let merged_body = merge_prompt_with_request(prompt_body_json, &request_json)?;
 
     let processed_body = apply_prompt_inputs_to_body(merged_body)?;
 
@@ -175,14 +154,11 @@ async fn build_prompt_request(
     let mut parts = parts;
     parts.extensions.insert(prompt_ctx);
 
-    let req =
-        Request::from_parts(parts, axum_core::body::Body::from(merged_bytes));
+    let req = Request::from_parts(parts, axum_core::body::Body::from(merged_bytes));
     Ok(req)
 }
 
-fn get_prompt_params(
-    request_json: &Value,
-) -> Result<PromptContext, InvalidRequestError> {
+fn get_prompt_params(request_json: &Value) -> Result<PromptContext, InvalidRequestError> {
     let prompt_ctx = serde_json::from_value(request_json.clone())?;
     Ok(prompt_ctx)
 }
@@ -248,15 +224,11 @@ fn merge_prompt_with_request(
         return Err(ApiError::Internal(InternalError::Internal));
     };
 
-    let Some(prompt_messages) =
-        prompt_obj.get("messages").and_then(|m| m.as_array())
-    else {
+    let Some(prompt_messages) = prompt_obj.get("messages").and_then(|m| m.as_array()) else {
         return Err(ApiError::Internal(InternalError::Internal));
     };
 
-    let Some(request_messages) =
-        request_obj.get("messages").and_then(|m| m.as_array())
-    else {
+    let Some(request_messages) = request_obj.get("messages").and_then(|m| m.as_array()) else {
         return Err(ApiError::Internal(InternalError::Internal));
     };
 

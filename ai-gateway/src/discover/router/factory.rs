@@ -5,8 +5,8 @@ use tokio::sync::mpsc::Receiver;
 use tower::{Service, discover::Change};
 
 use crate::{
-    app_state::AppState, discover::router::discover::RouterDiscovery,
-    error::init::InitError, router::service::Router, types::router::RouterId,
+    app_state::AppState, discover::router::discover::RouterDiscovery, error::init::InitError,
+    router::service::Router, types::router::RouterId,
 };
 
 #[derive(Debug)]
@@ -26,10 +26,7 @@ impl Service<Receiver<Change<RouterId, Router>>> for RouterDiscoverFactory {
     type Error = InitError;
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
-    fn poll_ready(
-        &mut self,
-        _: &mut Context<'_>,
-    ) -> Poll<Result<(), Self::Error>> {
+    fn poll_ready(&mut self, _: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         Poll::Ready(Ok(()))
     }
 

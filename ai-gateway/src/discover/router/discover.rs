@@ -49,10 +49,7 @@ impl RouterDiscovery {
 impl Stream for RouterDiscovery {
     type Item = Result<Change<RouterId, Router>, Infallible>;
 
-    fn poll_next(
-        self: Pin<&mut Self>,
-        ctx: &mut Context<'_>,
-    ) -> Poll<Option<Self::Item>> {
+    fn poll_next(self: Pin<&mut Self>, ctx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         self.project()
             .inner
             .poll_next(ctx)

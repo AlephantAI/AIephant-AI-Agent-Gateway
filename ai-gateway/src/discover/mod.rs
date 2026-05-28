@@ -45,14 +45,9 @@ where
 {
     type Item = Change<K, V>;
 
-    fn poll_next(
-        self: Pin<&mut Self>,
-        _: &mut Context<'_>,
-    ) -> Poll<Option<Self::Item>> {
+    fn poll_next(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         match self.project().inner.next() {
-            Some((key, service)) => {
-                Poll::Ready(Some(Change::Insert(key, service)))
-            }
+            Some((key, service)) => Poll::Ready(Some(Change::Insert(key, service))),
             None => Poll::Ready(None),
         }
     }

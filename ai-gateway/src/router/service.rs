@@ -18,8 +18,7 @@ use crate::{
     config::router::RouterConfig,
     endpoints::{ApiEndpoint, EndpointType},
     error::{
-        api::ApiError, init::InitError, internal::InternalError,
-        invalid_req::InvalidRequestError,
+        api::ApiError, init::InitError, internal::InternalError, invalid_req::InvalidRequestError,
     },
     middleware::{prompts::PromptLayer, request_context},
     router::{meta::MIDDLEWARE_BUFFER_SIZE, strategy::RoutingStrategyService},
@@ -27,11 +26,8 @@ use crate::{
     utils::handle_error::ErrorHandlerLayer,
 };
 
-type InnerRouterService = BoxCloneService<
-    crate::types::request::Request,
-    crate::types::response::Response,
-    Infallible,
->;
+type InnerRouterService =
+    BoxCloneService<crate::types::request::Request, crate::types::response::Response, Infallible>;
 
 /// The top-level service we use to compose both
 /// middleware along with the routing strategy service.
@@ -52,11 +48,8 @@ impl Router {
 
         let mut inner = HashMap::default();
         let prompt_layer = PromptLayer::new(&app_state)?;
-        let request_context_layer =
-            request_context::Layer::for_router(router_config.clone());
-        for (endpoint_type, balance_config) in
-            router_config.load_balance.as_ref()
-        {
+        let request_context_layer = request_context::Layer::for_router(router_config.clone());
+        for (endpoint_type, balance_config) in router_config.load_balance.as_ref() {
             let routing_strategy = RoutingStrategyService::new(
                 app_state.clone(),
                 id.clone(),
@@ -91,10 +84,7 @@ impl tower::Service<crate::types::request::Request> for Router {
     type Future = ResponseFuture;
 
     #[inline]
-    fn poll_ready(
-        &mut self,
-        ctx: &mut Context<'_>,
-    ) -> Poll<Result<(), Self::Error>> {
+    fn poll_ready(&mut self, ctx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         let mut any_pending = false;
         for balancer in self.inner.values_mut() {
             if balancer.poll_ready(ctx).is_pending() {
@@ -110,16 +100,9 @@ impl tower::Service<crate::types::request::Request> for Router {
 
     #[inline]
     #[tracing::instrument(level = "debug", name = "router", skip_all)]
-    fn call(
-        &mut self,
-        mut req: crate::types::request::Request,
-    ) -> Self::Future {
-        let Some(extracted_path_and_query) =
-            req.extensions().get::<PathAndQuery>()
-        else {
-            let api_error = ApiError::Internal(
-                InternalError::ExtensionNotFound("PathAndQuery"),
-            );
+    fn call(&mut self, mut req: crate::types::request::Request) -> Self::Future {
+        let Some(extracted_path_and_query) = req.extensions().get::<PathAndQuery>() else {
+            let api_error = ApiError::Internal(InternalError::ExtensionNotFound("PathAndQuery"));
             let response = api_error.into_response();
             return ResponseFuture::Ready {
                 response: Some(response),
@@ -147,20 +130,18 @@ impl tower::Service<crate::types::request::Request> for Router {
                     future: balancer.call(req),
                 }
             } else {
-                let api_error =
-                    ApiError::InvalidRequest(InvalidRequestError::NotFound(
-                        extracted_path_and_query.path().to_string(),
-                    ));
+                let api_error = ApiError::InvalidRequest(InvalidRequestError::NotFound(
+                    extracted_path_and_query.path().to_string(),
+                ));
                 let response = api_error.into_response();
                 ResponseFuture::Ready {
                     response: Some(response),
                 }
             }
         } else {
-            let api_error =
-                ApiError::InvalidRequest(InvalidRequestError::NotFound(
-                    extracted_path_and_query.path().to_string(),
-                ));
+            let api_error = ApiError::InvalidRequest(InvalidRequestError::NotFound(
+                extracted_path_and_query.path().to_string(),
+            ));
             let response = api_error.into_response();
             ResponseFuture::Ready {
                 response: Some(response),
@@ -188,9 +169,9 @@ impl Future for ResponseFuture {
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         match self.project() {
-            ResponseFutureProj::Ready { response } => Poll::Ready(Ok(response
-                .take()
-                .expect("future polled after completion"))),
+            ResponseFutureProj::Ready { response } => {
+                Poll::Ready(Ok(response.take().expect("future polled after completion")))
+            }
             ResponseFutureProj::Inner { future } => {
                 match futures::ready!(future.poll(cx)) {
                     Ok(res) => Poll::Ready(Ok(res)),
@@ -217,9 +198,9 @@ fn precheck_workspace_candidate_intersection(
         return None;
     }
 
-    let has_allowed = candidates.iter().any(|provider| {
-        app_state.is_provider_allowed_for_workspace(workspace_id, provider)
-    });
+    let has_allowed = candidates
+        .iter()
+        .any(|provider| app_state.is_provider_allowed_for_workspace(workspace_id, provider));
     if has_allowed {
         return None;
     }

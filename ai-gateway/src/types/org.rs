@@ -4,19 +4,7 @@ use uuid::Uuid;
 
 use crate::error::auth::AuthError;
 
-#[derive(
-    Debug,
-    AsRef,
-    Copy,
-    Clone,
-    Eq,
-    PartialEq,
-    Hash,
-    Serialize,
-    Deserialize,
-    Default,
-    From,
-)]
+#[derive(Debug, AsRef, Copy, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Default, From)]
 pub struct OrgId(Uuid);
 
 impl OrgId {
@@ -36,8 +24,7 @@ impl TryFrom<&str> for OrgId {
     type Error = AuthError;
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         Ok(OrgId::new(
-            Uuid::parse_str(value)
-                .map_err(|_| AuthError::InvalidCredentials)?,
+            Uuid::parse_str(value).map_err(|_| AuthError::InvalidCredentials)?,
         ))
     }
 }

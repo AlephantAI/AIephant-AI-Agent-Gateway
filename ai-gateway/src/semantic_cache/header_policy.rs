@@ -1,7 +1,6 @@
 use http::HeaderMap;
 
-const ALEPHANT_CACHE_SEMANTIC_THRESHOLD: &str =
-    "Alephant-Cache-Semantic-Threshold";
+const ALEPHANT_CACHE_SEMANTIC_THRESHOLD: &str = "Alephant-Cache-Semantic-Threshold";
 const ALEPHANT_CACHE_TTL: &str = "Alephant-Cache-Ttl";
 
 #[derive(Debug, Clone, PartialEq)]
@@ -25,10 +24,7 @@ impl SemanticPolicy {
     }
 }
 
-fn parse_threshold(
-    headers: &HeaderMap,
-    default_threshold: f32,
-) -> Result<f32, String> {
+fn parse_threshold(headers: &HeaderMap, default_threshold: f32) -> Result<f32, String> {
     let Some(raw) = headers.get(ALEPHANT_CACHE_SEMANTIC_THRESHOLD) else {
         return Ok(default_threshold);
     };
@@ -39,17 +35,12 @@ fn parse_threshold(
         .parse::<f32>()
         .map_err(|_| "invalid Alephant-Cache-Semantic-Threshold".to_string())?;
     if !(0.0..=1.0).contains(&v) {
-        return Err(
-            "Alephant-Cache-Semantic-Threshold out of range".to_string()
-        );
+        return Err("Alephant-Cache-Semantic-Threshold out of range".to_string());
     }
     Ok(v)
 }
 
-fn parse_ttl(
-    headers: &HeaderMap,
-    default_ttl_seconds: u64,
-) -> Result<u64, String> {
+fn parse_ttl(headers: &HeaderMap, default_ttl_seconds: u64) -> Result<u64, String> {
     let Some(raw) = headers.get(ALEPHANT_CACHE_TTL) else {
         return Ok(default_ttl_seconds);
     };
@@ -77,10 +68,7 @@ mod tests {
     #[test]
     fn parse_policy_allows_alephant_header_overrides() {
         let mut headers = HeaderMap::new();
-        headers.insert(
-            "Alephant-Cache-Semantic-Threshold",
-            "0.82".parse().unwrap(),
-        );
+        headers.insert("Alephant-Cache-Semantic-Threshold", "0.82".parse().unwrap());
         headers.insert("Alephant-Cache-Ttl", "120".parse().unwrap());
         let p = SemanticPolicy::from_headers(&headers, 0.9, 3600).unwrap();
         assert_eq!(p.threshold, 0.82);

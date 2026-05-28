@@ -44,10 +44,7 @@ pub fn usage_counts_from_response_body(body: &[u8]) -> UsageTokenCounts {
 /// and non-zero; otherwise scan `data:` SSE lines and take the **last** frame
 /// that carries a `usage` object.
 #[must_use]
-pub fn usage_counts_from_response_body_for_log(
-    is_stream: bool,
-    body: &[u8],
-) -> UsageTokenCounts {
+pub fn usage_counts_from_response_body_for_log(is_stream: bool, body: &[u8]) -> UsageTokenCounts {
     let from_single = std::str::from_utf8(body)
         .ok()
         .and_then(|t| serde_json::from_str::<Value>(t).ok())
@@ -107,11 +104,7 @@ pub fn extract_usage_from_root(root: &Value) -> UsageTokenCounts {
 
 fn extract_usage_from_usage_object(usage: &Value) -> UsageTokenCounts {
     let mut out = UsageTokenCounts {
-        prompt_tokens: usage_count_chat_or_responses(
-            usage,
-            "prompt_tokens",
-            "input_tokens",
-        ),
+        prompt_tokens: usage_count_chat_or_responses(usage, "prompt_tokens", "input_tokens"),
         completion_tokens: usage_count_chat_or_responses(
             usage,
             "completion_tokens",
@@ -128,11 +121,7 @@ fn extract_usage_from_usage_object(usage: &Value) -> UsageTokenCounts {
 
 /// Rule B: if `chat_key` is present and non-null, use its numeric value;
 /// otherwise use `responses_key`.
-fn usage_count_chat_or_responses(
-    usage: &Value,
-    chat_key: &str,
-    responses_key: &str,
-) -> i64 {
+fn usage_count_chat_or_responses(usage: &Value, chat_key: &str, responses_key: &str) -> i64 {
     match usage.get(chat_key) {
         Some(v) if !v.is_null() => value_as_i64(v),
         _ => json_i64(usage, responses_key),
@@ -162,10 +151,7 @@ fn fill_completion_details_from(details: &Value, out: &mut UsageTokenCounts) {
     out.completion_audio_tokens = json_i64(details, "audio_tokens");
 }
 
-fn apply_merged_prompt_token_details(
-    usage: &Value,
-    out: &mut UsageTokenCounts,
-) {
+fn apply_merged_prompt_token_details(usage: &Value, out: &mut UsageTokenCounts) {
     let chat = usage
         .get("prompt_tokens_details")
         .filter(|v| !v.is_null() && v.is_object());
@@ -207,12 +193,10 @@ fn merge_prompt_details_fallback(
         out.prompt_audio_tokens = json_i64(resp_details, "audio_tokens");
     }
 
-    let cache_write_unset_on_chat = !chat_obj
-        .contains_key("cache_write_tokens")
+    let cache_write_unset_on_chat = !chat_obj.contains_key("cache_write_tokens")
         && !chat_obj.contains_key("cache_write_input_tokens");
     if cache_write_unset_on_chat && out.prompt_cache_write_tokens == 0 {
-        out.prompt_cache_write_tokens =
-            json_i64(resp_details, "cache_write_tokens");
+        out.prompt_cache_write_tokens = json_i64(resp_details, "cache_write_tokens");
         if out.prompt_cache_write_tokens == 0
             && let Some(cache) = resp_details.get("cache_write_input_tokens")
         {
@@ -221,10 +205,7 @@ fn merge_prompt_details_fallback(
     }
 }
 
-fn apply_merged_completion_token_details(
-    usage: &Value,
-    out: &mut UsageTokenCounts,
-) {
+fn apply_merged_completion_token_details(usage: &Value, out: &mut UsageTokenCounts) {
     let chat = usage
         .get("completion_tokens_details")
         .filter(|v| !v.is_null() && v.is_object());
@@ -256,9 +237,7 @@ fn merge_completion_details_fallback(
         out.reasoning_tokens = json_i64(resp_details, "reasoning_tokens");
     }
 
-    if !chat_obj.contains_key("audio_tokens")
-        && out.completion_audio_tokens == 0
-    {
+    if !chat_obj.contains_key("audio_tokens") && out.completion_audio_tokens == 0 {
         out.completion_audio_tokens = json_i64(resp_details, "audio_tokens");
     }
 }
@@ -328,8 +307,7 @@ mod tests {
              cache_write_tokens\":5,\"cache_write_details\":{\"\
              write_5m_tokens\":5,\"write_1h_tokens\":0}}}}\n\n",
         );
-        let c =
-            usage_counts_from_response_body_for_log(false, frames.as_bytes());
+        let c = usage_counts_from_response_body_for_log(false, frames.as_bytes());
         assert_eq!(c.prompt_tokens, 3);
         assert_eq!(c.completion_tokens, 7);
         assert_eq!(c.prompt_cache_read_tokens, 2);
@@ -385,8 +363,7 @@ mod tests {
              input_tokens_details\":{\"cached_tokens\":50},\"\
              output_tokens_details\":{\"reasoning_tokens\":10}}}\n\n",
         );
-        let c =
-            usage_counts_from_response_body_for_log(true, frames.as_bytes());
+        let c = usage_counts_from_response_body_for_log(true, frames.as_bytes());
         assert_eq!(c.prompt_tokens, 100);
         assert_eq!(c.completion_tokens, 200);
         assert_eq!(c.prompt_cache_read_tokens, 50);

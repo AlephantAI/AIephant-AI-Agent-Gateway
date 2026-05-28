@@ -131,9 +131,7 @@ impl BalanceConfig {
 /// [`RoutingStrategyService`](crate::router::strategy::RoutingStrategyService).
 ///
 /// See the rustdocs there for more details.
-#[derive(
-    Debug, Clone, Deserialize, Serialize, Eq, PartialEq, strum::AsRefStr,
-)]
+#[derive(Debug, Clone, Deserialize, Serialize, Eq, PartialEq, strum::AsRefStr)]
 #[strum(serialize_all = "kebab-case")]
 #[serde(rename_all = "kebab-case", tag = "strategy")]
 pub enum BalanceConfigInner {
@@ -159,13 +157,13 @@ impl BalanceConfigInner {
             Self::ProviderWeighted { providers } => {
                 providers.iter().map(|t| t.provider.clone()).collect()
             }
-            Self::BalancedLatency { providers } => {
-                providers.iter().cloned().collect()
-            }
+            Self::BalancedLatency { providers } => providers.iter().cloned().collect(),
             Self::ModelWeighted { models } => models
                 .iter()
                 .filter_map(|model| {
-                    if let Some(provider) = model.model.inference_provider() { Some(provider) } else {
+                    if let Some(provider) = model.model.inference_provider() {
+                        Some(provider)
+                    } else {
                         tracing::warn!(model = ?model.model, "Model has no inference provider");
                         None
                     }
@@ -174,7 +172,9 @@ impl BalanceConfigInner {
             Self::ModelLatency { models } => models
                 .iter()
                 .filter_map(|model| {
-                    if let Some(provider) = model.inference_provider() { Some(provider) } else {
+                    if let Some(provider) = model.inference_provider() {
+                        Some(provider)
+                    } else {
                         tracing::warn!(model = ?model, "Model has no inference provider");
                         None
                     }

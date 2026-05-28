@@ -11,9 +11,8 @@ use reqwest::ClientBuilder;
 use crate::{
     app_state::AppState,
     error::{
-        api::ApiError, auth::AuthError, init::InitError,
-        internal::InternalError, invalid_req::InvalidRequestError,
-        provider::ProviderError,
+        api::ApiError, auth::AuthError, init::InitError, internal::InternalError,
+        invalid_req::InvalidRequestError, provider::ProviderError,
     },
     types::provider::{InferenceProvider, ProviderKey},
     utils::host_header,
@@ -70,14 +69,8 @@ impl Client {
         let secret_key = secret_key
             .ok_or(ApiError::Authentication(AuthError::InvalidCredentials))?
             .expose();
-        let identity = Credentials::new(
-            access_key_id,
-            secret_key,
-            None,
-            None,
-            "Environment",
-        )
-        .into();
+        let identity =
+            Credentials::new(access_key_id, secret_key, None, None, "Environment").into();
 
         let request = request_builder
             .try_clone()
@@ -95,11 +88,11 @@ impl Client {
             ))?
             .to_string();
         let host_region: Vec<&str> = host.split('.').collect();
-        let host_region = host_region.get(1).ok_or(
-            InvalidRequestError::UnsupportedEndpoint(
+        let host_region = host_region
+            .get(1)
+            .ok_or(InvalidRequestError::UnsupportedEndpoint(
                 "host is required in request url".to_string(),
-            ),
-        )?;
+            ))?;
 
         let signing_settings = SigningSettings::default();
         let signing_params = v4::SigningParams::builder()
@@ -138,9 +131,7 @@ impl Client {
 
         let (signing_output, _signature) =
             aws_sigv4::http_request::sign(signable_request, &signing_params)
-                .map_err(|e| {
-                    InternalError::AwsRequestSigningError(e.to_string())
-                })?
+                .map_err(|e| InternalError::AwsRequestSigningError(e.to_string()))?
                 .into_parts();
         signing_output.apply_to_request_http1x(&mut temp_request);
 

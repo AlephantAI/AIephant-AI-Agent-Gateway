@@ -8,8 +8,7 @@ use opentelemetry_appender_tracing::layer::OpenTelemetryTracingBridge;
 use opentelemetry_http::{Bytes, HeaderInjector};
 use opentelemetry_otlp::{SpanExporter, WithExportConfig};
 use opentelemetry_sdk::{
-    logs::SdkLoggerProvider, propagation::TraceContextPropagator,
-    trace::SdkTracerProvider,
+    logs::SdkLoggerProvider, propagation::TraceContextPropagator, trace::SdkTracerProvider,
 };
 use opentelemetry_stdout::LogExporter;
 use tracing::info;
@@ -53,8 +52,7 @@ async fn send_request(
     url: &str,
     body_content: &str,
     span_name: &str,
-) -> std::result::Result<(), Box<dyn std::error::Error + Send + Sync + 'static>>
-{
+) -> std::result::Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
     let client = Client::builder(TokioExecutor::new()).build_http();
     let tracer = global::tracer("");
     let span = tracer
@@ -73,10 +71,7 @@ async fn send_request(
 
     let mut req = hyper::Request::builder().uri(url).method("POST");
     global::get_text_map_propagator(|propagator| {
-        propagator.inject_context(
-            &cx,
-            &mut HeaderInjector(req.headers_mut().unwrap()),
-        )
+        propagator.inject_context(&cx, &mut HeaderInjector(req.headers_mut().unwrap()))
     });
     req.headers_mut()
         .unwrap()
@@ -94,8 +89,7 @@ async fn send_request(
 }
 
 #[tokio::main]
-async fn main()
--> std::result::Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
+async fn main() -> std::result::Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
     let tracer_provider = init_tracer();
     let logger_provider = init_logs();
 

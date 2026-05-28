@@ -10,15 +10,11 @@ mod choose;
 mod price;
 mod resolve;
 
-pub use choose::{
-    choose_default_gateway_model,
-    choose_default_gateway_model_excluding_provider,
-};
+pub use choose::{choose_default_gateway_model, choose_default_gateway_model_excluding_provider};
 pub use price::price_sum_from_info;
 pub use resolve::{
-    first_non_empty_list, model_ids_from_config_json,
-    model_ids_from_overrides_json, model_ids_from_policy_overrides_json,
-    pick_greatest_by_price_and_name,
+    first_non_empty_list, model_ids_from_config_json, model_ids_from_overrides_json,
+    model_ids_from_policy_overrides_json, pick_greatest_by_price_and_name,
 };
 
 #[cfg(test)]

@@ -157,9 +157,7 @@ impl IntoResponse for InvalidRequestError {
                     Json(ErrorResponse {
                         error: ErrorDetails {
                             message,
-                            r#type: Some(
-                                INVALID_REQUEST_ERROR_TYPE.to_string(),
-                            ),
+                            r#type: Some(INVALID_REQUEST_ERROR_TYPE.to_string()),
                             param: None,
                             code: None,
                         },
@@ -229,9 +227,7 @@ impl IntoResponse for InvalidRequestError {
                     Json(ErrorResponse {
                         error: ErrorDetails {
                             message,
-                            r#type: Some(
-                                INVALID_REQUEST_ERROR_TYPE.to_string(),
-                            ),
+                            r#type: Some(INVALID_REQUEST_ERROR_TYPE.to_string()),
                             param: None,
                             code: Some("ambiguous_model".to_string()),
                         },
@@ -248,9 +244,7 @@ impl IntoResponse for InvalidRequestError {
                             .to_string(),
                         r#type: Some(INVALID_REQUEST_ERROR_TYPE.to_string()),
                         param: None,
-                        code: Some(
-                            "custom_provider_missing_base_url".to_string(),
-                        ),
+                        code: Some("custom_provider_missing_base_url".to_string()),
                     },
                 }),
             )
@@ -313,12 +307,8 @@ pub enum InvalidRequestErrorMetric {
 impl From<&InvalidRequestError> for InvalidRequestErrorMetric {
     fn from(error: &InvalidRequestError) -> Self {
         match error {
-            InvalidRequestError::UnsupportedProvider(_) => {
-                Self::UnsupportedProvider
-            }
-            InvalidRequestError::MethodNotAllowed { .. } => {
-                Self::MethodNotAllowed
-            }
+            InvalidRequestError::UnsupportedProvider(_) => Self::UnsupportedProvider,
+            InvalidRequestError::MethodNotAllowed { .. } => Self::MethodNotAllowed,
             InvalidRequestError::NotFound(_)
             | InvalidRequestError::RouterIdNotFound(_)
             | InvalidRequestError::MissingRouterId
@@ -330,33 +320,17 @@ impl From<&InvalidRequestError> for InvalidRequestErrorMetric {
             | InvalidRequestError::MissingModelId
             | InvalidRequestError::InvalidModelId => Self::InvalidRequest,
             InvalidRequestError::InvalidUrl(_) => Self::InvalidUrl,
-            InvalidRequestError::InvalidRequestBody(_) => {
-                Self::InvalidRequestBody
-            }
+            InvalidRequestError::InvalidRequestBody(_) => Self::InvalidRequestBody,
             InvalidRequestError::Provider4xxError(_) => Self::Provider4xxError,
             InvalidRequestError::TooManyRequests(_) => Self::TooManyRequests,
-            InvalidRequestError::ModelAccessDenied(_) => {
-                Self::ModelAccessDenied
-            }
+            InvalidRequestError::ModelAccessDenied(_) => Self::ModelAccessDenied,
             InvalidRequestError::NoModelAvailable => Self::NoModelAvailable,
-            InvalidRequestError::UnsupportedGatewayModel(_) => {
-                Self::UnsupportedGatewayModel
-            }
-            InvalidRequestError::ContentPolicyDenied { .. } => {
-                Self::ContentPolicyDenied
-            }
-            InvalidRequestError::PiicacheOutBodyMissing { .. } => {
-                Self::PiicacheOutBodyMissing
-            }
-            InvalidRequestError::PromptCacheInvalid { .. } => {
-                Self::PromptCacheInvalid
-            }
-            InvalidRequestError::AmbiguousBareModel { .. } => {
-                Self::AmbiguousBareModel
-            }
-            InvalidRequestError::CustomProviderMissingBaseUrl => {
-                Self::CustomProviderMissingBaseUrl
-            }
+            InvalidRequestError::UnsupportedGatewayModel(_) => Self::UnsupportedGatewayModel,
+            InvalidRequestError::ContentPolicyDenied { .. } => Self::ContentPolicyDenied,
+            InvalidRequestError::PiicacheOutBodyMissing { .. } => Self::PiicacheOutBodyMissing,
+            InvalidRequestError::PromptCacheInvalid { .. } => Self::PromptCacheInvalid,
+            InvalidRequestError::AmbiguousBareModel { .. } => Self::AmbiguousBareModel,
+            InvalidRequestError::CustomProviderMissingBaseUrl => Self::CustomProviderMissingBaseUrl,
         }
     }
 }

@@ -81,9 +81,8 @@ async fn lazy_cf_503_then_retry_gets_value() {
             if i == 0 {
                 ResponseTemplate::new(503)
             } else {
-                ResponseTemplate::new(200).set_body_string(
-                    r#"{"headers":{},"latency":1,"body":["x"]}"#,
-                )
+                ResponseTemplate::new(200)
+                    .set_body_string(r#"{"headers":{},"latency":1,"body":["x"]}"#)
             }
         })
         .mount(&srv)

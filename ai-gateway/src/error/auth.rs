@@ -5,8 +5,8 @@ use thiserror::Error;
 
 use super::api::ErrorResponse;
 use crate::{
-    error::api::ErrorDetails,
-    middleware::mapper::openai::INVALID_REQUEST_ERROR_TYPE, types::json::Json,
+    error::api::ErrorDetails, middleware::mapper::openai::INVALID_REQUEST_ERROR_TYPE,
+    types::json::Json,
 };
 
 #[derive(Debug, strum::AsRefStr, Error, Display)]
@@ -78,9 +78,7 @@ pub enum AuthErrorMetric {
 impl From<&AuthError> for AuthErrorMetric {
     fn from(error: &AuthError) -> Self {
         match error {
-            AuthError::MissingAuthorizationHeader => {
-                Self::MissingAuthorizationHeader
-            }
+            AuthError::MissingAuthorizationHeader => Self::MissingAuthorizationHeader,
             AuthError::InvalidCredentials => Self::InvalidCredentials,
             AuthError::ProviderKeyNotFound => Self::ProviderKeyNotFound,
         }

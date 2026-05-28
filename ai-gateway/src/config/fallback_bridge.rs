@@ -20,9 +20,7 @@ use std::{borrow::Cow, time::Duration};
 use rust_decimal::prelude::ToPrimitive;
 
 use crate::{
-    config::{
-        Config, monitor::GracePeriod, retry::RetryConfig, router::RouterConfigs,
-    },
+    config::{Config, monitor::GracePeriod, retry::RetryConfig, router::RouterConfigs},
     types::router::RouterId,
 };
 
@@ -82,10 +80,7 @@ pub fn resolved_rate_limit_restore_after(
     config: &Config,
     retry_after_secs: Option<u64>,
 ) -> Duration {
-    crate::fallback::evaluator::restore_after(
-        &config.fallback_policy,
-        retry_after_secs,
-    )
+    crate::fallback::evaluator::restore_after(&config.fallback_policy, retry_after_secs)
 }
 
 /// Identifies a per-path retry config that has been superseded by
@@ -111,9 +106,7 @@ pub fn resolved_global_retry(config: &Config) -> Option<Cow<'_, RetryConfig>> {
 /// Return all per-path retry configurations that are superseded by the
 /// unified policy. Returns an empty `Vec` when none are set.
 #[must_use]
-pub fn deprecated_per_path_retries(
-    config: &Config,
-) -> Vec<DeprecatedRetryLocation> {
+pub fn deprecated_per_path_retries(config: &Config) -> Vec<DeprecatedRetryLocation> {
     let mut out = Vec::new();
     if config.unified_api.retries.is_some() {
         out.push(DeprecatedRetryLocation::UnifiedApi);

@@ -52,9 +52,7 @@ impl Default for ClientIpRateLimitConfig {
     }
 }
 
-#[derive(
-    Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq, Hash,
-)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq, Hash)]
 #[serde(rename_all = "kebab-case")]
 pub enum ClientIpRateLimitBackend {
     #[default]
@@ -72,9 +70,7 @@ fn default_redis_key_prefix() -> String {
 
 /// Accepts YAML arrays, JSON-array strings, or
 /// `AI_GATEWAY__...__TRUSTED_PROXY_CIDRS__0`-style maps.
-fn deserialize_cidr_list<'de, D>(
-    deserializer: D,
-) -> Result<Vec<String>, D::Error>
+fn deserialize_cidr_list<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
 where
     D: Deserializer<'de>,
 {
@@ -85,15 +81,11 @@ where
             .into_iter()
             .map(|v| {
                 v.as_str().map(str::to_owned).ok_or_else(|| {
-                    D::Error::custom(
-                        "trusted_proxy_cidrs: array items must be strings",
-                    )
+                    D::Error::custom("trusted_proxy_cidrs: array items must be strings")
                 })
             })
             .collect(),
-        serde_json::Value::String(s) => {
-            serde_json::from_str(&s).map_err(D::Error::custom)
-        }
+        serde_json::Value::String(s) => serde_json::from_str(&s).map_err(D::Error::custom),
         serde_json::Value::Object(map) => {
             let mut pairs: Vec<(usize, String)> = map
                 .into_iter()
@@ -125,8 +117,7 @@ mod tests {
     #[test]
     fn deserialize_cidr_list_accepts_json_array_string() {
         let v: Vec<String> =
-            serde_json::from_str(r#"["10.0.0.0/8","192.168.0.0/16"]"#)
-                .expect("fixture");
+            serde_json::from_str(r#"["10.0.0.0/8","192.168.0.0/16"]"#).expect("fixture");
         assert_eq!(v.len(), 2);
     }
 
@@ -153,16 +144,14 @@ trusted-proxy-cidrs:
   - 10.0.0.0/8
 redis-key-prefix: 'gw:test:'
 ";
-        let c: ClientIpRateLimitConfig =
-            serde_yml::from_str(yaml).expect("deserialize");
+        let c: ClientIpRateLimitConfig = serde_yml::from_str(yaml).expect("deserialize");
         assert!(c.enabled);
         assert_eq!(c.requests_per_second, 7);
         assert_eq!(c.backend, ClientIpRateLimitBackend::Redis);
         assert_eq!(c.trusted_proxy_cidrs, vec!["10.0.0.0/8".to_string()]);
         assert_eq!(c.redis_key_prefix, "gw:test:");
         let again: ClientIpRateLimitConfig =
-            serde_json::from_value(serde_json::to_value(&c).expect("to json"))
-                .expect("from json");
+            serde_json::from_value(serde_json::to_value(&c).expect("to json")).expect("from json");
         assert_eq!(c, again);
     }
 }

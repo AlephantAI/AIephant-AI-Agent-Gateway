@@ -5,10 +5,9 @@
 use std::collections::{HashMap, HashSet};
 
 use async_openai::types::{
-    ChatChoice, ChatChoiceStream, ChatCompletionMessageToolCall,
-    ChatCompletionResponseMessage, ChatCompletionStreamResponseDelta,
-    ChatCompletionToolType, CompletionTokensDetails, CompletionUsage,
-    CreateChatCompletionResponse, CreateChatCompletionStreamResponse,
+    ChatChoice, ChatChoiceStream, ChatCompletionMessageToolCall, ChatCompletionResponseMessage,
+    ChatCompletionStreamResponseDelta, ChatCompletionToolType, CompletionTokensDetails,
+    CompletionUsage, CreateChatCompletionResponse, CreateChatCompletionStreamResponse,
     FinishReason, PromptTokensDetails, Role,
     responses::{Annotation, Content, OutputContent, Response, Status},
 };
@@ -19,9 +18,8 @@ use serde_json::Value;
 use crate::{
     error::{api::ApiError, internal::InternalError},
     middleware::mapper::stream_normalizer::{
-        build_finish_choice, build_reasoning_choice, build_role_choice,
-        build_stream_response, build_text_choice, build_tool_call_chunk,
-        build_tool_choice,
+        build_finish_choice, build_reasoning_choice, build_role_choice, build_stream_response,
+        build_text_choice, build_tool_call_chunk, build_tool_choice,
     },
 };
 
@@ -50,9 +48,7 @@ fn parse_prompt_tokens_details(v: &Value) -> Option<PromptTokensDetails> {
     })
 }
 
-fn parse_completion_tokens_details(
-    v: &Value,
-) -> Option<CompletionTokensDetails> {
+fn parse_completion_tokens_details(v: &Value) -> Option<CompletionTokensDetails> {
     let d = v.get("output_tokens_details")?;
     Some(CompletionTokensDetails {
         reasoning_tokens: d
@@ -87,10 +83,7 @@ fn put_sse_record(buf: &mut BytesMut, payload: &[u8]) {
     buf.put("\n\n".as_bytes());
 }
 
-fn put_sse_json<T: Serialize>(
-    buf: &mut BytesMut,
-    val: &T,
-) -> Result<(), ApiError> {
+fn put_sse_json<T: Serialize>(buf: &mut BytesMut, val: &T) -> Result<(), ApiError> {
     let json = serde_json::to_vec(val).map_err(|error| {
         ApiError::Internal(InternalError::Serialize {
             ty: std::any::type_name::<T>(),
@@ -124,10 +117,7 @@ impl BridgeStreamState {
         self.model.clone().unwrap_or_else(|| "unknown".to_string())
     }
 
-    fn push_role_if_needed(
-        &mut self,
-        buf: &mut BytesMut,
-    ) -> Result<(), ApiError> {
+    fn push_role_if_needed(&mut self, buf: &mut BytesMut) -> Result<(), ApiError> {
         if self.role_sent {
             return Ok(());
         }
@@ -184,13 +174,13 @@ impl BridgeStreamState {
             }
             "response.reasoning_summary_text.delta" => return Ok(None),
             "response.output_text.delta" => {
-                if v.get("item_id").and_then(|i| i.as_str()).is_some_and(
-                    |item_id| self.hidden_text_item_ids.contains(item_id),
-                ) {
+                if v.get("item_id")
+                    .and_then(|i| i.as_str())
+                    .is_some_and(|item_id| self.hidden_text_item_ids.contains(item_id))
+                {
                     return Ok(None);
                 }
-                let delta =
-                    v.get("delta").and_then(|d| d.as_str()).unwrap_or("");
+                let delta = v.get("delta").and_then(|d| d.as_str()).unwrap_or("");
                 if delta.is_empty() {
                     return Ok(None);
                 }
@@ -204,8 +194,7 @@ impl BridgeStreamState {
                 put_sse_json(&mut buf, &chunk)?;
             }
             "response.reasoning_text.delta" => {
-                let delta =
-                    v.get("delta").and_then(|d| d.as_str()).unwrap_or("");
+                let delta = v.get("delta").and_then(|d| d.as_str()).unwrap_or("");
                 if delta.is_empty() {
                     return Ok(None);
                 }
@@ -219,8 +208,7 @@ impl BridgeStreamState {
                 put_sse_json(&mut buf, &chunk)?;
             }
             "response.refusal.delta" => {
-                let delta =
-                    v.get("delta").and_then(|d| d.as_str()).unwrap_or("");
+                let delta = v.get("delta").and_then(|d| d.as_str()).unwrap_or("");
                 if delta.is_empty() {
                     return Ok(None);
                 }
@@ -249,15 +237,13 @@ impl BridgeStreamState {
             }
             "response.output_item.added" => {
                 if let Some(item) = v.get("item") {
-                    let item_type =
-                        item.get("type").and_then(|t| t.as_str()).unwrap_or("");
+                    let item_type = item.get("type").and_then(|t| t.as_str()).unwrap_or("");
                     if item_type == "message"
                         && item
                             .get("phase")
                             .and_then(|p| p.as_str())
                             .is_some_and(|phase| phase == "commentary")
-                        && let Some(item_id) =
-                            item.get("id").and_then(|i| i.as_str())
+                        && let Some(item_id) = item.get("id").and_then(|i| i.as_str())
                     {
                         self.hidden_text_item_ids.insert(item_id.to_string());
                     }
@@ -301,22 +287,14 @@ impl BridgeStreamState {
                 }
             }
             "response.function_call_arguments.delta" => {
-                let delta =
-                    v.get("delta").and_then(|d| d.as_str()).unwrap_or("");
+                let delta = v.get("delta").and_then(|d| d.as_str()).unwrap_or("");
                 if delta.is_empty() {
                     return Ok(None);
                 }
-                let item_id =
-                    v.get("item_id").and_then(|i| i.as_str()).unwrap_or("");
-                let idx =
-                    self.tool_call_indices.get(item_id).copied().unwrap_or(0);
+                let item_id = v.get("item_id").and_then(|i| i.as_str()).unwrap_or("");
+                let idx = self.tool_call_indices.get(item_id).copied().unwrap_or(0);
 
-                let tc = build_tool_call_chunk(
-                    idx,
-                    None,
-                    None,
-                    Some(delta.to_string()),
-                );
+                let tc = build_tool_call_chunk(idx, None, None, Some(delta.to_string()));
                 let choice = build_tool_choice(0, tc);
                 let chunk = build_stream_response(
                     self.completion_id(),
@@ -429,26 +407,13 @@ fn aggregate_output(resp: &Response) -> AggregatedOutput {
                     } else {
                         &uc.title
                     };
-                    text_buf.push_str(&format!(
-                        "[{}] {}: {}\n",
-                        i + 1,
-                        title,
-                        uc.url
-                    ));
+                    text_buf.push_str(&format!("[{}] {}: {}\n", i + 1, title, uc.url));
                 }
                 Annotation::FileCitation(fc) => {
-                    text_buf.push_str(&format!(
-                        "[{}] file: {}\n",
-                        i + 1,
-                        fc.file_id
-                    ));
+                    text_buf.push_str(&format!("[{}] file: {}\n", i + 1, fc.file_id));
                 }
                 Annotation::FilePath(fp) => {
-                    text_buf.push_str(&format!(
-                        "[{}] file: {}\n",
-                        i + 1,
-                        fp.file_id
-                    ));
+                    text_buf.push_str(&format!("[{}] file: {}\n", i + 1, fp.file_id));
                 }
             }
         }
@@ -462,10 +427,7 @@ fn aggregate_output(resp: &Response) -> AggregatedOutput {
     }
 }
 
-fn finish_reason_for_status(
-    status: &Status,
-    has_tool_calls: bool,
-) -> Option<FinishReason> {
+fn finish_reason_for_status(status: &Status, has_tool_calls: bool) -> Option<FinishReason> {
     match status {
         Status::Completed => {
             if has_tool_calls {
@@ -480,9 +442,7 @@ fn finish_reason_for_status(
     }
 }
 
-pub(super) fn non_stream_responses_body_to_chat_completion(
-    body: &[u8],
-) -> Result<Bytes, ApiError> {
+pub(super) fn non_stream_responses_body_to_chat_completion(body: &[u8]) -> Result<Bytes, ApiError> {
     let resp: Response = serde_json::from_slice(body).map_err(|error| {
         ApiError::Internal(InternalError::Deserialize {
             ty: std::any::type_name::<Response>(),
@@ -564,9 +524,7 @@ mod tests {
         assert!(o1.is_none());
 
         let o2 = st
-            .process_upstream_sse_json(
-                br#"{"type":"response.output_text.delta","delta":"hi"}"#,
-            )
+            .process_upstream_sse_json(br#"{"type":"response.output_text.delta","delta":"hi"}"#)
             .unwrap()
             .expect("chunk");
         acc.put(o2.as_ref());
@@ -741,10 +699,8 @@ mod tests {
         )
         .unwrap();
 
-        st.process_upstream_sse_json(
-            br#"{"type":"response.output_text.delta","delta":"hello"}"#,
-        )
-        .unwrap();
+        st.process_upstream_sse_json(br#"{"type":"response.output_text.delta","delta":"hello"}"#)
+            .unwrap();
 
         let done = st
             .process_upstream_sse_json(

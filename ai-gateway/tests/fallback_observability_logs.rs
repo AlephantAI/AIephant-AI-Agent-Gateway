@@ -10,9 +10,7 @@
 use std::sync::{Arc, Mutex};
 
 use ai_gateway::{
-    config::fallback_policy::{
-        FallbackObservabilityPolicy, FallbackPolicyConfig,
-    },
+    config::fallback_policy::{FallbackObservabilityPolicy, FallbackPolicyConfig},
     fallback::{
         evaluator::FailoverSource,
         observability::{DecisionKind, log_decision},

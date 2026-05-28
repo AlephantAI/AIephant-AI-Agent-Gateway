@@ -8,17 +8,15 @@ use opentelemetry::KeyValue;
 use tracing::info;
 
 use crate::{
-    app_redis::AppRedis, config::policy::POLICY_MAX_REQUEST_BODY_BYTES,
-    metrics::VkMetrics, policy_proto::EvaluateRequest,
+    app_redis::AppRedis, config::policy::POLICY_MAX_REQUEST_BODY_BYTES, metrics::VkMetrics,
+    policy_proto::EvaluateRequest,
 };
 
 pub const PIICACHE_REDIS_KEY_PREFIX: &str = "policy:piicache:";
 
 #[must_use]
 pub fn piicache_redis_key(workspace_id: &str) -> String {
-    let mut s = String::with_capacity(
-        PIICACHE_REDIS_KEY_PREFIX.len() + workspace_id.len(),
-    );
+    let mut s = String::with_capacity(PIICACHE_REDIS_KEY_PREFIX.len() + workspace_id.len());
     s.push_str(PIICACHE_REDIS_KEY_PREFIX);
     s.push_str(workspace_id);
     s
@@ -65,10 +63,8 @@ pub async fn attach_request_body_from_piicache_redis(
             );
             match opt {
                 Some(ref v) if piicache_redis_value_is_true(v) => {
-                    let (slice, truncated) = truncate_request_body_bytes(
-                        body,
-                        POLICY_MAX_REQUEST_BODY_BYTES,
-                    );
+                    let (slice, truncated) =
+                        truncate_request_body_bytes(body, POLICY_MAX_REQUEST_BODY_BYTES);
                     req.body = slice.to_vec();
                     let outcome = if truncated {
                         "attached_truncated"

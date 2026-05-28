@@ -46,11 +46,7 @@ impl<B> MakeSpan<B> for SpanFactory {
         // `self.level`.
         macro_rules! make_span {
             ($level:expr) => {
-                tracing::span!(
-                    $level,
-                    "request",
-                    trace_id = tracing::field::Empty,
-                )
+                tracing::span!($level, "request", trace_id = tracing::field::Empty,)
             };
         }
 

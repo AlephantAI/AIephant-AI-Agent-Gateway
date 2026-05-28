@@ -14,9 +14,7 @@ pub const MASTER_KEY_NONCE_LEN: usize = 12;
 
 #[derive(Debug, Error, Clone, Eq, PartialEq)]
 pub enum DecryptError {
-    #[error(
-        "encryption key must be {MASTER_KEY_ENCRYPTION_KEY_LEN} bytes, got {0}"
-    )]
+    #[error("encryption key must be {MASTER_KEY_ENCRYPTION_KEY_LEN} bytes, got {0}")]
     InvalidKeyLen(usize),
     #[error("nonce must be {MASTER_KEY_NONCE_LEN} bytes, got {0}")]
     InvalidNonceLen(usize),
@@ -26,20 +24,14 @@ pub enum DecryptError {
 
 #[derive(Debug, Error, Clone, Eq, PartialEq)]
 pub enum EncryptError {
-    #[error(
-        "encryption key must be {MASTER_KEY_ENCRYPTION_KEY_LEN} bytes, got {0}"
-    )]
+    #[error("encryption key must be {MASTER_KEY_ENCRYPTION_KEY_LEN} bytes, got {0}")]
     InvalidKeyLen(usize),
     #[error("encryption failed")]
     EncryptFailed,
 }
 
 /// Decrypt master key ciphertext using workspace encryption key (32 bytes).
-pub fn decrypt(
-    ciphertext: &[u8],
-    nonce: &[u8],
-    key: &[u8],
-) -> Result<Vec<u8>, DecryptError> {
+pub fn decrypt(ciphertext: &[u8], nonce: &[u8], key: &[u8]) -> Result<Vec<u8>, DecryptError> {
     if key.len() != MASTER_KEY_ENCRYPTION_KEY_LEN {
         return Err(DecryptError::InvalidKeyLen(key.len()));
     }
@@ -55,10 +47,7 @@ pub fn decrypt(
 }
 
 /// Encrypt plaintext (for tests and tooling); returns `(ciphertext, nonce)`.
-pub fn encrypt(
-    plaintext: &[u8],
-    key: &[u8],
-) -> Result<(Vec<u8>, Vec<u8>), EncryptError> {
+pub fn encrypt(plaintext: &[u8], key: &[u8]) -> Result<(Vec<u8>, Vec<u8>), EncryptError> {
     if key.len() != MASTER_KEY_ENCRYPTION_KEY_LEN {
         return Err(EncryptError::InvalidKeyLen(key.len()));
     }

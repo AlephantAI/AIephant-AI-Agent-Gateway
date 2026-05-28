@@ -36,9 +36,7 @@ fn char_is_cjk_related_dense(ch: char) -> bool {
     clippy::cast_sign_loss
 )]
 #[must_use]
-pub fn estimate_heuristic_layer_d(
-    payload: &ChatCompletionsPayload,
-) -> Option<u32> {
+pub fn estimate_heuristic_layer_d(payload: &ChatCompletionsPayload) -> Option<u32> {
     if payload.has_non_text_message_content {
         return None;
     }
@@ -72,11 +70,9 @@ pub fn estimate_heuristic_layer_d(
         cjk_chars as f64 / total_chars as f64
     };
 
-    let effective =
-        TOKENS_PER_CHAR_BASE + TOKENS_PER_CHAR_CJK_EXTRA * cjk_ratio;
+    let effective = TOKENS_PER_CHAR_BASE + TOKENS_PER_CHAR_CJK_EXTRA * cjk_ratio;
     let base_tokens = (total_chars as f64 * effective).ceil() as u32;
-    let structure =
-        payload.messages.len() as u32 * TOKENS_PER_MESSAGE_STRUCTURE;
+    let structure = payload.messages.len() as u32 * TOKENS_PER_MESSAGE_STRUCTURE;
 
     Some(base_tokens.saturating_add(structure))
 }

@@ -28,9 +28,7 @@ fn default_max_value_bytes() -> usize {
 
 /// From `config` + env: `pd-endpoints` may be a YAML array, JSON-array string,
 /// or `AI_GATEWAY__TIKV_KV__PD_ENDPOINTS__0`-generated `{"0":"..."}` map.
-fn deserialize_pd_endpoints<'de, D>(
-    deserializer: D,
-) -> Result<Vec<String>, D::Error>
+fn deserialize_pd_endpoints<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
 where
     D: Deserializer<'de>,
 {
@@ -39,16 +37,12 @@ where
         serde_json::Value::Array(arr) => arr
             .into_iter()
             .map(|v| {
-                v.as_str().map(str::to_owned).ok_or_else(|| {
-                    D::Error::custom(
-                        "pd_endpoints: array items must be strings",
-                    )
-                })
+                v.as_str()
+                    .map(str::to_owned)
+                    .ok_or_else(|| D::Error::custom("pd_endpoints: array items must be strings"))
             })
             .collect(),
-        serde_json::Value::String(s) => {
-            serde_json::from_str(&s).map_err(D::Error::custom)
-        }
+        serde_json::Value::String(s) => serde_json::from_str(&s).map_err(D::Error::custom),
         serde_json::Value::Object(map) => {
             let mut pairs: Vec<(usize, String)> = map
                 .into_iter()

@@ -62,27 +62,9 @@ mod tests {
 
     #[test]
     fn different_bucket_index_produces_different_key() {
-        let k0 = kv_key_sha256_hex(
-            "",
-            "https://example.com/v1",
-            r#"{"x":1}"#,
-            &[],
-            0,
-        );
-        let k1 = kv_key_sha256_hex(
-            "",
-            "https://example.com/v1",
-            r#"{"x":1}"#,
-            &[],
-            1,
-        );
-        let k2 = kv_key_sha256_hex(
-            "",
-            "https://example.com/v1",
-            r#"{"x":1}"#,
-            &[],
-            2,
-        );
+        let k0 = kv_key_sha256_hex("", "https://example.com/v1", r#"{"x":1}"#, &[], 0);
+        let k1 = kv_key_sha256_hex("", "https://example.com/v1", r#"{"x":1}"#, &[], 1);
+        let k2 = kv_key_sha256_hex("", "https://example.com/v1", r#"{"x":1}"#, &[], 2);
         assert_ne!(k0, k1);
         assert_ne!(k1, k2);
         assert_ne!(k0, k2);
@@ -90,20 +72,8 @@ mod tests {
 
     #[test]
     fn different_seed_produces_different_key() {
-        let k1 = kv_key_sha256_hex(
-            "seed-a",
-            "https://example.com/v1",
-            r#"{"x":1}"#,
-            &[],
-            0,
-        );
-        let k2 = kv_key_sha256_hex(
-            "seed-b",
-            "https://example.com/v1",
-            r#"{"x":1}"#,
-            &[],
-            0,
-        );
+        let k1 = kv_key_sha256_hex("seed-a", "https://example.com/v1", r#"{"x":1}"#, &[], 0);
+        let k2 = kv_key_sha256_hex("seed-b", "https://example.com/v1", r#"{"x":1}"#, &[], 0);
         assert_ne!(k1, k2);
     }
 
@@ -116,13 +86,7 @@ mod tests {
             &["stream".to_string()],
             0,
         );
-        let k2 = kv_key_sha256_hex(
-            "",
-            "https://example.com/v1",
-            r#"{"model":"gpt-4"}"#,
-            &[],
-            0,
-        );
+        let k2 = kv_key_sha256_hex("", "https://example.com/v1", r#"{"model":"gpt-4"}"#, &[], 0);
         assert_eq!(k1, k2);
     }
 }

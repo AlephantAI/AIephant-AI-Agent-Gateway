@@ -3,9 +3,7 @@ use serde_json::Value;
 
 use super::{
     non_stream_profile::NonStreamFormatProfile,
-    rules::{
-        MultimodalMode, ReasoningMode, ResponseFormatMode, ToolChoiceMode,
-    },
+    rules::{MultimodalMode, ReasoningMode, ResponseFormatMode, ToolChoiceMode},
 };
 use crate::error::mapper::MapperError;
 
@@ -48,8 +46,7 @@ pub fn apply_non_stream_request_profile(
 fn request_contains_multimodal_content(
     value: &CreateChatCompletionRequest,
 ) -> Result<bool, MapperError> {
-    let messages = serde_json::to_value(&value.messages)
-        .map_err(MapperError::SerdeError)?;
+    let messages = serde_json::to_value(&value.messages).map_err(MapperError::SerdeError)?;
     Ok(contains_image_url_part(&messages))
 }
 
@@ -74,20 +71,14 @@ mod tests {
         error::mapper::MapperError,
         middleware::mapper::{
             non_stream_profile_data::default_non_stream_profile,
-            rules::{
-                MultimodalMode, ReasoningMode, ResponseFormatMode,
-                ToolChoiceMode,
-            },
+            rules::{MultimodalMode, ReasoningMode, ResponseFormatMode, ToolChoiceMode},
         },
         types::provider::InferenceProvider,
     };
 
     #[test]
-    fn request_interpreter_strips_response_format_when_profile_marks_it_unsupported()
-     {
-        let mut profile = default_non_stream_profile(
-            &InferenceProvider::Named("qwen".into()),
-        );
+    fn request_interpreter_strips_response_format_when_profile_marks_it_unsupported() {
+        let mut profile = default_non_stream_profile(&InferenceProvider::Named("qwen".into()));
         profile.request.response_format_mode = ResponseFormatMode::Unsupported;
 
         let mut request: async_openai::types::CreateChatCompletionRequest =
@@ -112,11 +103,8 @@ mod tests {
     }
 
     #[test]
-    fn request_interpreter_strips_tool_fields_when_profile_marks_tool_choice_unsupported()
-     {
-        let mut profile = default_non_stream_profile(
-            &InferenceProvider::Named("qwen".into()),
-        );
+    fn request_interpreter_strips_tool_fields_when_profile_marks_tool_choice_unsupported() {
+        let mut profile = default_non_stream_profile(&InferenceProvider::Named("qwen".into()));
         profile.request.tool_choice_mode = ToolChoiceMode::Unsupported;
 
         let mut request: async_openai::types::CreateChatCompletionRequest =
@@ -150,11 +138,8 @@ mod tests {
     }
 
     #[test]
-    fn request_interpreter_strips_reasoning_effort_when_profile_marks_reasoning_unsupported()
-     {
-        let mut profile = default_non_stream_profile(
-            &InferenceProvider::Named("qwen".into()),
-        );
+    fn request_interpreter_strips_reasoning_effort_when_profile_marks_reasoning_unsupported() {
+        let mut profile = default_non_stream_profile(&InferenceProvider::Named("qwen".into()));
         profile.request.reasoning_mode = ReasoningMode::Unsupported;
 
         let mut request: async_openai::types::CreateChatCompletionRequest =
@@ -177,11 +162,8 @@ mod tests {
     }
 
     #[test]
-    fn request_interpreter_rejects_multimodal_when_profile_marks_it_unsupported()
-     {
-        let mut profile = default_non_stream_profile(
-            &InferenceProvider::Named("qwen".into()),
-        );
+    fn request_interpreter_rejects_multimodal_when_profile_marks_it_unsupported() {
+        let mut profile = default_non_stream_profile(&InferenceProvider::Named("qwen".into()));
         profile.request.multimodal_mode = MultimodalMode::Unsupported;
 
         let mut request: async_openai::types::CreateChatCompletionRequest =
@@ -207,9 +189,8 @@ mod tests {
             }))
             .expect("request should deserialize");
 
-        let err =
-            super::apply_non_stream_request_profile(&profile, &mut request)
-                .expect_err("multimodal request should fail");
+        let err = super::apply_non_stream_request_profile(&profile, &mut request)
+            .expect_err("multimodal request should fail");
 
         assert!(matches!(err, MapperError::ImageMappingInvalid(_)));
     }

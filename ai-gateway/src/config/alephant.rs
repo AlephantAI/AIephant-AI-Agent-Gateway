@@ -3,9 +3,7 @@ use url::Url;
 
 use crate::types::secret::Secret;
 
-#[derive(
-    Default, Debug, Clone, Deserialize, Serialize, PartialEq, Eq, Hash,
-)]
+#[derive(Default, Debug, Clone, Deserialize, Serialize, PartialEq, Eq, Hash)]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
 pub enum AlephantFeatures {
     /// No features enabled
@@ -54,14 +52,12 @@ impl AlephantConfig {
 
     #[must_use]
     pub fn is_observability_enabled(&self) -> bool {
-        self.features == AlephantFeatures::All
-            || self.features == AlephantFeatures::Observability
+        self.features == AlephantFeatures::All || self.features == AlephantFeatures::Observability
     }
 
     #[must_use]
     pub fn is_prompts_enabled(&self) -> bool {
-        self.features == AlephantFeatures::All
-            || self.features == AlephantFeatures::Prompts
+        self.features == AlephantFeatures::All || self.features == AlephantFeatures::Prompts
     }
 }
 
@@ -77,8 +73,7 @@ impl Default for AlephantConfig {
 
 fn default_api_key() -> Secret<String> {
     // ALEPHANT_CONTROL_PLANE_API_KEY takes priority.
-    const LEGACY_CONTROL_PLANE_API_KEY_ENV: &str =
-        concat!("HELI", "CONE_CONTROL_PLANE_API_KEY");
+    const LEGACY_CONTROL_PLANE_API_KEY_ENV: &str = concat!("HELI", "CONE_CONTROL_PLANE_API_KEY");
     let val = std::env::var("ALEPHANT_CONTROL_PLANE_API_KEY")
         .or_else(|_| std::env::var(LEGACY_CONTROL_PLANE_API_KEY_ENV))
         .unwrap_or_else(|_| "sk-alephant-...".to_string());
@@ -86,15 +81,12 @@ fn default_api_key() -> Secret<String> {
 }
 
 fn default_log_collector_url() -> Url {
-    const LOG_COLLECTOR_URL_ENV: &str =
-        "AI_GATEWAY__ALEPHANT__LOG_COLLECTOR_URL";
+    const LOG_COLLECTOR_URL_ENV: &str = "AI_GATEWAY__ALEPHANT__LOG_COLLECTOR_URL";
     const DEFAULT_LOG_COLLECTOR_URL: &str = "https://api.alephant.io";
     std::env::var(LOG_COLLECTOR_URL_ENV)
         .ok()
         .and_then(|s| s.parse().ok())
-        .unwrap_or_else(|| {
-            DEFAULT_LOG_COLLECTOR_URL.parse().expect("valid URL")
-        })
+        .unwrap_or_else(|| DEFAULT_LOG_COLLECTOR_URL.parse().expect("valid URL"))
 }
 
 #[cfg(feature = "testing")]
@@ -143,10 +135,7 @@ impl<'de> Deserialize<'de> for AlephantConfig {
                 formatter.write_str("struct AlephantConfig")
             }
 
-            fn visit_map<V>(
-                self,
-                mut map: V,
-            ) -> Result<AlephantConfig, V::Error>
+            fn visit_map<V>(self, mut map: V) -> Result<AlephantConfig, V::Error>
             where
                 V: MapAccess<'de>,
             {
@@ -161,17 +150,13 @@ impl<'de> Deserialize<'de> for AlephantConfig {
                     match key {
                         Field::ApiKey => {
                             if api_key.is_some() {
-                                return Err(de::Error::duplicate_field(
-                                    "api_key",
-                                ));
+                                return Err(de::Error::duplicate_field("api_key"));
                             }
                             api_key = Some(map.next_value()?);
                         }
                         Field::LogCollectorUrl => {
                             if log_collector_url.is_some() {
-                                return Err(de::Error::duplicate_field(
-                                    "log_collector_url",
-                                ));
+                                return Err(de::Error::duplicate_field("log_collector_url"));
                             }
                             log_collector_url = Some(map.next_value()?);
                         }
@@ -181,33 +166,25 @@ impl<'de> Deserialize<'de> for AlephantConfig {
                         }
                         Field::Features => {
                             if features.is_some() {
-                                return Err(de::Error::duplicate_field(
-                                    "features",
-                                ));
+                                return Err(de::Error::duplicate_field("features"));
                             }
                             features = Some(map.next_value()?);
                         }
                         Field::Authentication => {
                             if authentication.is_some() {
-                                return Err(de::Error::duplicate_field(
-                                    "authentication",
-                                ));
+                                return Err(de::Error::duplicate_field("authentication"));
                             }
                             authentication = Some(map.next_value()?);
                         }
                         Field::Observability => {
                             if observability.is_some() {
-                                return Err(de::Error::duplicate_field(
-                                    "observability",
-                                ));
+                                return Err(de::Error::duplicate_field("observability"));
                             }
                             observability = Some(map.next_value()?);
                         }
                         Field::Prompts => {
                             if prompts.is_some() {
-                                return Err(de::Error::duplicate_field(
-                                    "prompts",
-                                ));
+                                return Err(de::Error::duplicate_field("prompts"));
                             }
                             prompts = Some(map.next_value()?);
                         }
@@ -225,25 +202,18 @@ impl<'de> Deserialize<'de> for AlephantConfig {
                 } else {
                     match (authentication, observability, prompts) {
                         (_, Some(true), Some(true)) => AlephantFeatures::All,
-                        (_, Some(true), Some(false) | None) => {
-                            AlephantFeatures::Observability
+                        (_, Some(true), Some(false) | None) => AlephantFeatures::Observability,
+                        (_, Some(false) | None, Some(true)) => AlephantFeatures::Prompts,
+                        (Some(true), Some(false) | None, Some(false) | None) => {
+                            AlephantFeatures::Auth
                         }
-                        (_, Some(false) | None, Some(true)) => {
-                            AlephantFeatures::Prompts
-                        }
-                        (
-                            Some(true),
-                            Some(false) | None,
-                            Some(false) | None,
-                        ) => AlephantFeatures::Auth,
                         _ => AlephantFeatures::None,
                     }
                 };
 
                 Ok(AlephantConfig {
                     api_key: api_key.unwrap_or_else(default_api_key),
-                    log_collector_url: log_collector_url
-                        .unwrap_or_else(default_log_collector_url),
+                    log_collector_url: log_collector_url.unwrap_or_else(default_log_collector_url),
                     features,
                 })
             }
@@ -258,11 +228,7 @@ impl<'de> Deserialize<'de> for AlephantConfig {
             "observability",
             "__prompts",
         ];
-        deserializer.deserialize_struct(
-            "AlephantConfig",
-            FIELDS,
-            AlephantConfigVisitor,
-        )
+        deserializer.deserialize_struct("AlephantConfig", FIELDS, AlephantConfigVisitor)
     }
 }
 

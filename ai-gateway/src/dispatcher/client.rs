@@ -11,14 +11,13 @@ use crate::{
     discover::monitor::metrics::EndpointMetricsRegistry,
     dispatcher::{
         SSEStream, anthropic_client::Client as AnthropicClient,
-        bedrock_client::Client as BedrockClient,
-        ollama_client::Client as OllamaClient,
+        bedrock_client::Client as BedrockClient, ollama_client::Client as OllamaClient,
         openai_compatible_client::Client as OpenAICompatibleClient,
     },
     endpoints::ApiEndpoint,
     error::{
-        api::ApiError, auth::AuthError, init::InitError,
-        internal::InternalError, stream::StreamError,
+        api::ApiError, auth::AuthError, init::InitError, internal::InternalError,
+        stream::StreamError,
     },
     types::{
         extensions::AuthContext,
@@ -49,22 +48,12 @@ impl ProviderClient for Client {
     ) -> Result<reqwest::RequestBuilder, ApiError> {
         match self {
             Client::Bedrock(inner) => {
-                let provider_key =
-                    resolve_bedrock_provider_key(app_state, auth_ctx).await?;
-                inner.extract_and_sign_aws_headers(
-                    request_builder,
-                    req_body_bytes,
-                    &provider_key,
-                )
+                let provider_key = resolve_bedrock_provider_key(app_state, auth_ctx).await?;
+                inner.extract_and_sign_aws_headers(request_builder, req_body_bytes, &provider_key)
             }
             Client::OpenAICompatible(_) | Client::Anthropic(_) => {
-                self.authenticate_inner(
-                    app_state,
-                    request_builder,
-                    auth_ctx,
-                    provider,
-                )
-                .await
+                self.authenticate_inner(app_state, request_builder, auth_ctx, provider)
+                    .await
             }
             Client::Ollama(_) => Ok(request_builder),
         }
@@ -88,26 +77,18 @@ impl Client {
         provider: &InferenceProvider,
     ) -> Result<reqwest::RequestBuilder, ApiError> {
         let Some(key) = compat_provider_api_key_from_env(provider) else {
-            return Err(ApiError::Authentication(
-                AuthError::ProviderKeyNotFound,
-            ));
+            return Err(ApiError::Authentication(AuthError::ProviderKeyNotFound));
         };
 
         match self {
-            Client::OpenAICompatible(c) => {
-                Ok(OpenAICompatibleClient::set_auth_header(
-                    request_builder,
-                    &key,
-                    c.upstream_auth,
-                ))
-            }
-            Client::Anthropic(_) => {
-                Ok(AnthropicClient::set_auth_header(request_builder, &key))
-            }
+            Client::OpenAICompatible(c) => Ok(OpenAICompatibleClient::set_auth_header(
+                request_builder,
+                &key,
+                c.upstream_auth,
+            )),
+            Client::Anthropic(_) => Ok(AnthropicClient::set_auth_header(request_builder, &key)),
             Client::Ollama(_) => Ok(request_builder),
-            Client::Bedrock(_) => {
-                Err(ApiError::Authentication(AuthError::ProviderKeyNotFound))
-            }
+            Client::Bedrock(_) => Err(ApiError::Authentication(AuthError::ProviderKeyNotFound)),
         }
     }
 
@@ -123,15 +104,11 @@ impl Client {
         }
 
         let Some(auth_ctx) = auth_ctx else {
-            return Err(ApiError::Authentication(
-                AuthError::ProviderKeyNotFound,
-            ));
+            return Err(ApiError::Authentication(AuthError::ProviderKeyNotFound));
         };
 
         let Some(master_key_id) = auth_ctx.master_key_id else {
-            return Err(ApiError::Authentication(
-                AuthError::ProviderKeyNotFound,
-            ));
+            return Err(ApiError::Authentication(AuthError::ProviderKeyNotFound));
         };
 
         let cache = app_state
@@ -141,10 +118,8 @@ impl Client {
             .ok_or(ApiError::Internal(InternalError::Internal))?;
 
         let workspace_id = *auth_ctx.org_id.as_ref();
-        let master_key_resolution =
-            app_state.0.config.deployment_target.master_key_resolution;
-        let fallback_enabled =
-            fallback_enabled_for_master_key_resolution(master_key_resolution);
+        let master_key_resolution = app_state.0.config.deployment_target.master_key_resolution;
+        let fallback_enabled = fallback_enabled_for_master_key_resolution(master_key_resolution);
 
         let decrypted = cache
             .get_primary_or_fallback(
@@ -170,23 +145,15 @@ impl Client {
                 %master_key_id,
                 "dispatcher: master_key provider mismatch"
             );
-            return Err(ApiError::Authentication(
-                AuthError::ProviderKeyNotFound,
-            ));
+            return Err(ApiError::Authentication(AuthError::ProviderKeyNotFound));
         }
 
         let key = Secret::from(decrypted.plaintext.as_ref().clone());
         let request_builder = match self {
             Client::OpenAICompatible(c) => {
-                OpenAICompatibleClient::set_auth_header(
-                    request_builder,
-                    &key,
-                    c.upstream_auth,
-                )
+                OpenAICompatibleClient::set_auth_header(request_builder, &key, c.upstream_auth)
             }
-            Client::Anthropic(_) => {
-                AnthropicClient::set_auth_header(request_builder, &key)
-            }
+            Client::Anthropic(_) => AnthropicClient::set_auth_header(request_builder, &key),
             _ => request_builder,
         };
         Ok(request_builder)
@@ -205,9 +172,7 @@ impl Client {
             .body(body)
             .eventsource()
             .map_err(|_e| InternalError::Internal)?;
-        let stream =
-            sse_stream(event_source, api_endpoint, metrics_registry.clone())
-                .await?;
+        let stream = sse_stream(event_source, api_endpoint, metrics_registry.clone()).await?;
         Ok(stream)
     }
 
@@ -251,12 +216,16 @@ impl Client {
                 )?;
                 Ok(Self::OpenAICompatible(openai_compatible_client))
             }
-            InferenceProvider::Anthropic => Ok(Self::Anthropic(
-                AnthropicClient::new(app_state, base_client, api_key)?,
-            )),
-            InferenceProvider::Bedrock => Ok(Self::Bedrock(
-                BedrockClient::new(app_state, base_client, api_key)?,
-            )),
+            InferenceProvider::Anthropic => Ok(Self::Anthropic(AnthropicClient::new(
+                app_state,
+                base_client,
+                api_key,
+            )?)),
+            InferenceProvider::Bedrock => Ok(Self::Bedrock(BedrockClient::new(
+                app_state,
+                base_client,
+                api_key,
+            )?)),
             InferenceProvider::Ollama => {
                 Ok(Self::Ollama(OllamaClient::new(app_state, base_client)?))
             }
@@ -264,13 +233,11 @@ impl Client {
     }
 }
 
-fn compat_provider_api_key_from_env(
-    provider: &InferenceProvider,
-) -> Option<Secret<String>> {
+fn compat_provider_api_key_from_env(provider: &InferenceProvider) -> Option<Secret<String>> {
     let raw = match provider {
-        InferenceProvider::OpenAI
-        | InferenceProvider::Custom
-        | InferenceProvider::Named(_) => std::env::var("OPENAI_API_KEY").ok(),
+        InferenceProvider::OpenAI | InferenceProvider::Custom | InferenceProvider::Named(_) => {
+            std::env::var("OPENAI_API_KEY").ok()
+        }
         InferenceProvider::GoogleGemini => std::env::var("GEMINI_API_KEY")
             .ok()
             .or_else(|| std::env::var("GOOGLE_API_KEY").ok()),
@@ -314,30 +281,23 @@ async fn resolve_bedrock_provider_key(
         && let Some(key) = app_state
             .0
             .provider_keys
-            .get_provider_key(
-                &InferenceProvider::Bedrock,
-                Some(&auth_ctx.org_id),
-            )
+            .get_provider_key(&InferenceProvider::Bedrock, Some(&auth_ctx.org_id))
             .await
     {
         return Ok(key);
     }
 
-    bedrock_provider_key_from_env()
-        .ok_or(ApiError::Authentication(AuthError::ProviderKeyNotFound))
+    bedrock_provider_key_from_env().ok_or(ApiError::Authentication(AuthError::ProviderKeyNotFound))
 }
 
 fn master_key_provider_matches(
     master_provider: &InferenceProvider,
     target_provider: &InferenceProvider,
 ) -> bool {
-    matches!(master_provider, InferenceProvider::Custom)
-        || master_provider == target_provider
+    matches!(master_provider, InferenceProvider::Custom) || master_provider == target_provider
 }
 
-fn fallback_enabled_for_master_key_resolution(
-    resolution: MasterKeyResolution,
-) -> bool {
+fn fallback_enabled_for_master_key_resolution(resolution: MasterKeyResolution) -> bool {
     resolution.fallback_enabled()
 }
 
@@ -373,8 +333,7 @@ pub(super) async fn sse_stream(
             _ => {}
         },
         Some(Err(e)) => {
-            handle_stream_error(e, api_endpoint.clone(), &metrics_registry)
-                .await?;
+            handle_stream_error(e, api_endpoint.clone(), &metrics_registry).await?;
         }
         None => {}
     }
@@ -391,7 +350,14 @@ pub(super) async fn sse_stream(
                             break;
                         }
 
-                        if let Err(e) = handle_stream_error_with_tx(e, tx.clone(), api_endpoint.clone(), &metrics_registry).await {
+                        if let Err(e) = handle_stream_error_with_tx(
+                            e,
+                            tx.clone(),
+                            api_endpoint.clone(),
+                            &metrics_registry,
+                        )
+                        .await
+                        {
                             tracing::error!(error = %e, "failed to handle stream error");
                             break;
                         }
@@ -405,9 +371,7 @@ pub(super) async fn sse_stream(
                             let data = Bytes::from(message.data);
 
                             if let Err(_e) = tx.send(Ok(data)) {
-                                tracing::trace!(
-                                    "rx dropped before stream ended"
-                                );
+                                tracing::trace!("rx dropped before stream ended");
                                 break;
                             }
                         }
@@ -434,10 +398,7 @@ async fn handle_stream_error_with_tx(
 ) -> Result<(), InternalError> {
     record_stream_err_metrics(&error, api_endpoint.clone(), metrics_registry);
     match error {
-        reqwest_eventsource::Error::InvalidStatusCode(
-            status_code,
-            response,
-        ) => {
+        reqwest_eventsource::Error::InvalidStatusCode(status_code, response) => {
             let http_resp = http::Response::from(response);
             let (_parts, body) = http_resp.into_parts();
             let body = body.collect().await?.to_bytes();
@@ -465,9 +426,9 @@ async fn handle_stream_error_with_tx(
             Ok(())
         }
         e => {
-            if let Err(e) = tx.send(Err(ApiError::StreamError(
-                StreamError::StreamError(Box::new(e)),
-            ))) {
+            if let Err(e) = tx.send(Err(ApiError::StreamError(StreamError::StreamError(
+                Box::new(e),
+            )))) {
                 tracing::error!(error = %e, "rx dropped before stream ended");
             }
             Ok(())
@@ -482,16 +443,12 @@ async fn handle_stream_error(
 ) -> Result<(), StreamError> {
     record_stream_err_metrics(&error, api_endpoint.clone(), metrics_registry);
     match error {
-        reqwest_eventsource::Error::InvalidStatusCode(
-            status_code,
-            response,
-        ) => {
+        reqwest_eventsource::Error::InvalidStatusCode(status_code, response) => {
             let http_resp = http::Response::from(response);
             let (_, body) = http_resp.into_parts();
             let body = match body.collect().await {
                 Err(e) => {
-                    let error =
-                        axum_core::Error::new(InternalError::ReqwestError(e));
+                    let error = axum_core::Error::new(InternalError::ReqwestError(e));
                     return Err(StreamError::BodyError(error));
                 }
                 Ok(body) => body.to_bytes(),
@@ -520,11 +477,15 @@ fn record_stream_err_metrics(
     metrics_registry: &EndpointMetricsRegistry,
 ) {
     if let Some(api_endpoint) = api_endpoint {
-        metrics_registry.health_metrics(api_endpoint).map(|metrics| {
-            metrics.incr_for_stream_error(stream_error);
-        }).inspect_err(|e| {
-            tracing::error!(error = %e, "failed to increment stream error metrics");
-        }).ok();
+        metrics_registry
+            .health_metrics(api_endpoint)
+            .map(|metrics| {
+                metrics.incr_for_stream_error(stream_error);
+            })
+            .inspect_err(|e| {
+                tracing::error!(error = %e, "failed to increment stream error metrics");
+            })
+            .ok();
     }
 }
 

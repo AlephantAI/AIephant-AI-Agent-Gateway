@@ -33,10 +33,7 @@ impl<S> WorkspaceConcurrencyService<S> {
 
 impl<S> tower::Service<Request> for WorkspaceConcurrencyService<S>
 where
-    S: tower::Service<Request, Response = Response, Error = ApiError>
-        + Clone
-        + Send
-        + 'static,
+    S: tower::Service<Request, Response = Response, Error = ApiError> + Clone + Send + 'static,
     S::Future: Send + 'static,
 {
     type Response = Response;
@@ -65,9 +62,7 @@ where
                     let workspace = req
                         .extensions()
                         .get::<AuthContext>()
-                        .map_or_else(placeholder_workspace, |a| {
-                            *a.org_id.as_ref()
-                        });
+                        .map_or_else(placeholder_workspace, |a| *a.org_id.as_ref());
                     if std::env::var_os("AI_GATEWAY_DEBUG_UNIFIED").is_some() {
                         tracing::info!(
                             "[workspace_concurrency] before redis incr, \
@@ -103,43 +98,28 @@ where
                     let key_for_cb = key.clone();
                     let metrics_for_cb = metrics.clone();
                     let ws_for_cb = workspace;
-                    let on_release: Arc<dyn Fn() + Send + Sync> =
-                        Arc::new(move || {
-                            let client = redis_for_cb.clone();
-                            let key = key_for_cb.clone();
-                            let metrics = metrics_for_cb.clone();
-                            let ws = ws_for_cb;
-                            tokio::spawn(async move {
-                                match decr_floor_refresh_ttl(&client, &key)
-                                    .await
-                                {
-                                    Ok(()) => {
-                                        metrics
-                                            .workspace_concurrency_redis_decr
-                                            .add(
-                                                1,
-                                                &[KeyValue::new(
-                                                    "result", "ok",
-                                                )],
-                                            );
-                                    }
-                                    Err(ref e) => {
-                                        log_redis_err("decr", ws, e);
-                                        metrics
-                                            .workspace_concurrency_redis_decr
-                                            .add(
-                                                1,
-                                                &[KeyValue::new(
-                                                    "result", "err",
-                                                )],
-                                            );
-                                    }
+                    let on_release: Arc<dyn Fn() + Send + Sync> = Arc::new(move || {
+                        let client = redis_for_cb.clone();
+                        let key = key_for_cb.clone();
+                        let metrics = metrics_for_cb.clone();
+                        let ws = ws_for_cb;
+                        tokio::spawn(async move {
+                            match decr_floor_refresh_ttl(&client, &key).await {
+                                Ok(()) => {
+                                    metrics
+                                        .workspace_concurrency_redis_decr
+                                        .add(1, &[KeyValue::new("result", "ok")]);
                                 }
-                            });
+                                Err(ref e) => {
+                                    log_redis_err("decr", ws, e);
+                                    metrics
+                                        .workspace_concurrency_redis_decr
+                                        .add(1, &[KeyValue::new("result", "err")]);
+                                }
+                            }
                         });
-                    let wrapped = axum_core::body::Body::new(CountedBody::new(
-                        body, on_release,
-                    ));
+                    });
+                    let wrapped = axum_core::body::Body::new(CountedBody::new(body, on_release));
                     Ok(http::Response::from_parts(parts, wrapped))
                 }
             }

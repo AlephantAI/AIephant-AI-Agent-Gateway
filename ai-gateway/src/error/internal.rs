@@ -85,9 +85,7 @@ impl IntoResponse for InternalError {
     fn into_response(self) -> Response {
         error!(error = %self, "internal error");
         let status = match &self {
-            Self::ContentFilterUnavailable(_) => {
-                StatusCode::SERVICE_UNAVAILABLE
-            }
+            Self::ContentFilterUnavailable(_) => StatusCode::SERVICE_UNAVAILABLE,
             _ => StatusCode::INTERNAL_SERVER_ERROR,
         };
         (
@@ -172,44 +170,33 @@ impl From<&InternalError> for InternalErrorMetric {
             InternalError::Internal => Self::Internal,
             InternalError::Serialize { .. } => Self::Serialize,
             InternalError::Deserialize { .. } => Self::Deserialize,
-            InternalError::ProviderNotConfigured(_) => {
-                Self::ProviderNotConfigured
-            }
+            InternalError::ProviderNotConfigured(_) => Self::ProviderNotConfigured,
             InternalError::ExtensionNotFound(_) => Self::ExtensionNotFound,
             InternalError::ProviderNotFound => Self::ProviderNotFound,
             InternalError::CollectBodyError(_) => Self::CollectBodyError,
             InternalError::RequestBodyError(_) => Self::RequestBodyError,
             InternalError::ReqwestError(_) => Self::ReqwestError,
             InternalError::HttpError(_) => Self::HttpError,
-            InternalError::MapperError(error) => {
-                Self::MapperError(MapperErrorMetric::from(error))
-            }
+            InternalError::MapperError(error) => Self::MapperError(MapperErrorMetric::from(error)),
             InternalError::LoadBalancerError(_) => Self::LoadBalancerError,
             InternalError::PollReadyError(_) => Self::PollReadyError,
             InternalError::BufferError(_) => Self::BufferError,
             InternalError::InvalidUri(_) => Self::InvalidUri,
             InternalError::InvalidHeader(_) => Self::InvalidHeader,
-            InternalError::MappingTaskError(_)
-            | InternalError::PromptTaskError(_) => Self::TokioTaskError,
+            InternalError::MappingTaskError(_) | InternalError::PromptTaskError(_) => {
+                Self::TokioTaskError
+            }
             InternalError::InvalidConverter(_, _) => Self::InvalidConverter,
             InternalError::Provider5xxError(_) => Self::Provider5xxError,
-            InternalError::MetricsNotConfigured(_) => {
-                Self::MetricsNotConfigured
-            }
-            InternalError::AwsRequestSigningError(_) => {
-                Self::AwsRequestSigningError
-            }
+            InternalError::MetricsNotConfigured(_) => Self::MetricsNotConfigured,
+            InternalError::AwsRequestSigningError(_) => Self::AwsRequestSigningError,
             InternalError::PromptError(_) => Self::PromptError,
-            InternalError::DynamicRouterDiscoveryError(_) => {
-                Self::DynamicRouterDiscoveryError
-            }
+            InternalError::DynamicRouterDiscoveryError(_) => Self::DynamicRouterDiscoveryError,
             InternalError::DatabaseError(_) => Self::DatabaseError,
             InternalError::ProviderNotAllowedForWorkspace(_) => {
                 Self::ProviderNotAllowedForWorkspace
             }
-            InternalError::ContentFilterUnavailable(_) => {
-                Self::ContentFilterUnavailable
-            }
+            InternalError::ContentFilterUnavailable(_) => Self::ContentFilterUnavailable,
         }
     }
 }

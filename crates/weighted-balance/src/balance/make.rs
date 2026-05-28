@@ -98,17 +98,13 @@ where
     S::Response: Discover,
     <S::Response as Discover>::Key: Hash + HasWeight,
     <S::Response as Discover>::Service: Service<Req>,
-    <<S::Response as Discover>::Service as Service<Req>>::Error:
-        Into<tower::BoxError>,
+    <<S::Response as Discover>::Service as Service<Req>>::Error: Into<tower::BoxError>,
 {
     type Response = WeightedBalance<S::Response, Req>;
     type Error = S::Error;
     type Future = MakeFuture<S::Future, Req>;
 
-    fn poll_ready(
-        &mut self,
-        cx: &mut Context<'_>,
-    ) -> Poll<Result<(), Self::Error>> {
+    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         self.inner.poll_ready(cx)
     }
 

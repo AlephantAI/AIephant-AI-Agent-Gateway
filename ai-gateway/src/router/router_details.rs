@@ -10,16 +10,12 @@ use http::uri::PathAndQuery;
 use regex::Regex;
 
 use crate::{
-    error::{
-        api::ApiError, internal::InternalError,
-        invalid_req::InvalidRequestError,
-    },
+    error::{api::ApiError, internal::InternalError, invalid_req::InvalidRequestError},
     types::{extensions::RequestKind, request::Request, response::Response},
 };
 
 /// Regex for extracting the first path segment and the rest of the path.
-const UNIFIED_URL_REGEX: &str =
-    r"^/(?P<first_segment>[^/?]+)(?P<rest>/[^?]*)?(?P<query>\?.*)?$";
+const UNIFIED_URL_REGEX: &str = r"^/(?P<first_segment>[^/?]+)(?P<rest>/[^?]*)?(?P<query>\?.*)?$";
 
 pub struct RouterDetailsLayer {}
 
@@ -55,22 +51,20 @@ impl<S> RouterDetailsService<S> {
     fn parse_route(&self, request: &Request) -> Result<RouteType, ApiError> {
         let path = request.uri().path();
         let Some(captures) = self.unified_url_regex.captures(path) else {
-            return Err(ApiError::InvalidRequest(
-                InvalidRequestError::NotFound(path.to_string()),
-            ));
+            return Err(ApiError::InvalidRequest(InvalidRequestError::NotFound(
+                path.to_string(),
+            )));
         };
         let first_segment = captures
             .name("first_segment")
             .ok_or_else(|| {
-                ApiError::InvalidRequest(InvalidRequestError::NotFound(
-                    path.to_string(),
-                ))
+                ApiError::InvalidRequest(InvalidRequestError::NotFound(path.to_string()))
             })?
             .as_str();
         if first_segment != "v1" {
-            return Err(ApiError::InvalidRequest(
-                InvalidRequestError::NotFound(path.to_string()),
-            ));
+            return Err(ApiError::InvalidRequest(InvalidRequestError::NotFound(
+                path.to_string(),
+            )));
         }
         let rest_path = captures
             .name("rest")
@@ -82,10 +76,7 @@ impl<S> RouterDetailsService<S> {
     }
 }
 
-fn extract_path_and_query(
-    path: &str,
-    query: Option<&str>,
-) -> Result<PathAndQuery, ApiError> {
+fn extract_path_and_query(path: &str, query: Option<&str>) -> Result<PathAndQuery, ApiError> {
     let path_and_query = if let Some(query_params) = query {
         PathAndQuery::from_str(&format!("{path}?{query_params}"))
     } else {
@@ -107,10 +98,7 @@ where
     type Error = ApiError;
     type Future = Either<Ready<Result<Self::Response, Self::Error>>, S::Future>;
 
-    fn poll_ready(
-        &mut self,
-        cx: &mut Context<'_>,
-    ) -> Poll<Result<(), Self::Error>> {
+    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         self.inner.poll_ready(cx).map_err(Into::into)
     }
 
@@ -122,13 +110,12 @@ where
 
         let RouteType::UnifiedApi { path } = &route_type;
         tracing::info!(path = %path, "unified api request path");
-        let extracted_path_and_query =
-            match extract_path_and_query(path, req.uri().query()) {
-                Ok(p) => p,
-                Err(e) => {
-                    return Either::Left(ready(Err(e)));
-                }
-            };
+        let extracted_path_and_query = match extract_path_and_query(path, req.uri().query()) {
+            Ok(p) => p,
+            Err(e) => {
+                return Either::Left(ready(Err(e)));
+            }
+        };
         req.extensions_mut().insert(extracted_path_and_query);
         req.extensions_mut().insert(RequestKind::UnifiedApi);
         req.extensions_mut().insert(route_type);
@@ -155,8 +142,7 @@ mod tests {
 
     #[test]
     fn test_unified_regex() {
-        let regex =
-            Regex::new(UNIFIED_URL_REGEX).expect("Regex should be valid");
+        let regex = Regex::new(UNIFIED_URL_REGEX).expect("Regex should be valid");
 
         assert!(regex.is_match("/v1"));
         assert!(regex.is_match("/v1/chat/completions"));
@@ -167,13 +153,9 @@ mod tests {
     }
 
     fn service() -> RouterDetailsService<
-        tower::util::ServiceFn<
-            fn(Request) -> std::future::Ready<Result<Response, ApiError>>,
-        >,
+        tower::util::ServiceFn<fn(Request) -> std::future::Ready<Result<Response, ApiError>>>,
     > {
-        fn handler(
-            _req: Request,
-        ) -> std::future::Ready<Result<Response, ApiError>> {
+        fn handler(_req: Request) -> std::future::Ready<Result<Response, ApiError>> {
             std::future::ready(Ok::<Response, ApiError>(
                 http::Response::builder()
                     .body(axum_core::body::Body::empty())

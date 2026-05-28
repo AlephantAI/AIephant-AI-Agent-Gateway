@@ -15,9 +15,8 @@ use crate::{
     types::{
         body::BodyReader,
         extensions::{
-            LargeContextDecision, MapperContext, PromptCompressionTokenPair,
-            PromptContext, PromptHeaderForRequestLog, RequestContext,
-            RequestLogEmitted,
+            LargeContextDecision, MapperContext, PromptCompressionTokenPair, PromptContext,
+            PromptHeaderForRequestLog, RequestContext, RequestLogEmitted,
         },
         provider::InferenceProvider,
         router::RouterId,
@@ -105,10 +104,8 @@ fn spawn_response_body_metrics_and_debug_log(task: ResponseMetricsDebugTask) {
         async move {
             let tfft_future = TFFTFuture::new(task.start_instant, task.tfft_rx);
             let collect_future = task.response_body_for_logger.collect();
-            let (collected, tfft_duration) =
-                tokio::join!(collect_future, tfft_future);
-            let response_body =
-                collected.expect("infallible never errors").to_bytes();
+            let (collected, tfft_duration) = tokio::join!(collect_future, tfft_future);
+            let response_body = collected.expect("infallible never errors").to_bytes();
             debug_log::maybe_log_body_with_target(
                 "dispatcher response",
                 &task.forward_url,
@@ -156,12 +153,10 @@ impl DispatchLogger {
             request.debug_log_config,
         );
 
-        let deployment_target =
-            self.app_state.config().deployment_target.clone();
+        let deployment_target = self.app_state.config().deployment_target.clone();
         if self.app_state.config().alephant.is_observability_enabled() {
             if let Some(auth_ctx) = request.req_ctx.auth_context.clone() {
-                let cache_enabled_for_log = if request.llm_kv_cache_read_enabled
-                {
+                let cache_enabled_for_log = if request.llm_kv_cache_read_enabled {
                     Some(request.cache_reference_id.is_some())
                 } else {
                     None
@@ -185,13 +180,9 @@ impl DispatchLogger {
                     .response_id(request.response_log_id)
                     .response_created_at(request.response_received_at)
                     .prompt_ctx(request.prompt_ctx)
-                    .prompt_header_for_request_log(
-                        request.prompt_header_for_request_log,
-                    )
+                    .prompt_header_for_request_log(request.prompt_header_for_request_log)
                     .large_context_decision(request.large_context_decision)
-                    .prompt_compression_tokens(
-                        request.prompt_compression_tokens,
-                    )
+                    .prompt_compression_tokens(request.prompt_compression_tokens)
                     .session_ctx(request.session_ctx)
                     .ai_gateway_body_mapping(request.ai_gateway_body_mapping)
                     .cache_enabled(cache_enabled_for_log)
@@ -223,26 +214,25 @@ impl DispatchLogger {
                 marker.mark();
             }
             let app_state = self.app_state.clone();
-            let model = request.mapper_ctx.model.as_ref().map_or_else(
-                || "unknown".to_string(),
-                std::string::ToString::to_string,
-            );
+            let model = request
+                .mapper_ctx
+                .model
+                .as_ref()
+                .map_or_else(|| "unknown".to_string(), std::string::ToString::to_string);
             let forward_url = request.target_url.to_string();
             let path = request.target_url.path().to_string();
             let provider_string = request.effective_provider.to_string();
-            spawn_response_body_metrics_and_debug_log(
-                ResponseMetricsDebugTask {
-                    app_state,
-                    response_body_for_logger: request.response_body_for_logger,
-                    start_instant: request.start_instant,
-                    tfft_rx: request.tfft_rx,
-                    forward_url,
-                    provider: provider_string,
-                    model,
-                    path,
-                    debug_log_config: request.debug_log_config,
-                },
-            );
+            spawn_response_body_metrics_and_debug_log(ResponseMetricsDebugTask {
+                app_state,
+                response_body_for_logger: request.response_body_for_logger,
+                start_instant: request.start_instant,
+                tfft_rx: request.tfft_rx,
+                forward_url,
+                provider: provider_string,
+                model,
+                path,
+                debug_log_config: request.debug_log_config,
+            });
         }
     }
 }

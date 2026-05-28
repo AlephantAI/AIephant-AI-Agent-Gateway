@@ -5,18 +5,13 @@ use std::{
 };
 
 use pin_project_lite::pin_project;
-use tower::{
-    Service as _, ServiceBuilder, buffer::BufferLayer, util::BoxCloneService,
-};
+use tower::{Service as _, ServiceBuilder, buffer::BufferLayer, util::BoxCloneService};
 use tower_http::auth::AsyncRequireAuthorizationLayer;
 
 use crate::{
     app_state::AppState,
     error::{api::ApiError, init::InitError, invalid_req::InvalidRequestError},
-    middleware::{
-        model_support::ModelSupportLayer,
-        routing_precheck::RoutingPrecheckLayer,
-    },
+    middleware::{model_support::ModelSupportLayer, routing_precheck::RoutingPrecheckLayer},
     router::{
         router_details::{RouteType, RouterDetailsLayer},
         unified_api,
@@ -33,16 +28,11 @@ pub struct MetaRouter {
     unified_api: UnifiedApiService,
 }
 
-pub type MetaRouterService = BoxCloneService<
-    crate::types::request::Request,
-    crate::types::response::Response,
-    Infallible,
->;
+pub type MetaRouterService =
+    BoxCloneService<crate::types::request::Request, crate::types::response::Response, Infallible>;
 
 impl MetaRouter {
-    pub async fn build(
-        app_state: AppState,
-    ) -> Result<MetaRouterService, InitError> {
+    pub async fn build(app_state: AppState) -> Result<MetaRouterService, InitError> {
         let meta_router = Self::cloud(app_state.clone()).await?;
 
         let service_stack = ServiceBuilder::new()
@@ -55,12 +45,14 @@ impl MetaRouter {
             .layer(ModelSupportLayer {
                 app_state: app_state.clone(),
             })
-            .layer(crate::middleware::fallback_request_log::FallbackRequestLogLayer::new(
-                &app_state,
-            ))
-            .layer(crate::middleware::workspace_concurrency::WorkspaceConcurrencyLayer::new(
-                &app_state,
-            ))
+            .layer(
+                crate::middleware::fallback_request_log::FallbackRequestLogLayer::new(&app_state),
+            )
+            .layer(
+                crate::middleware::workspace_concurrency::WorkspaceConcurrencyLayer::new(
+                    &app_state,
+                ),
+            )
             .map_err(|e: std::convert::Infallible| match e {})
             .layer(ErrorHandlerLayer::new(app_state.clone()))
             .map_err(crate::error::internal::InternalError::BufferError)
@@ -72,10 +64,7 @@ impl MetaRouter {
 
     async fn cloud(app_state: AppState) -> Result<Self, InitError> {
         if !app_state.config().compat_mode {
-            crate::discover::router::provider_db::bootstrap_provider_catalog(
-                &app_state,
-            )
-            .await?;
+            crate::discover::router::provider_db::bootstrap_provider_catalog(&app_state).await?;
         }
 
         let unified_api = ServiceBuilder::new()
@@ -104,26 +93,19 @@ impl tower::Service<crate::types::request::Request> for MetaRouter {
     type Error = ApiError;
     type Future = ResponseFuture;
 
-    fn poll_ready(
-        &mut self,
-        ctx: &mut Context<'_>,
-    ) -> Poll<Result<(), Self::Error>> {
+    fn poll_ready(&mut self, ctx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         self.unified_api.poll_ready(ctx).map_err(|e| match e {})
     }
 
     fn call(&mut self, req: crate::types::request::Request) -> Self::Future {
         let route_type = req.extensions().get::<RouteType>().cloned();
         match route_type {
-            Some(RouteType::UnifiedApi { path }) => {
-                self.handle_unified_api_request(req, &path)
-            }
+            Some(RouteType::UnifiedApi { path }) => self.handle_unified_api_request(req, &path),
             None => {
                 tracing::debug!("no route type found");
                 ResponseFuture::Ready {
                     future: ready(Err(ApiError::InvalidRequest(
-                        InvalidRequestError::NotFound(
-                            req.uri().path().to_string(),
-                        ),
+                        InvalidRequestError::NotFound(req.uri().path().to_string()),
                     ))),
                 }
             }
@@ -148,15 +130,10 @@ pin_project! {
 impl std::future::Future for ResponseFuture {
     type Output = Result<crate::types::response::Response, ApiError>;
 
-    fn poll(
-        self: std::pin::Pin<&mut Self>,
-        cx: &mut Context<'_>,
-    ) -> Poll<Self::Output> {
+    fn poll(self: std::pin::Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         match self.project() {
             ResponseFutureProj::Ready { future } => future.poll(cx),
-            ResponseFutureProj::UnifiedApi { future } => {
-                future.poll(cx).map_err(|e| match e {})
-            }
+            ResponseFutureProj::UnifiedApi { future } => future.poll(cx).map_err(|e| match e {}),
         }
     }
 }

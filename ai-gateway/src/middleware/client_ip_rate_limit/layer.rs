@@ -18,9 +18,7 @@ use tower::{Layer, Service};
 use super::{memory::MemoryLimiter, redis_script, resolve_ip};
 use crate::{
     app_state::AppState,
-    config::client_ip_rate_limit::{
-        ClientIpRateLimitBackend, ClientIpRateLimitConfig,
-    },
+    config::client_ip_rate_limit::{ClientIpRateLimitBackend, ClientIpRateLimitConfig},
     error::invalid_req::{InvalidRequestError, TooManyRequestsError},
     types::{request::Request, response::Response},
 };
@@ -37,8 +35,7 @@ fn log_redis_degraded_throttled(summary: &str) {
     static LAST: Mutex<Option<Instant>> = Mutex::new(None);
     let now = Instant::now();
     let mut g = LAST.lock().expect("degraded log mutex poisoned");
-    let should_log =
-        g.is_none_or(|t| now.duration_since(t) >= Duration::from_secs(5));
+    let should_log = g.is_none_or(|t| now.duration_since(t) >= Duration::from_secs(5));
     if should_log {
         *g = Some(now);
         tracing::error!(
@@ -62,8 +59,7 @@ struct State {
 
 /// Warn only once when `SocketAddr` extension is missing.
 fn warn_missing_socket_once() {
-    static DONE: std::sync::atomic::AtomicBool =
-        std::sync::atomic::AtomicBool::new(false);
+    static DONE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
     if !DONE.swap(true, std::sync::atomic::Ordering::SeqCst) {
         tracing::warn!(
             target: "ai_gateway::client_ip_rate_limit",
@@ -80,9 +76,7 @@ pub struct ClientIpRateLimitLayer {
 impl ClientIpRateLimitLayer {
     /// Build layer: parse trusted CIDRs; if `backend=redis`, use completed
     /// startup ping result.
-    pub async fn new(
-        app_state: &AppState,
-    ) -> Result<Self, crate::error::init::InitError> {
+    pub async fn new(app_state: &AppState) -> Result<Self, crate::error::init::InitError> {
         let cfg = app_state
             .config()
             .global
@@ -94,11 +88,9 @@ impl ClientIpRateLimitLayer {
         } else {
             Vec::new()
         };
-        let memory =
-            Arc::new(MemoryLimiter::new(cfg.requests_per_second.max(1)));
+        let memory = Arc::new(MemoryLimiter::new(cfg.requests_per_second.max(1)));
         let use_redis = Arc::new(AtomicBool::new(false));
-        if cfg.enabled && matches!(cfg.backend, ClientIpRateLimitBackend::Redis)
-        {
+        if cfg.enabled && matches!(cfg.backend, ClientIpRateLimitBackend::Redis) {
             match app_state.redis() {
                 None => {
                     tracing::error!(
@@ -136,11 +128,8 @@ impl ClientIpRateLimitLayer {
             let use_redis = state.use_redis.clone();
             let metrics = state.metrics.clone();
             tokio::spawn(async move {
-                let mut interval =
-                    tokio::time::interval(Duration::from_secs(30));
-                interval.set_missed_tick_behavior(
-                    tokio::time::MissedTickBehavior::Skip,
-                );
+                let mut interval = tokio::time::interval(Duration::from_secs(30));
+                interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
                 loop {
                     interval.tick().await;
                     if use_redis.load(Ordering::Relaxed) {
@@ -148,13 +137,9 @@ impl ClientIpRateLimitLayer {
                     }
                     if let Ok(()) = redis.ping().await {
                         use_redis.store(true, Ordering::Relaxed);
-                        metrics.rate_limit_redis_degraded_gauge.record(
-                            0,
-                            &[opentelemetry::KeyValue::new(
-                                "layer",
-                                "client_ip",
-                            )],
-                        );
+                        metrics
+                            .rate_limit_redis_degraded_gauge
+                            .record(0, &[opentelemetry::KeyValue::new("layer", "client_ip")]);
                         tracing::info!(
                             target: "ai_gateway::client_ip_rate_limit",
                             "Redis recovered, switching back from in-memory \
@@ -188,20 +173,14 @@ pub struct ClientIpRateLimitService<S> {
 
 impl<S> Service<Request> for ClientIpRateLimitService<S>
 where
-    S: Service<Request, Response = Response, Error = Infallible>
-        + Clone
-        + Send
-        + 'static,
+    S: Service<Request, Response = Response, Error = Infallible> + Clone + Send + 'static,
     S::Future: Send + 'static,
 {
     type Response = Response;
     type Error = Infallible;
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
-    fn poll_ready(
-        &mut self,
-        cx: &mut Context<'_>,
-    ) -> Poll<Result<(), Self::Error>> {
+    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         self.inner.poll_ready(cx)
     }
 
@@ -213,16 +192,11 @@ where
             if !state.cfg.enabled {
                 return inner.call(req).await;
             }
-            let Some(peer_sa) = req.extensions().get::<SocketAddr>().copied()
-            else {
+            let Some(peer_sa) = req.extensions().get::<SocketAddr>().copied() else {
                 warn_missing_socket_once();
                 return inner.call(req).await;
             };
-            let ip = resolve_ip::effective_client_ip(
-                peer_sa.ip(),
-                req.headers(),
-                &state.trusted,
-            );
+            let ip = resolve_ip::effective_client_ip(peer_sa.ip(), req.headers(), &state.trusted);
             let limit_i64 = i64::from(state.cfg.requests_per_second);
             let allowed = if state.use_redis.load(Ordering::Relaxed) {
                 if let Some(ref redis) = state.redis {
@@ -255,13 +229,7 @@ where
                             state
                                 .metrics
                                 .rate_limit_redis_degraded_gauge
-                                .record(
-                                    1,
-                                    &[opentelemetry::KeyValue::new(
-                                        "layer",
-                                        "client_ip",
-                                    )],
-                                );
+                                .record(1, &[opentelemetry::KeyValue::new("layer", "client_ip")]);
                             log_redis_degraded_throttled(&format!(
                                 "client-ip-rate-limit: Redis EVAL failed: {e}"
                             ));
@@ -276,15 +244,11 @@ where
             };
             if !allowed {
                 state.metrics.client_ip_rate_limit_rejected.add(1, &[]);
-                let resp = InvalidRequestError::TooManyRequests(
-                    TooManyRequestsError {
-                        ratelimit_limit: u64::from(
-                            state.cfg.requests_per_second,
-                        ),
-                        ratelimit_remaining: 0,
-                        retry_after: 1,
-                    },
-                )
+                let resp = InvalidRequestError::TooManyRequests(TooManyRequestsError {
+                    ratelimit_limit: u64::from(state.cfg.requests_per_second),
+                    ratelimit_remaining: 0,
+                    retry_after: 1,
+                })
                 .into_response();
                 return Ok(resp);
             }

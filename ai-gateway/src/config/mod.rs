@@ -46,8 +46,7 @@ const DEFAULT_CONFIG_PATH: &str = "/etc/ai-gateway/config.yaml";
 /// `alephant-cloud.yaml` → `AI_GATEWAY__*` env**, so environment variables
 /// override YAML (including `cloudflare-kv`, `alephant.base-url`, etc.).
 const DEFAULT_ALEPHANT_CLOUD_PATH: &str = "/etc/ai-gateway/alephant-cloud.yaml";
-const LEGACY_CONTROL_PLANE_API_KEY_ENV: &str =
-    concat!("HELI", "CONE_CONTROL_PLANE_API_KEY");
+const LEGACY_CONTROL_PLANE_API_KEY_ENV: &str = concat!("HELI", "CONE_CONTROL_PLANE_API_KEY");
 
 #[derive(Debug, Error, Display)]
 pub enum Error {
@@ -56,9 +55,7 @@ pub enum Error {
     /// deserialization error for input config: {0}
     InputConfigDeserialization(#[from] serde_path_to_error::Error<ConfigError>),
     /// deserialization error for merged config: {0}
-    MergedConfigDeserialization(
-        #[from] serde_path_to_error::Error<serde_json::Error>,
-    ),
+    MergedConfigDeserialization(#[from] serde_path_to_error::Error<serde_json::Error>),
     /// URL parsing error: {0}
     UrlParse(#[from] url::ParseError),
     /// invalid S3_URL_STYLE: {0} (expected path or virtual-host)
@@ -71,18 +68,14 @@ pub struct MiddlewareConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub retries: Option<self::retry::RetryConfig>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub client_ip_rate_limit:
-        Option<self::client_ip_rate_limit::ClientIpRateLimitConfig>,
+    pub client_ip_rate_limit: Option<self::client_ip_rate_limit::ClientIpRateLimitConfig>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub gateway_in_flight_limit:
-        Option<self::gateway_in_flight_limit::GatewayInFlightLimitConfig>,
+    pub gateway_in_flight_limit: Option<self::gateway_in_flight_limit::GatewayInFlightLimitConfig>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub health_event_broadcast: Option<HealthEventBroadcastConfig>,
 }
 
-#[derive(
-    Debug, Clone, Deserialize, Serialize, PartialEq, Eq, Hash, Default,
-)]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq, Hash, Default)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct HealthEventBroadcastConfig {
     #[serde(default)]
@@ -212,9 +205,7 @@ fn parse_s3_url_style(raw: &str) -> Result<self::s3::UrlStyle, Box<Error>> {
     }
 }
 
-fn apply_flat_s3_env_overrides(
-    s3: &mut self::s3::Config,
-) -> Result<(), Box<Error>> {
+fn apply_flat_s3_env_overrides(s3: &mut self::s3::Config) -> Result<(), Box<Error>> {
     if let Some(endpoint) = env_non_empty("S3_ENDPOINT") {
         s3.endpoint = Url::parse(&endpoint).map_err(Error::UrlParse)?;
     }
@@ -237,11 +228,9 @@ fn apply_flat_s3_env_overrides(
 }
 
 impl Config {
-    pub fn try_read(
-        config_file_path: Option<&PathBuf>,
-    ) -> Result<Self, Box<Error>> {
-        let mut default_config = serde_json::to_value(Self::default())
-            .expect("default config is serializable");
+    pub fn try_read(config_file_path: Option<&PathBuf>) -> Result<Self, Box<Error>> {
+        let mut default_config =
+            serde_json::to_value(Self::default()).expect("default config is serializable");
         let mut builder = config::Config::builder();
         if let Some(path) = config_file_path {
             builder = builder.add_source(config::File::from(path.clone()));
@@ -256,15 +245,13 @@ impl Config {
             // `AI_GATEWAY__*` always overrides YAML (e.g. `cloudflare-kv` in
             // `/etc/ai-gateway/alephant-cloud.yaml`).
             if std::fs::exists(DEFAULT_CONFIG_PATH).unwrap_or_default() {
-                builder = builder.add_source(config::File::from(
-                    PathBuf::from(DEFAULT_CONFIG_PATH),
-                ));
+                builder =
+                    builder.add_source(config::File::from(PathBuf::from(DEFAULT_CONFIG_PATH)));
             }
-            if std::fs::exists(DEFAULT_ALEPHANT_CLOUD_PATH).unwrap_or_default()
-            {
-                builder = builder.add_source(config::File::from(
-                    PathBuf::from(DEFAULT_ALEPHANT_CLOUD_PATH),
-                ));
+            if std::fs::exists(DEFAULT_ALEPHANT_CLOUD_PATH).unwrap_or_default() {
+                builder = builder.add_source(config::File::from(PathBuf::from(
+                    DEFAULT_ALEPHANT_CLOUD_PATH,
+                )));
             }
             builder = builder.add_source(
                 config::Environment::with_prefix("AI_GATEWAY")
@@ -283,10 +270,9 @@ impl Config {
         merge(&mut default_config, &input_config);
         merge_s_dash_3_into_s3(&mut default_config);
 
-        let mut config: Config =
-            serde_path_to_error::deserialize(default_config)
-                .map_err(Error::from)
-                .map_err(Box::new)?;
+        let mut config: Config = serde_path_to_error::deserialize(default_config)
+            .map_err(Error::from)
+            .map_err(Box::new)?;
 
         // HACK: for secret fields in the **`Config`** struct that don't follow
         // the `AI_GATEWAY` prefix + the double underscore separator (`__`)
@@ -309,14 +295,10 @@ impl Config {
         }
 
         if let Ok(bedrock_region) = std::env::var("AWS_REGION")
-            && let Some(bedrock_provider) =
-                config.providers.get_mut(&InferenceProvider::Bedrock)
+            && let Some(bedrock_provider) = config.providers.get_mut(&InferenceProvider::Bedrock)
         {
-            let bedrock_url = format!(
-                "https://bedrock-runtime.{bedrock_region}.amazonaws.com"
-            );
-            bedrock_provider.base_url =
-                Url::parse(&bedrock_url).map_err(Error::UrlParse)?;
+            let bedrock_url = format!("https://bedrock-runtime.{bedrock_region}.amazonaws.com");
+            bedrock_provider.base_url = Url::parse(&bedrock_url).map_err(Error::UrlParse)?;
         }
 
         if let Ok(key) = std::env::var("REDIS_STREAM_KEY_REQUEST_RESPONSE")
@@ -340,8 +322,7 @@ impl Config {
     }
 
     pub fn validate(&self) -> Result<(), InitError> {
-        let router_id_regex =
-            Regex::new(ROUTER_ID_REGEX).expect("always valid if tests pass");
+        let router_id_regex = Regex::new(ROUTER_ID_REGEX).expect("always valid if tests pass");
         for (router_id, router_config) in self.routers.as_ref() {
             router_config.validate()?;
             if !router_id_regex.is_match(router_id.as_ref()) {
@@ -351,13 +332,10 @@ impl Config {
         self.fallback_policy.validate()?;
         if self.policy.enabled && self.policy.grpc_endpoint.trim().is_empty() {
             return Err(InitError::PolicyGrpcConnect(
-                "policy.grpc-endpoint must be set when policy.enabled is true"
-                    .to_string(),
+                "policy.grpc-endpoint must be set when policy.enabled is true".to_string(),
             ));
         }
-        if self.compat_mode
-            && self.alephant.features != self::alephant::AlephantFeatures::None
-        {
+        if self.compat_mode && self.alephant.features != self::alephant::AlephantFeatures::None {
             return Err(InitError::CompatModeAlephantFeatures(format!(
                 "alephant.features must be `none` when compat_mode is true \
                  (got {:?})",
@@ -378,9 +356,7 @@ impl crate::tests::TestDefault for Config {
             api_base: "https://api.cloudflare.com/client/v4".into(),
             account_id: "test".into(),
             namespace_id: "test".into(),
-            api_token: crate::types::secret::Secret::from(
-                "test-token".to_string(),
-            ),
+            api_token: crate::types::secret::Secret::from("test-token".to_string()),
         });
         #[cfg(not(feature = "external"))]
         let cloudflare_kv = None;
@@ -396,8 +372,7 @@ impl crate::tests::TestDefault for Config {
             s3: self::s3::Config::test_default(),
             database: self::database::DatabaseConfig::test_default(),
             dispatcher: self::dispatcher::DispatcherConfig::test_default(),
-            default_model_mapping:
-                self::model_mapping::ModelMappingConfig::default(),
+            default_model_mapping: self::model_mapping::ModelMappingConfig::default(),
             global: MiddlewareConfig::default(),
             unified_api: MiddlewareConfig::default(),
             providers: self::providers::ProvidersConfig::default(),
@@ -409,10 +384,8 @@ impl crate::tests::TestDefault for Config {
             ),
             discover: self::discover::DiscoverConfig::test_default(),
             routers: self::router::RouterConfigs::test_default(),
-            response_headers:
-                self::response_headers::ResponseHeadersConfig::default(),
-            fallback_policy:
-                self::fallback_policy::FallbackPolicyConfig::test_default(),
+            response_headers: self::response_headers::ResponseHeadersConfig::default(),
+            fallback_policy: self::fallback_policy::FallbackPolicyConfig::test_default(),
             openrouter_catalog_sync_deprecated: None,
             control_plane_deprecated: None,
             policy: self::policy::PolicyConfig::default(),
@@ -436,9 +409,7 @@ mod tests {
     };
 
     use super::*;
-    use crate::config::deployment_target::{
-        DeploymentTarget, MasterKeyResolution,
-    };
+    use crate::config::deployment_target::{DeploymentTarget, MasterKeyResolution};
 
     #[test]
     fn router_id_regex_is_valid() {
@@ -448,8 +419,8 @@ mod tests {
     #[test]
     fn default_config_is_serializable() {
         // if it doesn't panic, it's good
-        let _config = serde_json::to_string(&Config::default())
-            .expect("default config is serializable");
+        let _config =
+            serde_json::to_string(&Config::default()).expect("default config is serializable");
     }
 
     #[test]
@@ -461,8 +432,7 @@ mod tests {
             serde_json::json!({ "endpoint": "http://env-only:9000" }),
         );
         super::merge_s_dash_3_into_s3(&mut v);
-        let cfg: Config =
-            serde_json::from_value(v).expect("folded s-3 into s3");
+        let cfg: Config = serde_json::from_value(v).expect("folded s-3 into s3");
         assert_eq!(cfg.s3.endpoint.as_str(), "http://env-only:9000/");
     }
 
@@ -502,8 +472,7 @@ mod tests {
             MasterKeyResolution::PrimaryThenWorkspaceFallback,
         );
         let serialized = serde_json::to_string(&cloud_config).unwrap();
-        let deserialized =
-            serde_json::from_str::<DeploymentTarget>(&serialized).unwrap();
+        let deserialized = serde_json::from_str::<DeploymentTarget>(&serialized).unwrap();
         assert_eq!(cloud_config, deserialized);
     }
 
@@ -570,8 +539,7 @@ mod tests {
     fn telemetry_round_trip() {
         let config = Config::default();
         let serialized = serde_json::to_string(&config.telemetry).unwrap();
-        let deserialized =
-            serde_json::from_str::<telemetry::Config>(&serialized).unwrap();
+        let deserialized = serde_json::from_str::<telemetry::Config>(&serialized).unwrap();
         assert_eq!(config.telemetry, deserialized);
     }
 
@@ -579,9 +547,7 @@ mod tests {
     fn server_round_trip() {
         let config = Config::default();
         let serialized = serde_json::to_string(&config.server).unwrap();
-        let deserialized =
-            serde_json::from_str::<self::server::ServerConfig>(&serialized)
-                .unwrap();
+        let deserialized = serde_json::from_str::<self::server::ServerConfig>(&serialized).unwrap();
         assert_eq!(config.server, deserialized);
     }
 
@@ -589,10 +555,8 @@ mod tests {
     fn dispatcher_round_trip() {
         let config = Config::default();
         let serialized = serde_json::to_string(&config.dispatcher).unwrap();
-        let deserialized = serde_json::from_str::<
-            self::dispatcher::DispatcherConfig,
-        >(&serialized)
-        .unwrap();
+        let deserialized =
+            serde_json::from_str::<self::dispatcher::DispatcherConfig>(&serialized).unwrap();
         assert_eq!(config.dispatcher, deserialized);
     }
 
@@ -601,44 +565,35 @@ mod tests {
         let config = Config::default();
         let serialized = serde_json::to_string(&config.discover).unwrap();
         let deserialized =
-            serde_json::from_str::<self::discover::DiscoverConfig>(&serialized)
-                .unwrap();
+            serde_json::from_str::<self::discover::DiscoverConfig>(&serialized).unwrap();
         assert_eq!(config.discover, deserialized);
     }
 
     #[test]
     fn response_headers_round_trip() {
         let config = Config::default();
-        let serialized =
-            serde_json::to_string(&config.response_headers).unwrap();
-        let deserialized = serde_json::from_str::<
-            self::response_headers::ResponseHeadersConfig,
-        >(&serialized)
-        .unwrap();
+        let serialized = serde_json::to_string(&config.response_headers).unwrap();
+        let deserialized =
+            serde_json::from_str::<self::response_headers::ResponseHeadersConfig>(&serialized)
+                .unwrap();
         assert_eq!(config.response_headers, deserialized);
     }
 
     #[test]
     fn deployment_target_field_round_trip() {
         let config = Config::default();
-        let serialized =
-            serde_json::to_string(&config.deployment_target).unwrap();
-        let deserialized = serde_json::from_str::<
-            self::deployment_target::DeploymentTarget,
-        >(&serialized)
-        .unwrap();
+        let serialized = serde_json::to_string(&config.deployment_target).unwrap();
+        let deserialized =
+            serde_json::from_str::<self::deployment_target::DeploymentTarget>(&serialized).unwrap();
         assert_eq!(config.deployment_target, deserialized);
     }
 
     #[test]
     fn default_model_mapping_round_trip() {
         let config = Config::default();
-        let serialized =
-            serde_json::to_string(&config.default_model_mapping).unwrap();
-        let deserialized = serde_json::from_str::<
-            self::model_mapping::ModelMappingConfig,
-        >(&serialized)
-        .unwrap();
+        let serialized = serde_json::to_string(&config.default_model_mapping).unwrap();
+        let deserialized =
+            serde_json::from_str::<self::model_mapping::ModelMappingConfig>(&serialized).unwrap();
         assert_eq!(config.default_model_mapping, deserialized);
     }
 
@@ -646,10 +601,8 @@ mod tests {
     fn providers_round_trip() {
         let config = Config::default();
         let serialized = serde_json::to_string(&config.providers).unwrap();
-        let deserialized = serde_json::from_str::<
-            self::providers::ProvidersConfig,
-        >(&serialized)
-        .unwrap();
+        let deserialized =
+            serde_json::from_str::<self::providers::ProvidersConfig>(&serialized).unwrap();
         assert_eq!(config.providers, deserialized);
     }
 
@@ -657,8 +610,7 @@ mod tests {
     fn global_middleware_round_trip() {
         let config = Config::default();
         let serialized = serde_json::to_string(&config.global).unwrap();
-        let deserialized =
-            serde_json::from_str::<MiddlewareConfig>(&serialized).unwrap();
+        let deserialized = serde_json::from_str::<MiddlewareConfig>(&serialized).unwrap();
         assert_eq!(config.global, deserialized);
     }
 
@@ -666,8 +618,7 @@ mod tests {
     fn unified_api_middleware_round_trip() {
         let config = Config::default();
         let serialized = serde_json::to_string(&config.unified_api).unwrap();
-        let deserialized =
-            serde_json::from_str::<MiddlewareConfig>(&serialized).unwrap();
+        let deserialized = serde_json::from_str::<MiddlewareConfig>(&serialized).unwrap();
         assert_eq!(config.unified_api, deserialized);
     }
 
@@ -676,8 +627,7 @@ mod tests {
         let config = Config::default();
         let serialized = serde_json::to_string(&config.routers).unwrap();
         let deserialized =
-            serde_json::from_str::<self::router::RouterConfigs>(&serialized)
-                .unwrap();
+            serde_json::from_str::<self::router::RouterConfigs>(&serialized).unwrap();
         assert_eq!(config.routers, deserialized);
     }
 
@@ -704,8 +654,7 @@ mod tests {
         assert!(serialized.contains("*****"));
 
         // Deserializing succeeds but with "*****" as the new value
-        let deserialized =
-            serde_json::from_str::<TestConfig>(&serialized).unwrap();
+        let deserialized = serde_json::from_str::<TestConfig>(&serialized).unwrap();
 
         // The values won't be equal because the secret is now "*****" instead
         // of "my-secret-value"
@@ -727,10 +676,7 @@ mod tests {
         LOCK.get_or_init(|| Mutex::new(()))
     }
 
-    fn with_env_overrides<T>(
-        vars: &[(&str, Option<&str>)],
-        f: impl FnOnce() -> T,
-    ) -> T {
+    fn with_env_overrides<T>(vars: &[(&str, Option<&str>)], f: impl FnOnce() -> T) -> T {
         let _guard = env_lock()
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
@@ -764,10 +710,7 @@ alephant:
   features: auth
 ";
         let c1: Config = serde_yml::from_str(alephant_yaml).unwrap();
-        assert_eq!(
-            c1.alephant.features,
-            self::alephant::AlephantFeatures::Auth
-        );
+        assert_eq!(c1.alephant.features, self::alephant::AlephantFeatures::Auth);
     }
 
     #[test]
@@ -963,10 +906,9 @@ unified-api:
 
     #[test]
     fn invalid_redis_url_returns_parse_error() {
-        let err =
-            with_env_overrides(&[("REDIS_URL", Some("not-a-url"))], || {
-                Config::try_read(None).unwrap_err().to_string()
-            });
+        let err = with_env_overrides(&[("REDIS_URL", Some("not-a-url"))], || {
+            Config::try_read(None).unwrap_err().to_string()
+        });
         assert!(err.contains("URL parsing error"), "unexpected err: {err}");
     }
 
@@ -999,28 +941,25 @@ unified-api:
 
     #[test]
     fn flat_s3_endpoint_applies_without_ai_gateway_s3() {
-        let cfg = with_env_overrides(
-            &[("S3_ENDPOINT", Some("http://127.0.0.1:9400"))],
-            || Config::try_read(None).expect("config load"),
-        );
+        let cfg = with_env_overrides(&[("S3_ENDPOINT", Some("http://127.0.0.1:9400"))], || {
+            Config::try_read(None).expect("config load")
+        });
         assert_eq!(cfg.s3.endpoint.as_str(), "http://127.0.0.1:9400/");
     }
 
     #[test]
     fn invalid_s3_endpoint_returns_url_parse_error() {
-        let err =
-            with_env_overrides(&[("S3_ENDPOINT", Some("not-a-url"))], || {
-                Config::try_read(None).unwrap_err().to_string()
-            });
+        let err = with_env_overrides(&[("S3_ENDPOINT", Some("not-a-url"))], || {
+            Config::try_read(None).unwrap_err().to_string()
+        });
         assert!(err.contains("URL parsing error"), "unexpected err: {err}");
     }
 
     #[test]
     fn invalid_s3_url_style_returns_error() {
-        let err =
-            with_env_overrides(&[("S3_URL_STYLE", Some("nosuch"))], || {
-                Config::try_read(None).unwrap_err().to_string()
-            });
+        let err = with_env_overrides(&[("S3_URL_STYLE", Some("nosuch"))], || {
+            Config::try_read(None).unwrap_err().to_string()
+        });
         assert!(
             err.contains("invalid S3_URL_STYLE"),
             "unexpected err: {err}"

@@ -80,23 +80,14 @@ where
 
 impl<S> tower::Service<Request> for Service<S>
 where
-    S: tower::Service<Request, Response = Response, Error = ApiError>
-        + Send
-        + Clone
-        + 'static,
+    S: tower::Service<Request, Response = Response, Error = ApiError> + Send + Clone + 'static,
     S::Future: Send + 'static,
 {
     type Response = Response;
     type Error = ApiError;
-    type Future = ResponseFuture<
-        <PromptService<S> as tower::Service<Request>>::Future,
-        S::Future,
-    >;
+    type Future = ResponseFuture<<PromptService<S> as tower::Service<Request>>::Future, S::Future>;
 
-    fn poll_ready(
-        &mut self,
-        cx: &mut Context<'_>,
-    ) -> Poll<Result<(), Self::Error>> {
+    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         match self {
             Service::Enabled { service, .. } => service.poll_ready(cx),
             Service::Disabled { service } => service.poll_ready(cx),

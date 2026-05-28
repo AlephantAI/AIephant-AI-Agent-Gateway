@@ -141,8 +141,7 @@ fn fallback_policy_validate_rejects_bad_error_ratio_threshold() {
 #[test]
 fn fallback_policy_validate_rejects_zero_grace_period_requests() {
     let mut p = FallbackPolicyConfig::default();
-    p.provider_failover.health.grace_period =
-        GracePeriod::Requests { min_requests: 0 };
+    p.provider_failover.health.grace_period = GracePeriod::Requests { min_requests: 0 };
     let err = p.validate().unwrap_err();
     let msg = format!("{err}");
     assert!(

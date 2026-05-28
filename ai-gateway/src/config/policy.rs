@@ -14,9 +14,7 @@ pub const POLICY_GRPC_RECONNECT_INTERVAL: Duration = Duration::from_secs(5);
 /// `EvaluateRequest.body` etc.).
 pub const POLICY_MAX_REQUEST_BODY_BYTES: usize = 1024 * 1024;
 
-#[derive(
-    Debug, Clone, Copy, Default, Deserialize, Serialize, PartialEq, Eq,
-)]
+#[derive(Debug, Clone, Copy, Default, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub enum OnUnavailable {
     #[default]

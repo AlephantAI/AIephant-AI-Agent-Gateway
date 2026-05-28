@@ -2,18 +2,13 @@ use http::uri::PathAndQuery;
 use opentelemetry::KeyValue;
 use tower_otel_http_metrics::ResponseAttributeExtractor;
 
-use crate::types::{
-    extensions::MapperContext, provider::InferenceProvider, router::RouterId,
-};
+use crate::types::{extensions::MapperContext, provider::InferenceProvider, router::RouterId};
 
 #[derive(Debug, Clone)]
 pub struct AttributeExtractor;
 
 impl<B> ResponseAttributeExtractor<B> for AttributeExtractor {
-    fn extract_attributes(
-        &self,
-        response: &http::Response<B>,
-    ) -> Vec<KeyValue> {
+    fn extract_attributes(&self, response: &http::Response<B>) -> Vec<KeyValue> {
         let resp_extensions = response.extensions();
         let mut attributes = Vec::new();
         if let Some(mapper_ctx) = resp_extensions.get::<MapperContext>() {
@@ -23,8 +18,7 @@ impl<B> ResponseAttributeExtractor<B> for AttributeExtractor {
             }
         }
         if let Some(path) = resp_extensions.get::<PathAndQuery>() {
-            attributes
-                .push(KeyValue::new("provider_path", path.path().to_string()));
+            attributes.push(KeyValue::new("provider_path", path.path().to_string()));
         }
         if let Some(provider) = resp_extensions.get::<InferenceProvider>() {
             attributes.push(KeyValue::new("provider", provider.to_string()));

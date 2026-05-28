@@ -25,8 +25,7 @@ impl AiRequest for CreateImageRequest {
     fn model(&self) -> Result<ModelId, MapperError> {
         let m = self.model.as_ref().ok_or_else(|| {
             MapperError::InvalidModelName(
-                "unified API images/generations require `model` for routing"
-                    .to_string(),
+                "unified API images/generations require `model` for routing".to_string(),
             )
         })?;
         let name = match m {

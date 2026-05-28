@@ -12,8 +12,7 @@ use uuid::Uuid;
 
 use crate::endpoints::{ApiEndpoint, openai::OpenAI};
 
-const ALLOWED_ROLES: [&str; 5] =
-    ["system", "user", "assistant", "tool", "function"];
+const ALLOWED_ROLES: [&str; 5] = ["system", "user", "assistant", "tool", "function"];
 
 const ORIGINAL_ROLE_MAX_CHARS: usize = 64;
 
@@ -36,9 +35,7 @@ pub fn normalize_chat_completion_roles_in_place(
     let Some(root_obj) = root.as_object_mut() else {
         return stats;
     };
-    let Some(choices) =
-        root_obj.get_mut("choices").and_then(Value::as_array_mut)
-    else {
+    let Some(choices) = root_obj.get_mut("choices").and_then(Value::as_array_mut) else {
         return stats;
     };
 
@@ -77,8 +74,7 @@ pub fn normalize_chat_completion_roles_in_place(
             continue;
         }
 
-        let original_display =
-            truncate_original(s.as_str(), ORIGINAL_ROLE_MAX_CHARS);
+        let original_display = truncate_original(s.as_str(), ORIGINAL_ROLE_MAX_CHARS);
         tracing::warn!(
             reason = "unknown",
             original_role = %original_display,
@@ -132,8 +128,7 @@ pub fn ensure_openai_chat_completion_required_fields_in_place(
         );
     }
 
-    let choices_needs_patch =
-        matches!(root_obj.get("choices"), None | Some(Value::Null));
+    let choices_needs_patch = matches!(root_obj.get("choices"), None | Some(Value::Null));
     if choices_needs_patch {
         root_obj.insert("choices".to_string(), Value::Array(vec![]));
         tracing::warn!(
@@ -142,8 +137,7 @@ pub fn ensure_openai_chat_completion_required_fields_in_place(
         );
     }
 
-    let created_needs_patch =
-        matches!(root_obj.get("created"), None | Some(Value::Null));
+    let created_needs_patch = matches!(root_obj.get("created"), None | Some(Value::Null));
     if created_needs_patch {
         let ts = unix_now_u32();
         root_obj.insert("created".to_string(), Value::Number(ts.into()));
@@ -195,9 +189,7 @@ fn truncate_original(s: &str, max_chars: usize) -> String {
 }
 
 #[must_use]
-pub(crate) fn lenient_openai_chat_roles_for_target_endpoint(
-    target_endpoint: &ApiEndpoint,
-) -> bool {
+pub(crate) fn lenient_openai_chat_roles_for_target_endpoint(target_endpoint: &ApiEndpoint) -> bool {
     match target_endpoint {
         ApiEndpoint::OpenAI(OpenAI::ChatCompletions(_)) => true,
         ApiEndpoint::OpenAICompatible {
@@ -326,8 +318,7 @@ mod tests {
 
     #[test]
     fn leaves_non_empty_id_unchanged() {
-        let mut v =
-            serde_json::json!({ "id": "chatcmpl-upstream", "choices": [] });
+        let mut v = serde_json::json!({ "id": "chatcmpl-upstream", "choices": [] });
         ensure_openai_chat_completion_required_fields_in_place(&mut v, false);
         assert_eq!(v["id"], "chatcmpl-upstream");
     }

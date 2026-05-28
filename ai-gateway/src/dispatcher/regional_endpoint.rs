@@ -149,8 +149,7 @@ mod tests {
 
     #[test]
     fn redis_key_includes_master_key_id() {
-        let master_key_id =
-            Uuid::parse_str("67e55044-10b1-426f-9247-bb680e5fe0c8").unwrap();
+        let master_key_id = Uuid::parse_str("67e55044-10b1-426f-9247-bb680e5fe0c8").unwrap();
 
         assert_eq!(
             redis_key(master_key_id),
@@ -195,8 +194,7 @@ mod tests {
             .expect("build test app");
         let master_key_id = Uuid::new_v4();
 
-        remember_region(&app.state, Some(master_key_id), EndpointRegion::Cn)
-            .await;
+        remember_region(&app.state, Some(master_key_id), EndpointRegion::Cn).await;
         assert_eq!(
             get_learned_region(&app.state, Some(master_key_id)).await,
             Some(EndpointRegion::Cn)

@@ -105,9 +105,7 @@ where
 
 impl<S, ReqBody, E> Service<Request<ReqBody>> for ErrorHandler<S>
 where
-    S: Service<Request<ReqBody>, Response = Response, Error = E>
-        + Send
-        + 'static,
+    S: Service<Request<ReqBody>, Response = Response, Error = E> + Send + 'static,
     S::Future: Send + 'static,
     S::Error: IntoResponse + std::fmt::Display,
     ReqBody: Send + 'static,
@@ -117,10 +115,7 @@ where
     type Error = Infallible;
     type Future = ResponseFuture<S::Future, E>;
 
-    fn poll_ready(
-        &mut self,
-        cx: &mut Context<'_>,
-    ) -> Poll<Result<(), Self::Error>> {
+    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         match self.inner.poll_ready(cx) {
             Poll::Ready(Ok(())) => Poll::Ready(Ok(())),
             Poll::Ready(Err(e)) => {

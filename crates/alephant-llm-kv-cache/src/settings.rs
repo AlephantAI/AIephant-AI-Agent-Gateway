@@ -27,13 +27,10 @@ impl CacheSettings {
             .and_then(|s| s.parse().ok())
             .unwrap_or(1);
         if bucket == 0 || bucket > 20 {
-            return Err(format!(
-                "Cache bucket size must be 1..=20, got {bucket}"
-            ));
+            return Err(format!("Cache bucket size must be 1..=20, got {bucket}"));
         }
         let seed = lower_get(headers, "Alephant-Cache-Seed");
-        let cc_in =
-            lower_get(headers, "Alephant-Cache-Control").unwrap_or_default();
+        let cc_in = lower_get(headers, "Alephant-Cache-Control").unwrap_or_default();
         let cache_control_value = build_cache_control(&cc_in);
         Ok(Self {
             should_read: enabled || read,

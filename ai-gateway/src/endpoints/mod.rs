@@ -9,13 +9,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     endpoints::{
-        anthropic::Anthropic, bedrock::Bedrock, google::Google, ollama::Ollama,
-        openai::OpenAI,
+        anthropic::Anthropic, bedrock::Bedrock, google::Google, ollama::Ollama, openai::OpenAI,
     },
-    error::{
-        internal::InternalError, invalid_req::InvalidRequestError,
-        mapper::MapperError,
-    },
+    error::{internal::InternalError, invalid_req::InvalidRequestError, mapper::MapperError},
     types::{model_id::ModelId, provider::InferenceProvider},
 };
 
@@ -106,9 +102,7 @@ impl ApiEndpoint {
             match target_provider {
                 InferenceProvider::OpenAI | InferenceProvider::Named(_) => {}
                 _ => {
-                    return Err(InvalidRequestError::UnsupportedEndpoint(
-                        CROSS.to_string(),
-                    ));
+                    return Err(InvalidRequestError::UnsupportedEndpoint(CROSS.to_string()));
                 }
             }
         }
@@ -117,27 +111,17 @@ impl ApiEndpoint {
                 Ok(Self::Anthropic(Anthropic::from(o)))
             }
             (Self::OpenAI(o), InferenceProvider::OpenAI) => Ok(Self::OpenAI(o)),
-            (Self::OpenAI(o), InferenceProvider::GoogleGemini) => {
-                Ok(Self::Google(Google::from(o)))
-            }
-            (Self::OpenAI(o), InferenceProvider::Ollama) => {
-                Ok(Self::Ollama(Ollama::from(o)))
-            }
-            (Self::OpenAI(o), InferenceProvider::Bedrock) => {
-                Ok(Self::Bedrock(Bedrock::from(o)))
-            }
-            (Self::OpenAI(o), InferenceProvider::Named(name)) => {
-                Ok(Self::OpenAICompatible {
-                    provider: InferenceProvider::Named(name.clone()),
-                    openai_endpoint: o,
-                })
-            }
-            (Self::OpenAI(o), InferenceProvider::Custom) => {
-                Ok(Self::OpenAICompatible {
-                    provider: InferenceProvider::Custom,
-                    openai_endpoint: o,
-                })
-            }
+            (Self::OpenAI(o), InferenceProvider::GoogleGemini) => Ok(Self::Google(Google::from(o))),
+            (Self::OpenAI(o), InferenceProvider::Ollama) => Ok(Self::Ollama(Ollama::from(o))),
+            (Self::OpenAI(o), InferenceProvider::Bedrock) => Ok(Self::Bedrock(Bedrock::from(o))),
+            (Self::OpenAI(o), InferenceProvider::Named(name)) => Ok(Self::OpenAICompatible {
+                provider: InferenceProvider::Named(name.clone()),
+                openai_endpoint: o,
+            }),
+            (Self::OpenAI(o), InferenceProvider::Custom) => Ok(Self::OpenAICompatible {
+                provider: InferenceProvider::Custom,
+                openai_endpoint: o,
+            }),
             _ => Err(InvalidRequestError::UnsupportedProvider(
                 target_provider.clone(),
             )),
@@ -195,17 +179,7 @@ impl ApiEndpoint {
     }
 }
 
-#[derive(
-    Debug,
-    Clone,
-    Copy,
-    PartialEq,
-    Eq,
-    Hash,
-    Serialize,
-    Deserialize,
-    strum::AsRefStr,
-)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, strum::AsRefStr)]
 #[serde(rename_all = "kebab-case")]
 #[strum(serialize_all = "kebab-case")]
 pub enum EndpointType {

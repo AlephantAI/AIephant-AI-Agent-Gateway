@@ -34,10 +34,8 @@ impl RollingCounter {
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     fn get_index_and_lap(&self, now: Instant) -> (usize, u64) {
         let elapsed = now.duration_since(self.start).as_secs_f64();
-        let lap = (elapsed / (self.bucket_duration * f64::from(self.buckets)))
-            .floor() as u64;
-        let idx = ((elapsed / self.bucket_duration) as usize)
-            % (self.buckets as usize);
+        let lap = (elapsed / (self.bucket_duration * f64::from(self.buckets))).floor() as u64;
+        let idx = ((elapsed / self.bucket_duration) as usize) % (self.buckets as usize);
         (idx, lap)
     }
 
@@ -48,12 +46,7 @@ impl RollingCounter {
         if last_lap != lap {
             // Try to reset the bucket if we are the first in this lap
             if self.laps[idx]
-                .compare_exchange(
-                    last_lap,
-                    lap,
-                    Ordering::AcqRel,
-                    Ordering::Acquire,
-                )
+                .compare_exchange(last_lap, lap, Ordering::AcqRel, Ordering::Acquire)
                 .is_ok()
             {
                 self.counters[idx].store(0, Ordering::Release);

@@ -29,9 +29,7 @@ pub async fn put_with_backoff_classified(
             .body(body.to_string())
             .send()
             .await
-            .map_err(|e| {
-                PutClassifiedError::TransientExhausted(e.to_string())
-            })?;
+            .map_err(|e| PutClassifiedError::TransientExhausted(e.to_string()))?;
         let status = res.status();
         if status.is_success() {
             return Ok(());
@@ -44,8 +42,7 @@ pub async fn put_with_backoff_classified(
                 )));
             }
             let delay_ms = (1u64 << attempt) * 500;
-            tokio::time::sleep(std::time::Duration::from_millis(delay_ms))
-                .await;
+            tokio::time::sleep(std::time::Duration::from_millis(delay_ms)).await;
             continue;
         }
         return Err(PutClassifiedError::Terminal(format!(
@@ -65,8 +62,7 @@ pub async fn put_with_backoff(
     put_with_backoff_classified(client, url, token, body, ttl)
         .await
         .map_err(|e| match e {
-            PutClassifiedError::TransientExhausted(s)
-            | PutClassifiedError::Terminal(s) => {
+            PutClassifiedError::TransientExhausted(s) | PutClassifiedError::Terminal(s) => {
                 crate::error::LlmKvCacheError::Http(s)
             }
         })

@@ -66,9 +66,7 @@ impl QdrantStore {
         dimension: usize,
     ) -> Result<QdrantEnsureCollection, String> {
         if dimension == 0 {
-            return Err(
-                "embedding dimension must be greater than zero".to_string()
-            );
+            return Err("embedding dimension must be greater than zero".to_string());
         }
 
         match self.collection_state(collection).await? {
@@ -78,9 +76,7 @@ impl QdrantStore {
             }
             QdrantCollectionState::Exists {
                 dimension: Some(existing),
-            } if existing == dimension => {
-                Ok(QdrantEnsureCollection { created: false })
-            }
+            } if existing == dimension => Ok(QdrantEnsureCollection { created: false }),
             QdrantCollectionState::Exists {
                 dimension: Some(existing),
             } => Err(format!(
@@ -97,8 +93,7 @@ impl QdrantStore {
         &self,
         collection: &str,
     ) -> Result<QdrantCollectionState, String> {
-        let mut req =
-            self.client.get(collection_url(&self.base_url, collection));
+        let mut req = self.client.get(collection_url(&self.base_url, collection));
         if let Some(api_key) = self.api_key.as_deref() {
             req = req.header("api-key", api_key);
         }
@@ -114,8 +109,7 @@ impl QdrantStore {
             ));
         }
 
-        let value: serde_json::Value =
-            resp.json().await.map_err(|e| e.to_string())?;
+        let value: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
         Ok(QdrantCollectionState::Exists {
             dimension: collection_dimension_from_value(&value)?,
         })
@@ -183,8 +177,7 @@ impl QdrantStore {
         if !resp.status().is_success() {
             return Err(format!("qdrant search failed: {}", resp.status()));
         }
-        let parsed: SearchResponse =
-            resp.json().await.map_err(|e| e.to_string())?;
+        let parsed: SearchResponse = resp.json().await.map_err(|e| e.to_string())?;
         let now = now_unix();
         for hit in parsed.result {
             if let Some(decoded) = decode_payload_if_fresh(&hit.payload, now) {
@@ -262,25 +255,20 @@ fn points_upsert_url(base_url: &str, collection: &str) -> String {
     format!("{}/points?wait=true", collection_url(base_url, collection))
 }
 
-fn collection_dimension_from_value(
-    value: &serde_json::Value,
-) -> Result<Option<usize>, String> {
+fn collection_dimension_from_value(value: &serde_json::Value) -> Result<Option<usize>, String> {
     let Some(vectors) = value
         .get("result")
         .and_then(|v| v.get("config"))
         .and_then(|v| v.get("params"))
         .and_then(|v| v.get("vectors"))
     else {
-        return Err(
-            "qdrant collection response missing vectors config".to_string()
-        );
+        return Err("qdrant collection response missing vectors config".to_string());
     };
 
-    if let Some(size) = vectors.get("size").and_then(serde_json::Value::as_u64)
-    {
-        return usize::try_from(size).map(Some).map_err(|_| {
-            "qdrant collection vector size is too large".to_string()
-        });
+    if let Some(size) = vectors.get("size").and_then(serde_json::Value::as_u64) {
+        return usize::try_from(size)
+            .map(Some)
+            .map_err(|_| "qdrant collection vector size is too large".to_string());
     }
 
     Ok(None)
@@ -324,9 +312,8 @@ mod tests {
     use serde_json::json;
 
     use super::{
-        QdrantPointPayload, QdrantStore, collection_dimension_from_value,
-        collection_url, decode_payload_if_fresh, points_search_url,
-        points_upsert_url,
+        QdrantPointPayload, QdrantStore, collection_dimension_from_value, collection_url,
+        decode_payload_if_fresh, points_search_url, points_upsert_url,
     };
 
     #[test]
@@ -335,8 +322,7 @@ mod tests {
         let hit = QdrantPointPayload {
             cache_key: "k".into(),
             params_hash: "p".into(),
-            response_b64: base64::engine::general_purpose::STANDARD
-                .encode(br#"{"ok":true}"#),
+            response_b64: base64::engine::general_purpose::STANDARD.encode(br#"{"ok":true}"#),
             expires_at: Some(now - 10),
         };
         assert!(decode_payload_if_fresh(&hit, now).is_none());
@@ -357,10 +343,7 @@ mod tests {
             }
         });
 
-        assert_eq!(
-            collection_dimension_from_value(&value).unwrap(),
-            Some(1536)
-        );
+        assert_eq!(collection_dimension_from_value(&value).unwrap(), Some(1536));
     }
 
     #[test]
@@ -402,24 +385,15 @@ mod tests {
     #[test]
     fn qdrant_urls_use_runtime_collection() {
         assert_eq!(
-            collection_url(
-                "http://qdrant.local/",
-                "semantic_cache__openai__m__3"
-            ),
+            collection_url("http://qdrant.local/", "semantic_cache__openai__m__3"),
             "http://qdrant.local/collections/semantic_cache__openai__m__3"
         );
         assert_eq!(
-            points_search_url(
-                "http://qdrant.local/",
-                "semantic_cache__openai__m__3"
-            ),
+            points_search_url("http://qdrant.local/", "semantic_cache__openai__m__3"),
             "http://qdrant.local/collections/semantic_cache__openai__m__3/points/search"
         );
         assert_eq!(
-            points_upsert_url(
-                "http://qdrant.local/",
-                "semantic_cache__openai__m__3"
-            ),
+            points_upsert_url("http://qdrant.local/", "semantic_cache__openai__m__3"),
             "http://qdrant.local/collections/semantic_cache__openai__m__3/points?wait=true"
         );
     }

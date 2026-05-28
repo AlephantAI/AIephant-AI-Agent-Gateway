@@ -70,12 +70,8 @@ struct MasterKeyCacheInner {
 
 impl MasterKeyCache {
     #[must_use]
-    pub fn new(
-        pool: PgPool,
-        enc_key: Arc<[u8; MASTER_KEY_ENCRYPTION_KEY_LEN]>,
-    ) -> Self {
-        let capacity =
-            NonZeroUsize::new(DEFAULT_CAPACITY).expect("capacity > 0");
+    pub fn new(pool: PgPool, enc_key: Arc<[u8; MASTER_KEY_ENCRYPTION_KEY_LEN]>) -> Self {
+        let capacity = NonZeroUsize::new(DEFAULT_CAPACITY).expect("capacity > 0");
         Self {
             inner: Arc::new(MasterKeyCacheInner {
                 pool,
@@ -95,8 +91,7 @@ impl MasterKeyCache {
     ) -> Result<DecryptedMasterKey, MasterKeyCacheError> {
         // ── fast path ──────────────────────────────────────────────────────
         {
-            let mut guard =
-                self.inner.cache.lock().expect("cache lock poisoned");
+            let mut guard = self.inner.cache.lock().expect("cache lock poisoned");
             if let Some(entry) = guard.get(&master_key_id) {
                 debug!(%master_key_id, "master_key_cache: hit");
                 return Ok(entry.clone());
@@ -113,12 +108,8 @@ impl MasterKeyCache {
             .await?
             .ok_or(MasterKeyCacheError::NotFound(master_key_id))?;
 
-        let provider = InferenceProvider::from_provider_code(
-            &row.provider_code,
-        )
-        .map_err(|_| {
-            MasterKeyCacheError::UnknownProvider(row.provider_code.clone())
-        })?;
+        let provider = InferenceProvider::from_provider_code(&row.provider_code)
+            .map_err(|_| MasterKeyCacheError::UnknownProvider(row.provider_code.clone()))?;
 
         let plaintext_bytes = master_key::decrypt(
             &row.key_ciphertext,
@@ -127,9 +118,7 @@ impl MasterKeyCache {
         )?;
 
         let entry = DecryptedMasterKey {
-            plaintext: Arc::new(
-                String::from_utf8_lossy(&plaintext_bytes).into_owned(),
-            ),
+            plaintext: Arc::new(String::from_utf8_lossy(&plaintext_bytes).into_owned()),
             provider,
             base_url: row.base_url,
             updated_at: row.updated_at,
@@ -137,8 +126,7 @@ impl MasterKeyCache {
 
         // ── insert into cache ──────────────────────────────────────────────
         {
-            let mut guard =
-                self.inner.cache.lock().expect("cache lock poisoned");
+            let mut guard = self.inner.cache.lock().expect("cache lock poisoned");
             guard.put(master_key_id, entry.clone());
         }
 
@@ -194,14 +182,10 @@ impl MasterKeyCache {
             pool: self.inner.pool.clone(),
         };
         let ids = store
-            .get_master_key_ids_by_workspace_and_provider(
-                workspace_id,
-                provider.as_provider_code(),
-            )
+            .get_master_key_ids_by_workspace_and_provider(workspace_id, provider.as_provider_code())
             .await
             .map_err(MasterKeyCacheError::Db)?;
-        let candidate_ids: Vec<Uuid> =
-            ids.into_iter().filter(|id| *id != primary_id).collect();
+        let candidate_ids: Vec<Uuid> = ids.into_iter().filter(|id| *id != primary_id).collect();
 
         if candidate_ids.is_empty() {
             warn!(
@@ -257,8 +241,7 @@ mod tests {
     #[test]
     fn cache_returns_same_arc_on_second_get() {
         let capacity = NonZeroUsize::new(4).unwrap();
-        let cache: Mutex<LruCache<Uuid, DecryptedMasterKey>> =
-            Mutex::new(LruCache::new(capacity));
+        let cache: Mutex<LruCache<Uuid, DecryptedMasterKey>> = Mutex::new(LruCache::new(capacity));
         let id = Uuid::new_v4();
 
         let entry = DecryptedMasterKey {
@@ -282,8 +265,7 @@ mod tests {
     #[test]
     fn invalidate_removes_entry() {
         let capacity = NonZeroUsize::new(4).unwrap();
-        let cache: Mutex<LruCache<Uuid, DecryptedMasterKey>> =
-            Mutex::new(LruCache::new(capacity));
+        let cache: Mutex<LruCache<Uuid, DecryptedMasterKey>> = Mutex::new(LruCache::new(capacity));
         let id = Uuid::new_v4();
 
         let entry = DecryptedMasterKey {
@@ -313,8 +295,7 @@ mod tests {
     fn decrypt_called_once_for_cached_key() {
         let decrypt_count = Arc::new(AtomicUsize::new(0));
         let capacity = NonZeroUsize::new(4).unwrap();
-        let cache: Mutex<LruCache<Uuid, DecryptedMasterKey>> =
-            Mutex::new(LruCache::new(capacity));
+        let cache: Mutex<LruCache<Uuid, DecryptedMasterKey>> = Mutex::new(LruCache::new(capacity));
         let id = Uuid::new_v4();
 
         // Simulate the slow path (decrypt + insert) once
@@ -336,8 +317,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_primary_or_fallback_uses_other_key_when_primary_unusable() {
-        const DEFAULT_TEST_DB_URL: &str =
-            "postgres://postgres:postgres@localhost:54322/postgres";
+        const DEFAULT_TEST_DB_URL: &str = "postgres://postgres:postgres@localhost:54322/postgres";
         let db_url = preferred_test_db_url(DEFAULT_TEST_DB_URL);
         let pool = match PgPool::connect(&db_url).await {
             Ok(pool) => pool,
@@ -353,10 +333,8 @@ mod tests {
         let enc_key = Arc::new(*b"0123456789abcdef0123456789abcdef");
         let cache = MasterKeyCache::new(pool.clone(), enc_key.clone());
         let workspace_id = Uuid::new_v4();
-        let workspace_owner_id =
-            Uuid::parse_str("c94287af-2516-4df1-8a42-207ebd8b76d5").unwrap();
-        let provider_id =
-            Uuid::parse_str("d79f440f-61c2-49fc-a29d-4c9d6b208985").unwrap();
+        let workspace_owner_id = Uuid::parse_str("c94287af-2516-4df1-8a42-207ebd8b76d5").unwrap();
+        let provider_id = Uuid::parse_str("d79f440f-61c2-49fc-a29d-4c9d6b208985").unwrap();
 
         let primary_id = Uuid::new_v4();
         let fallback_id = Uuid::new_v4();
@@ -364,11 +342,9 @@ mod tests {
         let primary_bad_nonce = vec![9_u8; 11]; // invalid nonce len => decrypt error
 
         let fallback_plaintext = "sk-fallback-ok";
-        let (fallback_ciphertext, fallback_nonce) = master_key::encrypt(
-            fallback_plaintext.as_bytes(),
-            enc_key.as_ref(),
-        )
-        .expect("encrypt fallback key");
+        let (fallback_ciphertext, fallback_nonce) =
+            master_key::encrypt(fallback_plaintext.as_bytes(), enc_key.as_ref())
+                .expect("encrypt fallback key");
 
         let workspace_slug = format!("mk-cache-it-{}", Uuid::new_v4().simple());
         sqlx::query(
@@ -403,12 +379,7 @@ mod tests {
         .expect("insert test master keys");
 
         let resolved = cache
-            .get_primary_or_fallback(
-                primary_id,
-                workspace_id,
-                InferenceProvider::OpenAI,
-                true,
-            )
+            .get_primary_or_fallback(primary_id, workspace_id, InferenceProvider::OpenAI, true)
             .await
             .expect("fallback should resolve with other key");
 

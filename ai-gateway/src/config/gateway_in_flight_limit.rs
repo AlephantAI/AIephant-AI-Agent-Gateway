@@ -50,9 +50,7 @@ impl Default for GatewayInFlightLimitConfig {
     }
 }
 
-#[derive(
-    Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq, Hash,
-)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq, Hash)]
 #[serde(rename_all = "kebab-case")]
 pub enum GatewayInFlightBackend {
     #[default]

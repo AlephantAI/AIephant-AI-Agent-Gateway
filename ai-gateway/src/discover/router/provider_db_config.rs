@@ -16,9 +16,7 @@ use uuid::Uuid;
 
 use super::bare_model_expand_index::BareModelExpandIndex;
 use crate::{
-    config::providers::{
-        EmbeddedProviderMetadata, GlobalProviderConfig, ProvidersConfig,
-    },
+    config::providers::{EmbeddedProviderMetadata, GlobalProviderConfig, ProvidersConfig},
     store::router::{DbGatewayProvider, DbGatewayProviderModel},
     types::{model_id::ModelId, provider::InferenceProvider},
 };
@@ -46,14 +44,11 @@ pub fn build_from_db(
     // DB mode owns the model catalog; this fallback must not parse YAML models.
     let embedded_defaults = EmbeddedProviderMetadata::cached();
 
-    let mut entries: Vec<(InferenceProvider, GlobalProviderConfig)> =
-        Vec::new();
+    let mut entries: Vec<(InferenceProvider, GlobalProviderConfig)> = Vec::new();
     let mut bare_model_expand = BareModelExpandIndex::default();
 
     for db_provider in db_providers {
-        let Ok(provider) =
-            InferenceProvider::from_provider_code(&db_provider.code)
-        else {
+        let Ok(provider) = InferenceProvider::from_provider_code(&db_provider.code) else {
             warn!(
                 code = %db_provider.code,
                 "provider_db_config: unknown provider code, skipping"
@@ -201,8 +196,7 @@ mod tests {
             },
         ];
 
-        let (providers_config, bare_expand) =
-            build_from_db(&db_providers, &db_models);
+        let (providers_config, bare_expand) = build_from_db(&db_providers, &db_models);
 
         let openai_cfg = providers_config
             .get(&InferenceProvider::OpenAI)
@@ -298,9 +292,7 @@ mod tests {
         let db_providers = vec![DbGatewayProvider {
             id: provider_id,
             code: "db-only-provider-42".to_string(),
-            default_base_url: Some(
-                "https://api.db-only-provider-42.test/v1/".to_string(),
-            ),
+            default_base_url: Some("https://api.db-only-provider-42.test/v1/".to_string()),
             cn_base_url: None,
             updated_at: Utc::now(),
             is_router: false,
@@ -310,8 +302,7 @@ mod tests {
             model_id: "db-only-model-a".to_string(),
         }];
 
-        let (providers_config, bare_expand) =
-            build_from_db(&db_providers, &db_models);
+        let (providers_config, bare_expand) = build_from_db(&db_providers, &db_models);
 
         let provider = InferenceProvider::Named("db-only-provider-42".into());
         let cfg = providers_config
@@ -356,8 +347,7 @@ mod tests {
             model_id: "claude-sonnet-4-20250514".to_string(),
         }];
 
-        let (providers_config, bare_expand) =
-            build_from_db(&db_providers, &db_models);
+        let (providers_config, bare_expand) = build_from_db(&db_providers, &db_models);
 
         let cfg = providers_config
             .get(&InferenceProvider::Anthropic)
@@ -376,12 +366,8 @@ mod tests {
             .expect("valid model")]);
         assert_eq!(cfg.models, expected_models);
 
-        let bare =
-            bare_expand.gateway_models_for_bare_id("claude-sonnet-4-20250514");
-        assert_eq!(
-            bare,
-            vec!["anthropic/claude-sonnet-4-20250514".to_string()]
-        );
+        let bare = bare_expand.gateway_models_for_bare_id("claude-sonnet-4-20250514");
+        assert_eq!(bare, vec!["anthropic/claude-sonnet-4-20250514".to_string()]);
     }
 
     #[test]
@@ -406,8 +392,7 @@ mod tests {
             },
         ];
 
-        let (providers_config, bare_expand) =
-            build_from_db(&db_providers, &db_models);
+        let (providers_config, bare_expand) = build_from_db(&db_providers, &db_models);
 
         let bedrock_cfg = providers_config
             .get(&InferenceProvider::Bedrock)
@@ -452,8 +437,7 @@ mod tests {
             model_id: "glm-5".to_string(),
         }];
 
-        let (providers_config, _bare_expand) =
-            build_from_db(&db_providers, &db_models);
+        let (providers_config, _bare_expand) = build_from_db(&db_providers, &db_models);
 
         let z_ai = InferenceProvider::Named("z-ai".into());
         let cfg = providers_config.get(&z_ai).expect("z-ai providers config");
@@ -472,8 +456,7 @@ mod tests {
             is_router: false,
         }];
 
-        let (providers_config, _bare_expand) =
-            build_from_db(&db_providers, &[]);
+        let (providers_config, _bare_expand) = build_from_db(&db_providers, &[]);
 
         let embedded_defaults = EmbeddedProviderMetadata::cached();
         let expected_base_url = embedded_defaults
