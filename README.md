@@ -4,8 +4,11 @@
 </h1>
 
 <p align="center">
-  <strong>Open source, OpenAI-compatible AI Gateway for 50+ providers, 320+ models, and custom model backends.</strong><br />
-  Route traffic, adapt provider APIs, cache responses, enforce policy, and observe every request from one developer-friendly integration point.
+  <strong>Open-source Agent Gateway for AI agents and workflows.</strong><br />
+  Alephant provides an OpenAI-compatible gateway for 50+ providers, 320+ models, and custom model backends. It routes traffic, adapts provider APIs, caches responses, enforces policy, and observes every request from one developer-friendly integration point.
+  
+  Beyond standard AI Gateway routing, Alephant is built for agents: agent identity, runtime policies, budget guardrails, session tracing, token and API spend control, paid endpoints, and per-call margin visibility.
+
 </p>
 
 <p align="center">
@@ -51,11 +54,15 @@
   <a href="README.zh-CN.md">Simplified Chinese</a>
 </p>
 
-## What is Alephant AI Gateway
+## What is Alephant Agent Gateway
 
-Alephant AI Gateway is an OpenAI-compatible control layer for production AI applications, available as hosted SaaS or as a self-hosted gateway. It gives developers one stable API surface while the gateway handles provider-specific adaptation, model routing, policy enforcement, layered caching, retries, fallback, usage metadata, request logging, and audit trails.
+Alephant Agent Gateway is an open-source gateway for AI agents, coding agents, and LLM-powered workflows.
 
-Instead of wiring every application directly to every provider, teams connect once and route across 50+ providers, 320+ models, and custom model backends. Start with Alephant Cloud for a managed workspace, or self-host the gateway when you need private infrastructure, BYO keys, and direct operational control.
+It provides an OpenAI-compatible gateway for 50+ providers, 320+ models, and custom model backends. It routes traffic, adapts provider APIs, caches responses, enforces policy, and observes every request from one developer-friendly integration point.
+
+Unlike a standard AI Gateway, Alephant is designed around agents as first-class runtime actors. Each agent can have its own identity, virtual keys, model access, budget limits, runtime policies, sessions, request traces, and financial ledger.
+
+Alephant helps teams control token and API spend, prevent runaway agent behavior, and turn agents or workflows into paid endpoints with clear revenue, cost, and margin tracking.
 
 ```typescript
 import OpenAI from "openai"
@@ -71,34 +78,46 @@ const openai = new OpenAI({
 
 ## Project status
 
-Alephant AI Gateway is currently in beta (`0.2.0-beta.30`). Alephant Cloud is the hosted SaaS path, and this repository provides the gateway runtime for self-hosted and platform-connected deployments. Public APIs, configuration fields, and internal build modes may evolve before a stable `1.0` release.
+Alephant Agent Gateway is currently in beta (`0.2.0-beta.30`). Alephant Cloud is the hosted SaaS path, and this repository provides the gateway runtime for self-hosted and platform-connected deployments. Public APIs, configuration fields, and internal build modes may evolve before a stable `1.0` release.
 
 ---
 
 ## Why this exists
 
-AI applications are moving from single-model prototypes to production systems that call many providers, agents, tools, and custom model backends. Without a gateway, every team ends up rebuilding the same operational layer: provider adapters, routing rules, key management, usage metadata, retries, caching, and request logs.
+AI agents are not simple model calls.
 
-Alephant AI Gateway centralizes that layer behind one OpenAI-compatible API. It gives developers a stable integration surface while platform teams get policy before provider access, cache before repeated calls, fallback before outages, and audit trails before production incidents.
+They run multi-step sessions, call tools, retry failed steps, loop unexpectedly, use different models, trigger APIs, and sometimes expose capabilities as paid services. A standard AI Gateway can route requests and collect logs, but it usually does not understand the agent as the operating unit.
 
-The goal is simple: make AI traffic observable, governable, and reliable without slowing developers down. [Learn more ->](https://alephant.io/)
+Alephant exists to make agents governable.
+
+Every agent needs an identity, a budget, runtime policies, request traces, and a clear financial record. Teams should know which agent created the spend, which session caused the spike, which model or tool was used, and whether a paid agent call was profitable.
+
+Alephant provides the gateway layer for that agent lifecycle: route the model call, enforce policy, track cost, observe the session, control spend, and connect revenue back to the agent that generated it. [Learn more ->](https://alephant.io/)
 
 <a id="features"></a>
 
 ## Features
 
-| Capability | What Alephant AI Gateway provides |
+| Capability | What Alephant Agent Gateway provides |
 | --- | --- |
+| Agent-first gateway | A gateway designed for AI agents, coding agents, and LLM-powered workflows, not just single LLM requests |
 | One API surface | OpenAI-compatible `/v1/*` and `/ai/*` routes for chat, responses, embeddings, images, and provider-style model names |
-| Provider and model coverage | 50+ providers, 320+ models, local runtimes, OpenRouter-style catalogs, and custom/private backends |
+| Provider and model coverage | 50+ providers, 320+ models, local runtimes, OpenRouter-style catalogs, and custom/private model backends |
 | Provider adaptation | Request, tool, streaming, error, usage, finish-reason, and response normalization across provider APIs |
+| Agent client compatibility | OpenAI-compatible formats for Cursor, Codex, opencode, Antigravity, OpenClaw, Hermes, and custom agent clients |
+| IDE and coding-agent integration | Cursor, opencode, Codex, and agent workflow-ready with client adapters, workflow guides, implementation skills, and task management; Claude Code adapter in progress |
+| Agent identity | Attribute requests to workspace, project, agent, user/member, virtual key, session, prompt, model, and provider |
+| Runtime policies | Configure per-agent limits for model access, retries, tokens, session cost, timeouts, fallback behavior, and kill-switch controls |
+| Budget guardrails | Enforce hard-dollar spend policies across workspace, project, agent, member, session, model, provider, and endpoint dimensions |
+| Policy-aware routing | Route by agent identity, model policy, budget state, latency target, provider health, cost preference, and fallback strategy |
 | Routing and resilience | Direct provider paths, policy routers, retries, fallback, health checks, provider 429 handling, and fail-open cache paths |
-| Agent client compatibility | OpenAI-compatible formats for Cursor, Codex, opencode, and Antigravity workflows |
-| IDE integration | Cursor, opencode, and Codex-ready with agent client adaptation, workflow guides, implementation skills, and task management; Claude Code adapter in progress |
-| Policy and key control | Virtual keys, master key resolution, model policy, workspace provider allowlists, and concurrency controls |
-| Caching | Gateway-side LLM KV cache and semantic cache to avoid repeated upstream calls |
-| Observability | Request logs, traces, metrics, usage metadata, optional body archival, and downstream log delivery |
-| Live operations | Route, virtual key, and provider key refresh from database changes without restarting the gateway |
+| Policy and key control | Virtual keys, master key resolution, model policy, workspace provider allowlists, endpoint policies, and concurrency controls |
+| Caching | Gateway-side LLM KV cache and semantic cache to avoid repeated upstream calls and reduce token spend |
+| Agent observability | Request logs, session traces, model usage, latency, errors, token spend, policy decisions, and optional body archival |
+| Cost attribution | Track token cost by agent, workflow, user, session, request, prompt, model, provider, and virtual key |
+| Paid endpoints | Turn agents, workflows, and HTTP services into paid endpoints with payment verification, request forwarding, and revenue tracking |
+| Agent ledger | Connect buyer revenue, AI token cost, external API spend, fees, policy decisions, and known margin per paid call |
+| Live operations | Route, virtual key, provider key, policy, and endpoint refresh from database changes without restarting the gateway |
 | Deployment | Hosted SaaS through Alephant Cloud, or self-hosted Rust gateway with PostgreSQL, Redis, Qdrant, and S3-compatible integrations |
 
 ## Developer surface
@@ -336,30 +355,40 @@ Explore the Alephant workspace experience around the gateway: usage overview, re
 
 ## Comparison
 
-Portkey, Alephant, and LiteLLM are excellent projects, but they start from different centers of gravity. Alephant is built for teams shipping agentic AI products: a hosted SaaS workspace plus a self-hosted gateway path for agent development, cost control, provider routing, governance, and operational visibility.
+Portkey, Helicone, LiteLLM, and Alephant are all useful infrastructure projects, but they start from different centers of gravity.
+
+Portkey is gateway and enterprise guardrails-first. Helicone is observability-first. LiteLLM is provider proxy and SDK-first. Alephant is agent-first: it is built for teams running AI agents, coding agents, and LLM-powered workflows that need identity, runtime control, cost guardrails, paid endpoints, and per-call margin visibility.
 
 | Project | Best known for | Best fit |
 | --- | --- | --- |
-| Portkey | Enterprise AI gateway controls, guardrails, and managed policy workflows | Teams that want a managed AI control plane |
-| Helicone | LLM observability, request analytics, sessions, and cost visibility | Teams whose primary need is tracing and analytics |
-| LiteLLM | Broad Python proxy/SDK ecosystem for many providers | Teams that want maximum provider breadth through a Python stack |
-| Alephant AI Gateway | Agent development infrastructure, cost control, governance, provider routing, and SaaS + self-host deployment | Teams building production agents that need cost guardrails, request traceability, BYO keys, and multi-provider control |
+| Portkey | AI gateway, guardrails, observability, governance, prompt management, and enterprise control workflows | Teams that want a managed AI control plane for LLM traffic and policy enforcement |
+| Helicone | LLM observability, request analytics, sessions, traces, and cost visibility | Teams whose primary need is logging, analytics, debugging, and usage visibility |
+| LiteLLM | Broad OpenAI-compatible proxy, Python SDK, provider abstraction, virtual keys, and spend controls | Teams that want maximum provider coverage and a flexible proxy/SDK stack |
+| Alephant Agent Gateway | Agent identity, runtime policies, token/API spend control, paid endpoints, and agent margin ledger | Teams building production agents and workflows that need cost guardrails, request traceability, BYO keys, monetization, and per-call margin tracking |
 
-| Capability | Portkey | Alephant | LiteLLM | Alephant AI Gateway |
+| Capability | Portkey | Helicone | LiteLLM | Alephant Agent Gateway |
 | --- | --- | --- | --- | --- |
 | OpenAI-compatible API | Yes | Yes | Yes | Yes |
-| SaaS + self-host | Enterprise/self-host options | Hosted and self-host options | Self-hosted proxy | Yes: Alephant Cloud plus self-hosted Rust gateway |
-| Provider/model coverage | Broad | Broad logging/proxy coverage | Very broad | 50+ providers, 320+ models, custom backends |
-| Agent coding clients | No dedicated compatibility layer | No dedicated compatibility layer | No dedicated compatibility layer | Cursor, Codex, opencode, Antigravity workflows |
-| Agent cost control | Guardrails and policy controls | Cost analytics and request visibility | Budgets and spend controls | Agent/session-aware usage visibility, cache savings, budget controls, and governance workflows |
-| Provider adaptation | Gateway policies and routing | Proxy plus observability pipeline | Strong provider abstraction | Explicit mappers for requests, streaming, errors, usage, and responses |
-| Routing and resilience | Routing, retries, fallbacks | Gateway controls plus observability | Router, fallback, budgets | Direct paths, policy routers, fallback, health checks, provider 429 handling |
-| BYO key control | Key vault / enterprise controls | BYO keys with proxy controls | Virtual keys and self-hosted keys | BYO provider keys, master-key resolution, workspace allowlists |
-| Cache | Gateway caching | Cache tracking/integrations | Cache integrations | LLM KV cache plus semantic cache |
-| Observability | Logs and policy events | Core strength | Callback/logging integrations | Logs, traces, metrics, usage metadata, optional body archival |
-| Governance path | Strong enterprise guardrails | Workspace controls around observability | Teams, budgets, rate limits | Agent/session governance, model policy, provider allowlists, concurrency controls, and workspace-level controls |
+| SaaS + self-host path | Enterprise and self-host options | Hosted and self-host options | Self-hosted proxy, hosted options vary | Alephant Cloud plus self-hosted Rust gateway |
+| Provider/model coverage | Broad | Broad observability/proxy coverage | Very broad provider abstraction | 50+ providers, 320+ models, local runtimes, and custom backends |
+| Provider adaptation | Gateway configs, routing, retries, guardrails | Proxy and observability pipeline | Strong provider abstraction | Explicit normalization for requests, tools, streaming, errors, usage, finish reasons, and responses |
+| Routing and resilience | Routing, retries, fallbacks, load balancing, circuit breakers | Request forwarding and observability-focused workflows | Router, fallback, budgets, rate limits | Direct paths, policy routers, fallback, health checks, provider 429 handling, and fail-open cache paths |
+| Caching | Simple and semantic caching | Cache visibility/integrations | Cache integrations | LLM KV cache plus semantic cache |
+| Observability | Logs, policy events, traces, metrics | Core strength: request logs, sessions, analytics, costs | Callback/logging integrations | Requests, sessions, traces, metrics, usage metadata, cost, policy decisions, and optional body archival |
+| Key and access control | Key vault, configs, access controls | Proxy keys and request controls | Virtual keys, teams, budgets, self-hosted keys | Virtual keys, BYO provider keys, master-key resolution, workspace allowlists, model policy, and endpoint policy |
+| Budget and spend controls | Budget limits and gateway guardrails | Cost visibility and analytics | Budgets and spend controls | Agent/session-aware budget guardrails across workspace, project, agent, member, model, provider, and endpoint |
+| Agent identity | Supports agent framework integrations | Can trace sessions and users | Can be used by agent clients | First-class agent registry: workspace, project, agent, user, session, prompt, model, provider, and virtual key attribution |
+| Runtime agent policies | General gateway policy and guardrails | Primarily observability-driven | Budgets, keys, routing, rate limits | Per-agent model access, token limits, retries, session budgets, fallback behavior, timeout controls, and kill-switch rules |
+| Agent client compatibility | General SDK/proxy compatibility | General SDK/proxy compatibility | General OpenAI-compatible compatibility | Cursor, Codex, opencode, Antigravity, OpenClaw, Hermes, LangChain, LlamaIndex, and custom OpenAI-compatible agents |
+| Agent workflow support | Can support agent traffic through gateway patterns | Strong tracing for agent/session workflows | Works well as a proxy for agent frameworks | Built for agents, coding agents, n8n workflows, Activepieces, Zapier, Pipedream, Make, and custom workflow endpoints |
+| Paid endpoints | Not the primary product center | Not the primary product center | Not the primary product center | Turn agents, workflows, and HTTP services into paid endpoints |
+| Agent ledger and margin | Not the primary product center | Cost visibility, not revenue/cost margin ledger | Spend tracking, not paid-agent margin ledger | Tracks buyer revenue, AI token cost, external API spend, fees, policy decisions, and known margin per paid call |
 
-Alephant's differentiator is the combination: hosted SaaS, self-hosted Rust gateway, agent-first developer compatibility, cost-control workflows, BYO-key governance, explicit provider adaptation, and workspace-level AI FinOps.
+Alephant's differentiator is not only provider routing. It is the combination of an OpenAI-compatible gateway, agent identity, runtime control, budget guardrails, BYO-key governance, paid endpoints, and an agent ledger that connects revenue, token cost, external API spend, and known margin.
+
+```text
+Standard AI gateways route model calls.
+Alephant governs agents at runtime and tracks the margin of every paid call.
 
 ## Repository structure
 
