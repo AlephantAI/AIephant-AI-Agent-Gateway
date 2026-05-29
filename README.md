@@ -1,6 +1,6 @@
 <h1 align="center">
   <img src="docs/images/readme/alephant-logo.png" alt="Alephant logo" width="42" />
-  Alephant AI Gateway
+  Alephant Agent Gateway
 </h1>
 
 <p align="center">
