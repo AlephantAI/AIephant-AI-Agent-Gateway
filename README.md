@@ -34,7 +34,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/images/readme/ai-gateway-cover.png" alt="Alephant AI Gateway cover" width="900" />
+  <img src="docs/images/readme/ai-gateway-cover.png" alt="Alephant Agent Gateway cover" width="900" />
 </p>
 
 <p align="center">
