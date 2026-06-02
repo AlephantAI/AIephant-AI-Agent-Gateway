@@ -12,14 +12,9 @@ pub use embedding_identity::{
     EmbeddingIdentity, collection_name_for_embedding, parse_embedding_identity,
 };
 pub use header_policy::SemanticPolicy;
-pub use key_builder::{
-    BuiltKey, build_cache_key, extract_embed_text_from_body,
-};
-pub use qdrant_store::{
-    QdrantEnsureCollection, QdrantStore, SemanticVectorHit,
-};
+pub use key_builder::{BuiltKey, build_cache_key, extract_embed_text_from_body};
+pub use qdrant_store::{QdrantEnsureCollection, QdrantStore, SemanticVectorHit};
 pub use service::{
-    PreparedSemanticRequest, SemanticCacheService, SemanticHit,
-    SemanticLookupOutcome, SemanticLookupRequest, SemanticWriteContext,
-    SemanticWriteRequest,
+    PreparedSemanticRequest, SemanticCacheService, SemanticHit, SemanticLookupOutcome,
+    SemanticLookupRequest, SemanticWriteContext, SemanticWriteRequest,
 };

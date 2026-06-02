@@ -4,8 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::types::secret::Secret;
 
-const DEFAULT_DATABASE_URL: &str =
-    "postgres://postgres:postgres@localhost:54322/postgres";
+const DEFAULT_DATABASE_URL: &str = "postgres://postgres:postgres@localhost:54322/postgres";
 
 #[derive(Debug, Clone, Deserialize, Serialize, Eq, PartialEq, Hash)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]

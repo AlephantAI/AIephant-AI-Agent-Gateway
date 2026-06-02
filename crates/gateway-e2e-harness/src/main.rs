@@ -119,31 +119,23 @@ struct E2eReportDocument {
 fn parse_kv_list(vars: &[String]) -> anyhow::Result<Vec<(String, String)>> {
     let mut out = Vec::new();
     for s in vars {
-        let (k, v) = s.split_once('=').ok_or_else(|| {
-            anyhow::anyhow!("--var must be KEY=VAL, got {s:?}")
-        })?;
+        let (k, v) = s
+            .split_once('=')
+            .ok_or_else(|| anyhow::anyhow!("--var must be KEY=VAL, got {s:?}"))?;
         out.push((k.to_string(), v.to_string()));
     }
     Ok(out)
 }
 
-fn missing_required_env(
-    required_env: &[String],
-    vars: &HashMap<String, String>,
-) -> Vec<String> {
+fn missing_required_env(required_env: &[String], vars: &HashMap<String, String>) -> Vec<String> {
     required_env
         .iter()
-        .filter(|key| {
-            vars.get(*key).is_none_or(|value| value.trim().is_empty())
-        })
+        .filter(|key| vars.get(*key).is_none_or(|value| value.trim().is_empty()))
         .cloned()
         .collect()
 }
 
-fn skipped_required_env_entry(
-    case: &CaseFile,
-    missing_env: Vec<String>,
-) -> E2eReportEntry {
+fn skipped_required_env_entry(case: &CaseFile, missing_env: Vec<String>) -> E2eReportEntry {
     E2eReportEntry {
         case_id: case.case_id.clone(),
         request_id: None,
@@ -183,9 +175,8 @@ async fn main() -> anyhow::Result<()> {
 async fn run() -> anyhow::Result<()> {
     let cli = Cli::parse();
     if cli.dotenv_path.exists() {
-        dotenvy::from_path(&cli.dotenv_path).with_context(|| {
-            format!("load dotenv {}", cli.dotenv_path.display())
-        })?;
+        dotenvy::from_path(&cli.dotenv_path)
+            .with_context(|| format!("load dotenv {}", cli.dotenv_path.display()))?;
     }
     let extra = parse_kv_list(&cli.vars)?;
     let mut vars: HashMap<String, String> = std::env::vars().collect();
@@ -195,9 +186,10 @@ async fn run() -> anyhow::Result<()> {
 
     let ch_client = ChClient::from_env()?;
 
-    let run_id = cli.run_id.clone().unwrap_or_else(|| {
-        format!("{}-e2e", Utc::now().format("%Y%m%dT%H%M%SZ"))
-    });
+    let run_id = cli
+        .run_id
+        .clone()
+        .unwrap_or_else(|| format!("{}-e2e", Utc::now().format("%Y%m%dT%H%M%SZ")));
     // Default for `$HARNESS_E2E_RUN_TOKEN` in case curl templates (e.g. KV-004)
     // so multi-step cache assertions start from a cold key per run unless
     // pinned via env or `--var`.
@@ -239,12 +231,7 @@ async fn run() -> anyhow::Result<()> {
             run_one_case(&case, &vars, ch_client.as_ref(), ch_lookup).await;
         if !passed {
             any_failed = true;
-            eprint_failure_bodies(
-                &case.case_id,
-                &record,
-                &vars,
-                print_failure_headers,
-            );
+            eprint_failure_bodies(&case.case_id, &record, &vars, print_failure_headers);
         }
         let entry = E2eReportEntry {
             case_id: case.case_id.clone(),
@@ -285,9 +272,8 @@ async fn run() -> anyhow::Result<()> {
     .with_context(|| format!("write {}", report_path.display()))?;
     fs::write(
         &failures_path,
-        serde_json::to_string_pretty(&doc_failed).with_context(|| {
-            format!("serialize {}", failures_path.display())
-        })?,
+        serde_json::to_string_pretty(&doc_failed)
+            .with_context(|| format!("serialize {}", failures_path.display()))?,
     )
     .with_context(|| format!("write {}", failures_path.display()))?;
 
@@ -386,9 +372,7 @@ async fn run_one_case(
     let ch_json = if let Some(ref chspec) = case.ch {
         if failure.is_none() {
             match run_ch_spec(ch_client, chspec, Some(&captured)).await {
-                Ok(out) => {
-                    Some(serde_json::json!({ "rowsSample": out.last_rows }))
-                }
+                Ok(out) => Some(serde_json::json!({ "rowsSample": out.last_rows })),
                 Err(e) => {
                     failure = Some(format!("{e:#}"));
                     None
@@ -568,10 +552,7 @@ mod tests {
     #[test]
     fn skipped_required_env_entry_has_expected_report_shape() {
         let case = sample_case();
-        let entry = skipped_required_env_entry(
-            &case,
-            vec!["OPENAI_API_KEY".to_string()],
-        );
+        let entry = skipped_required_env_entry(&case, vec!["OPENAI_API_KEY".to_string()]);
 
         assert_eq!(entry.case_id, "env1");
         assert!(entry.passed);

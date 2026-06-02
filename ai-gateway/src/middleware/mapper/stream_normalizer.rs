@@ -1,17 +1,14 @@
 use async_openai::types::{
-    ChatChoiceStream, ChatCompletionMessageToolCallChunk,
-    ChatCompletionStreamResponseDelta, ChatCompletionToolType, CompletionUsage,
-    CreateChatCompletionStreamResponse, FinishReason, FunctionCallStream, Role,
+    ChatChoiceStream, ChatCompletionMessageToolCallChunk, ChatCompletionStreamResponseDelta,
+    ChatCompletionToolType, CompletionUsage, CreateChatCompletionStreamResponse, FinishReason,
+    FunctionCallStream, Role,
 };
 
 pub const OPENAI_CHAT_COMPLETION_CHUNK_OBJECT: &str = "chat.completion.chunk";
 const DEFAULT_CREATED_TIMESTAMP: u32 = 0;
 
 #[must_use]
-pub fn build_stream_usage(
-    prompt_tokens: u32,
-    completion_tokens: u32,
-) -> CompletionUsage {
+pub fn build_stream_usage(prompt_tokens: u32, completion_tokens: u32) -> CompletionUsage {
     CompletionUsage {
         prompt_tokens,
         completion_tokens,
@@ -39,10 +36,7 @@ fn build_delta(
 }
 
 #[must_use]
-pub fn build_reasoning_choice(
-    index: u32,
-    reasoning_content: String,
-) -> ChatChoiceStream {
+pub fn build_reasoning_choice(index: u32, reasoning_content: String) -> ChatChoiceStream {
     ChatChoiceStream {
         index,
         delta: ChatCompletionStreamResponseDelta {
@@ -137,15 +131,12 @@ pub fn build_stream_response(
 
 #[cfg(test)]
 mod tests {
-    use async_openai::types::{
-        ChatCompletionStreamResponseDelta, FinishReason, Role,
-    };
+    use async_openai::types::{ChatCompletionStreamResponseDelta, FinishReason, Role};
 
     use super::{
-        OPENAI_CHAT_COMPLETION_CHUNK_OBJECT, build_finish_choice,
-        build_reasoning_choice, build_role_choice, build_stream_response,
-        build_stream_usage, build_text_choice, build_tool_call_chunk,
-        build_tool_choice,
+        OPENAI_CHAT_COMPLETION_CHUNK_OBJECT, build_finish_choice, build_reasoning_choice,
+        build_role_choice, build_stream_response, build_stream_usage, build_text_choice,
+        build_tool_call_chunk, build_tool_choice,
     };
 
     #[test]
@@ -168,8 +159,7 @@ mod tests {
         );
         let choice = build_tool_choice(0, tool_call);
 
-        let delta_tool_call =
-            &choice.delta.tool_calls.as_ref().expect("tool calls")[0];
+        let delta_tool_call = &choice.delta.tool_calls.as_ref().expect("tool calls")[0];
         assert_eq!(choice.index, 0);
         assert_eq!(delta_tool_call.index, 3);
         assert_eq!(delta_tool_call.id.as_deref(), Some("call_1"));
@@ -231,8 +221,7 @@ mod tests {
 
     #[test]
     fn build_reasoning_choice_sets_reasoning_content() {
-        let choice =
-            build_reasoning_choice(0, "thinking step by step...".to_string());
+        let choice = build_reasoning_choice(0, "thinking step by step...".to_string());
 
         assert_eq!(choice.index, 0);
         assert_eq!(choice.delta.content, None);
@@ -256,8 +245,7 @@ mod tests {
         };
         let json = serde_json::to_string(&delta).unwrap();
         assert!(json.contains("reasoning_content"));
-        let parsed: ChatCompletionStreamResponseDelta =
-            serde_json::from_str(&json).unwrap();
+        let parsed: ChatCompletionStreamResponseDelta = serde_json::from_str(&json).unwrap();
         assert_eq!(
             parsed.reasoning_content,
             Some("thinking step by step...".to_string())

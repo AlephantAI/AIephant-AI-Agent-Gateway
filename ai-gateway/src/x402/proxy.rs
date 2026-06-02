@@ -127,9 +127,7 @@ pub fn filtered_upstream_headers(
     filtered
 }
 
-fn allowed_header_names(
-    policy: &[X402TargetHeaderPolicyItem],
-) -> HashSet<HeaderName> {
+fn allowed_header_names(policy: &[X402TargetHeaderPolicyItem]) -> HashSet<HeaderName> {
     policy
         .iter()
         .filter_map(|item| HeaderName::from_bytes(item.name.as_bytes()).ok())
@@ -142,9 +140,7 @@ fn connection_header_tokens(inbound: &HeaderMap) -> HashSet<HeaderName> {
         .iter()
         .filter_map(|value| value.to_str().ok())
         .flat_map(|value| value.split(','))
-        .filter_map(|token| {
-            HeaderName::from_bytes(token.trim().as_bytes()).ok()
-        })
+        .filter_map(|token| HeaderName::from_bytes(token.trim().as_bytes()).ok())
         .collect()
 }
 
@@ -166,9 +162,7 @@ fn should_strip_header(
         return true;
     }
 
-    if is_hop_by_hop_or_framing_header(name_str)
-        || connection_tokens.contains(name)
-    {
+    if is_hop_by_hop_or_framing_header(name_str) || connection_tokens.contains(name) {
         return true;
     }
 
@@ -244,28 +238,18 @@ mod tests {
     use uuid::Uuid;
 
     use super::{
-        PAYMENT_SERVICE_KEY_HEADER, PAYMENT_SIGNATURE_HEADER,
-        build_upstream_url, filtered_upstream_headers, hash_body,
-        method_for_upstream,
+        PAYMENT_SERVICE_KEY_HEADER, PAYMENT_SIGNATURE_HEADER, build_upstream_url,
+        filtered_upstream_headers, hash_body, method_for_upstream,
     };
     use crate::x402::types::{
         X402EndpointSnapshot, X402OriginAuthSnapshot, X402PolicySnapshot,
         X402TargetHeaderPolicyItem, X402TargetSnapshot,
     };
 
-    fn test_snapshot(
-        method: &str,
-        forward_method: &str,
-    ) -> X402EndpointSnapshot {
+    fn test_snapshot(method: &str, forward_method: &str) -> X402EndpointSnapshot {
         X402EndpointSnapshot {
-            endpoint_id: Uuid::parse_str(
-                "11111111-1111-1111-1111-111111111111",
-            )
-            .unwrap(),
-            workspace_id: Uuid::parse_str(
-                "22222222-2222-2222-2222-222222222222",
-            )
-            .unwrap(),
+            endpoint_id: Uuid::parse_str("11111111-1111-1111-1111-111111111111").unwrap(),
+            workspace_id: Uuid::parse_str("22222222-2222-2222-2222-222222222222").unwrap(),
             agent_id: None,
             status: "active".to_string(),
             name: "Weather API".to_string(),
@@ -292,10 +276,7 @@ mod tests {
                 active_secret_version: 1,
             },
             policy: X402PolicySnapshot {
-                policy_id: Uuid::parse_str(
-                    "33333333-3333-3333-3333-333333333333",
-                )
-                .unwrap(),
+                policy_id: Uuid::parse_str("33333333-3333-3333-3333-333333333333").unwrap(),
                 buyer_access: "public".to_string(),
                 rate_limit_rpm: 60,
                 max_request_size: 1024,
@@ -340,13 +321,8 @@ mod tests {
 
     #[test]
     fn upstream_url_avoids_duplicate_slashes() {
-        let url = build_upstream_url(
-            "https://target.test///",
-            "/test-agent/",
-            "foo/bar",
-            None,
-        )
-        .unwrap();
+        let url =
+            build_upstream_url("https://target.test///", "/test-agent/", "foo/bar", None).unwrap();
 
         assert_eq!(url.as_str(), "https://target.test/test-agent/foo/bar");
     }
@@ -354,22 +330,10 @@ mod tests {
     #[test]
     fn upstream_url_rejects_remaining_path_dot_segments() {
         assert!(
-            build_upstream_url(
-                "https://target.test",
-                "test-agent",
-                "../admin",
-                None,
-            )
-            .is_err()
+            build_upstream_url("https://target.test", "test-agent", "../admin", None,).is_err()
         );
         assert!(
-            build_upstream_url(
-                "https://target.test",
-                "test-agent",
-                "%2e%2e/admin",
-                None,
-            )
-            .is_err()
+            build_upstream_url("https://target.test", "test-agent", "%2e%2e/admin", None,).is_err()
         );
     }
 
@@ -385,13 +349,8 @@ mod tests {
             .is_err()
         );
         assert!(
-            build_upstream_url(
-                "https://target.test/base#frag",
-                "test-agent",
-                "foo",
-                None,
-            )
-            .is_err()
+            build_upstream_url("https://target.test/base#frag", "test-agent", "foo", None,)
+                .is_err()
         );
     }
 
@@ -402,8 +361,7 @@ mod tests {
         inbound.insert("x-drop", HeaderValue::from_static("drop"));
         inbound.insert("authorization", HeaderValue::from_static("bearer"));
 
-        let filtered =
-            filtered_upstream_headers(&inbound, &header_policy(&["x-keep"]));
+        let filtered = filtered_upstream_headers(&inbound, &header_policy(&["x-keep"]));
 
         assert_eq!(filtered.get("x-keep").unwrap(), "keep");
         assert!(!filtered.contains_key("x-drop"));
@@ -418,10 +376,7 @@ mod tests {
         inbound.insert("x-request-context", HeaderValue::from_static("ctx"));
         inbound.insert("x-drop", HeaderValue::from_static("drop"));
 
-        let filtered = filtered_upstream_headers(
-            &inbound,
-            &header_policy(&["X-REQUEST-CONTEXT"]),
-        );
+        let filtered = filtered_upstream_headers(&inbound, &header_policy(&["X-REQUEST-CONTEXT"]));
 
         assert_eq!(filtered.get("x-request-context").unwrap(), "ctx");
         assert!(!filtered.contains_key("x-drop"));
@@ -454,8 +409,7 @@ mod tests {
         );
         inbound.insert("x-secret", HeaderValue::from_static("strip"));
         inbound.insert("x-keep", HeaderValue::from_static("keep"));
-        inbound
-            .insert(PAYMENT_SIGNATURE_HEADER, HeaderValue::from_static("sig"));
+        inbound.insert(PAYMENT_SIGNATURE_HEADER, HeaderValue::from_static("sig"));
         inbound.insert(
             PAYMENT_SERVICE_KEY_HEADER,
             HeaderValue::from_static("service-key"),

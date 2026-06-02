@@ -83,9 +83,7 @@ async fn openai_slow() {
         let request = Request::builder()
             .method(Method::POST)
             // default router
-            .uri(
-                "http://router.alephant.test/router/my-router/chat/completions",
-            )
+            .uri("http://router.alephant.test/router/my-router/chat/completions")
             .body(request_body)
             .unwrap();
         let response = harness.call(request).await.unwrap();
@@ -136,9 +134,7 @@ async fn anthropic_slow() {
         let request = Request::builder()
             .method(Method::POST)
             // default router
-            .uri(
-                "http://router.alephant.test/router/my-router/chat/completions",
-            )
+            .uri("http://router.alephant.test/router/my-router/chat/completions")
             .body(request_body)
             .unwrap();
         let response = harness.call(request).await.unwrap();

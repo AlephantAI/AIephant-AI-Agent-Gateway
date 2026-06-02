@@ -34,17 +34,12 @@ impl Client {
 
         let mut default_headers = HeaderMap::new();
         if let Some(ProviderKey::Secret(key)) = provider_key {
-            insert_upstream_auth_header(
-                &mut default_headers,
-                key,
-                upstream_auth,
-            );
+            insert_upstream_auth_header(&mut default_headers, key, upstream_auth);
         }
         default_headers.insert(http::header::HOST, host_header(&base_url));
         default_headers.insert(
             http::header::CONTENT_TYPE,
-            HeaderValue::from_str(mime::APPLICATION_JSON.essence_str())
-                .unwrap(),
+            HeaderValue::from_str(mime::APPLICATION_JSON.essence_str()).unwrap(),
         );
         let inner = client_builder
             .default_headers(default_headers)
@@ -64,8 +59,7 @@ impl Client {
         match style {
             UpstreamAuthStyle::Bearer => request_builder.header(
                 http::header::AUTHORIZATION,
-                HeaderValue::from_str(&format!("Bearer {}", key.expose()))
-                    .unwrap(),
+                HeaderValue::from_str(&format!("Bearer {}", key.expose())).unwrap(),
             ),
             UpstreamAuthStyle::ApiKey => request_builder.header(
                 HeaderName::from_static("api-key"),
@@ -84,8 +78,7 @@ fn insert_upstream_auth_header(
         UpstreamAuthStyle::Bearer => {
             headers.insert(
                 http::header::AUTHORIZATION,
-                HeaderValue::from_str(&format!("Bearer {}", key.expose()))
-                    .unwrap(),
+                HeaderValue::from_str(&format!("Bearer {}", key.expose())).unwrap(),
             );
         }
         UpstreamAuthStyle::ApiKey => {
@@ -107,9 +100,7 @@ mod tests {
         app::build_test_app,
         config::{
             Config,
-            providers::{
-                GlobalProviderConfig, ProvidersConfig, UpstreamAuthStyle,
-            },
+            providers::{GlobalProviderConfig, ProvidersConfig, UpstreamAuthStyle},
         },
         types::{model_id::ModelId, provider::InferenceProvider},
     };

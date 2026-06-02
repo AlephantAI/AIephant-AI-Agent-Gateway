@@ -7,8 +7,7 @@ use async_trait::async_trait;
 
 use super::{HttpLogTransport, LogTransport};
 use crate::{
-    app_redis::AppRedis, error::logger::LoggerError, metrics::Metrics,
-    types::logger::LogMessage,
+    app_redis::AppRedis, error::logger::LoggerError, metrics::Metrics, types::logger::LogMessage,
 };
 
 /// Write request logs to Redis Stream (`XADD`, single `payload` field); cold
@@ -42,11 +41,7 @@ impl RedisStreamLogTransport {
         }
     }
 
-    fn warn_degrade_once(
-        &self,
-        reason: &'static str,
-        detail: impl std::fmt::Display,
-    ) {
+    fn warn_degrade_once(&self, reason: &'static str, detail: impl std::fmt::Display) {
         if self
             .warned_degrade
             .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
@@ -60,10 +55,7 @@ impl RedisStreamLogTransport {
         }
     }
 
-    async fn send_degraded_http(
-        &self,
-        log_message: &LogMessage,
-    ) -> Result<(), LoggerError> {
+    async fn send_degraded_http(&self, log_message: &LogMessage) -> Result<(), LoggerError> {
         self.metrics.ingest_log_sends.add(
             1,
             &[opentelemetry::KeyValue::new(

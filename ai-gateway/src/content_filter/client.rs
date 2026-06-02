@@ -3,10 +3,7 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 use tonic::transport::Channel;
 
-use crate::{
-    error::init::InitError,
-    policy_proto::policy_service_client::PolicyServiceClient,
-};
+use crate::{error::init::InitError, policy_proto::policy_service_client::PolicyServiceClient};
 
 #[derive(Clone, Debug)]
 pub struct ContentFilterGrpcClient {
@@ -74,9 +71,7 @@ impl ContentFilterClientHolder {
         self.inner.read().await.clone()
     }
 
-    pub(crate) fn reconnect_lock(
-        &self,
-    ) -> Arc<RwLock<Option<Arc<ContentFilterGrpcClient>>>> {
+    pub(crate) fn reconnect_lock(&self) -> Arc<RwLock<Option<Arc<ContentFilterGrpcClient>>>> {
         self.inner.clone()
     }
 }

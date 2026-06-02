@@ -6,9 +6,8 @@ pub mod responses;
 
 use super::EndpointType;
 pub use crate::endpoints::openai::{
-    chat_completions::ChatCompletions, completions::Completions,
-    embeddings::Embeddings, image_generations::ImageGenerations,
-    responses::Responses,
+    chat_completions::ChatCompletions, completions::Completions, embeddings::Embeddings,
+    image_generations::ImageGenerations, responses::Responses,
 };
 use crate::{
     endpoints::{Endpoint, EndpointRoute},
@@ -64,9 +63,9 @@ impl OpenAI {
     #[must_use]
     pub fn endpoint_type(&self) -> EndpointType {
         match self {
-            Self::ChatCompletions(_)
-            | Self::Completions(_)
-            | Self::Responses(_) => EndpointType::Chat,
+            Self::ChatCompletions(_) | Self::Completions(_) | Self::Responses(_) => {
+                EndpointType::Chat
+            }
             Self::Embeddings(_) => EndpointType::Embeddings,
             Self::ImageGenerations(_) => EndpointType::Image,
         }
@@ -78,21 +77,14 @@ impl TryFrom<&EndpointRoute> for OpenAI {
 
     fn try_from(endpoint: &EndpointRoute) -> Result<Self, Self::Error> {
         match endpoint {
-            EndpointRoute::ChatCompletions => {
-                Ok(Self::ChatCompletions(ChatCompletions))
-            }
+            EndpointRoute::ChatCompletions => Ok(Self::ChatCompletions(ChatCompletions)),
             EndpointRoute::Completions => Ok(Self::Completions(Completions)),
             EndpointRoute::Embeddings => Ok(Self::Embeddings(Embeddings)),
-            EndpointRoute::ImageGenerations => {
-                Ok(Self::ImageGenerations(ImageGenerations))
-            }
+            EndpointRoute::ImageGenerations => Ok(Self::ImageGenerations(ImageGenerations)),
             EndpointRoute::Responses => Ok(Self::Responses(Responses)),
-            EndpointRoute::Messages => {
-                Err(InvalidRequestError::UnsupportedEndpoint(
-                    "messages is resolved via Anthropic, not OpenAI"
-                        .to_string(),
-                ))
-            }
+            EndpointRoute::Messages => Err(InvalidRequestError::UnsupportedEndpoint(
+                "messages is resolved via Anthropic, not OpenAI".to_string(),
+            )),
         }
     }
 }
@@ -104,14 +96,11 @@ impl Endpoint for OpenAICompatibleChatCompletions {
     const PATH: &'static str = "v1/chat/completions";
     type RequestBody = OpenAICompatibleChatCompletionRequest;
     type ResponseBody = async_openai::types::CreateChatCompletionResponse;
-    type StreamResponseBody =
-        async_openai::types::CreateChatCompletionStreamResponse;
+    type StreamResponseBody = async_openai::types::CreateChatCompletionStreamResponse;
     type ErrorResponseBody = async_openai::error::WrappedError;
 }
 
-#[derive(
-    Clone, serde::Serialize, Default, Debug, serde::Deserialize, PartialEq,
-)]
+#[derive(Clone, serde::Serialize, Default, Debug, serde::Deserialize, PartialEq)]
 pub struct OpenAICompatibleChatCompletionRequest {
     #[serde(skip)]
     pub(crate) provider: crate::types::provider::InferenceProvider,
@@ -124,12 +113,7 @@ impl super::AiRequest for OpenAICompatibleChatCompletionRequest {
         self.inner.stream.unwrap_or(false)
     }
 
-    fn model(
-        &self,
-    ) -> Result<
-        crate::types::model_id::ModelId,
-        crate::error::mapper::MapperError,
-    > {
+    fn model(&self) -> Result<crate::types::model_id::ModelId, crate::error::mapper::MapperError> {
         crate::types::model_id::ModelId::from_str_and_provider(
             self.provider.clone(),
             &self.inner.model,

@@ -26,9 +26,7 @@ fn trimmed_string(value: &Value) -> Option<String> {
         .map(str::to_string)
 }
 
-fn completion_budget_from_object(
-    object: &serde_json::Map<String, Value>,
-) -> Option<u32> {
+fn completion_budget_from_object(object: &serde_json::Map<String, Value>) -> Option<u32> {
     ["max_completion_tokens", "max_tokens", "max_output_tokens"]
         .into_iter()
         .find_map(|key| {

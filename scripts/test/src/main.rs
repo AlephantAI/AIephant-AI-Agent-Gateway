@@ -41,11 +41,7 @@ enum Commands {
         request_type: RequestType,
 
         /// Model identifier to use
-        #[arg(
-            short = 'm',
-            long = "model",
-            default_value = "openai/gpt-4o-mini"
-        )]
+        #[arg(short = 'm', long = "model", default_value = "openai/gpt-4o-mini")]
         model: String,
     },
 
@@ -65,18 +61,12 @@ enum Commands {
         request_type: RequestType,
 
         /// Model identifier to use
-        #[arg(
-            short = 'm',
-            long = "model",
-            default_value = "openai/gpt-4o-mini"
-        )]
+        #[arg(short = 'm', long = "model", default_value = "openai/gpt-4o-mini")]
         model: String,
     },
 }
 
-#[derive(
-    Default, Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, clap::ValueEnum,
-)]
+#[derive(Default, Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, clap::ValueEnum)]
 #[clap(rename_all = "kebab-case")]
 enum RequestType {
     Direct,
@@ -143,9 +133,7 @@ async fn test(
             };
             format!("http://localhost:8080/{}/v1/chat/completions", provider)
         }
-        RequestType::UnifiedApi => {
-            "http://localhost:8080/ai/chat/completions".to_string()
-        }
+        RequestType::UnifiedApi => "http://localhost:8080/ai/chat/completions".to_string(),
     };
 
     let mut request_builder = reqwest::Client::new()
@@ -154,8 +142,8 @@ async fn test(
 
     if send_auth {
         let legacy = concat!("HELI", "CONE_CONTROL_PLANE_API_KEY");
-        if let Ok(api_key) = std::env::var("ALEPHANT_CONTROL_PLANE_API_KEY")
-            .or_else(|_| std::env::var(legacy))
+        if let Ok(api_key) =
+            std::env::var("ALEPHANT_CONTROL_PLANE_API_KEY").or_else(|_| std::env::var(legacy))
         {
             request_builder = request_builder.header("authorization", api_key);
         } else {
@@ -193,11 +181,8 @@ async fn test(
                         }
 
                         // Try to parse the JSON
-                        if let Ok(json) =
-                            serde_json::from_str::<serde_json::Value>(json_str)
-                        {
-                            let pretty_json =
-                                serde_json::to_string_pretty(&json).unwrap();
+                        if let Ok(json) = serde_json::from_str::<serde_json::Value>(json_str) {
+                            let pretty_json = serde_json::to_string_pretty(&json).unwrap();
                             println!("Chunk: {}", pretty_json);
                         } else {
                             println!("Failed to parse JSON: {}", json_str);
@@ -206,8 +191,7 @@ async fn test(
                 }
             }
         } else {
-            let response_bytes =
-                response.json::<serde_json::Value>().await.unwrap();
+            let response_bytes = response.json::<serde_json::Value>().await.unwrap();
             println!("Response: {}", response_bytes);
         }
     }

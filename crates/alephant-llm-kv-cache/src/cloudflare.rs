@@ -3,9 +3,7 @@ use reqwest::Client;
 
 use crate::{
     backend::LlmKvBackend,
-    put_retry::{
-        PutClassifiedError, put_with_backoff, put_with_backoff_classified,
-    },
+    put_retry::{PutClassifiedError, put_with_backoff, put_with_backoff_classified},
 };
 
 const MAX_KV_VALUE_BYTES: usize = 25 * 1024 * 1024;
@@ -44,10 +42,7 @@ impl CloudflareKvClient {
         )
     }
 
-    pub async fn get_key_classified(
-        &self,
-        key: &str,
-    ) -> Result<Option<String>, CfKvErrorKind> {
+    pub async fn get_key_classified(&self, key: &str) -> Result<Option<String>, CfKvErrorKind> {
         let url = self.values_url(key);
         let res = self
             .http
@@ -64,11 +59,10 @@ impl CloudflareKvClient {
             return Ok(None);
         }
         if status.is_success() {
-            let body =
-                res.text().await.map_err(|e| CfKvErrorKind::Transient {
-                    status: Some(status.as_u16()),
-                    message: e.to_string(),
-                })?;
+            let body = res.text().await.map_err(|e| CfKvErrorKind::Transient {
+                status: Some(status.as_u16()),
+                message: e.to_string(),
+            })?;
             return Ok(Some(body));
         }
         let code = status.as_u16();
@@ -96,8 +90,7 @@ impl CloudflareKvClient {
         key: &str,
     ) -> Result<Option<String>, crate::error::LlmKvCacheError> {
         self.get_key_classified(key).await.map_err(|e| match e {
-            CfKvErrorKind::Transient { message, .. }
-            | CfKvErrorKind::Terminal { message, .. } => {
+            CfKvErrorKind::Transient { message, .. } | CfKvErrorKind::Terminal { message, .. } => {
                 crate::error::LlmKvCacheError::Http(message)
             }
         })
@@ -139,14 +132,7 @@ impl CloudflareKvClient {
         }
         let ttl = cf_clamp_ttl(expiration_ttl_secs);
         let url = self.values_url(key);
-        put_with_backoff_classified(
-            &self.http,
-            &url,
-            &self.api_token,
-            body,
-            ttl,
-        )
-        .await
+        put_with_backoff_classified(&self.http, &url, &self.api_token, body, ttl).await
     }
 }
 
@@ -164,10 +150,7 @@ fn cf_clamp_ttl(expiration_ttl_secs: u64) -> u64 {
 
 #[async_trait]
 impl LlmKvBackend for CloudflareKvClient {
-    async fn get(
-        &self,
-        key: &str,
-    ) -> Result<Option<String>, crate::error::LlmKvCacheError> {
+    async fn get(&self, key: &str) -> Result<Option<String>, crate::error::LlmKvCacheError> {
         self.get_raw(key).await
     }
 

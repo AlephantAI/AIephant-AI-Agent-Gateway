@@ -4,8 +4,7 @@ use tokio::sync::RwLock;
 use tonic::transport::Channel;
 
 use crate::{
-    error::init::InitError,
-    payment_proto::x402_payment_service_client::X402PaymentServiceClient,
+    error::init::InitError, payment_proto::x402_payment_service_client::X402PaymentServiceClient,
 };
 
 #[derive(Clone, Debug)]

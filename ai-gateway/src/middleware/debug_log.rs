@@ -49,10 +49,7 @@ where
     type Error = ApiError;
     type Future = BoxFuture<Result<Self::Response, Self::Error>>;
 
-    fn poll_ready(
-        &mut self,
-        cx: &mut Context<'_>,
-    ) -> Poll<Result<(), Self::Error>> {
+    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         self.inner.poll_ready(cx).map_err(Into::into)
     }
 
@@ -74,9 +71,7 @@ where
     }
 }
 
-async fn prepare_request_for_debug_logging(
-    req: Request,
-) -> Result<Request, ApiError> {
+async fn prepare_request_for_debug_logging(req: Request) -> Result<Request, ApiError> {
     let (mut parts, body) = req.into_parts();
     let debug_log_config = DebugLogConfig::from_headers(&mut parts.headers);
     parts.extensions.insert(debug_log_config);
@@ -143,9 +138,7 @@ async fn log_response_for_debug(
     Ok(Response::from_parts(parts, Body::from(body)))
 }
 
-pub(crate) fn should_collect_response_body_for_debug(
-    headers: &http::HeaderMap,
-) -> bool {
+pub(crate) fn should_collect_response_body_for_debug(headers: &http::HeaderMap) -> bool {
     let Some(content_type) = headers
         .get(CONTENT_TYPE)
         .and_then(|value| value.to_str().ok())
@@ -165,10 +158,7 @@ mod tests {
     use http_body_util::BodyExt as _;
     use tower::{Service, ServiceBuilder, service_fn};
 
-    use crate::{
-        error::api::ApiError, types::body::Body,
-        utils::debug_log::DebugLogConfig,
-    };
+    use crate::{error::api::ApiError, types::body::Body, utils::debug_log::DebugLogConfig};
 
     #[tokio::test]
     async fn debug_layer_removes_control_headers_and_replays_request_body() {
@@ -183,9 +173,7 @@ mod tests {
                             body: true,
                         })
                     );
-                    assert!(
-                        !req.headers().contains_key("alephant-debug-headers")
-                    );
+                    assert!(!req.headers().contains_key("alephant-debug-headers"));
                     assert!(!req.headers().contains_key("alephant-debug-body"));
 
                     let body = req

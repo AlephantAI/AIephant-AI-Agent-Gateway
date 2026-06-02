@@ -13,19 +13,14 @@ use futures::{SinkExt, StreamExt};
 
 use crate::AppState;
 
-pub(crate) async fn log_request(
-    State(state): State<AppState>,
-) -> impl IntoResponse {
+pub(crate) async fn log_request(State(state): State<AppState>) -> impl IntoResponse {
     if state.jawn_latency > 0 {
-        tokio::time::sleep(Duration::from_millis(state.jawn_latency.into()))
-            .await;
+        tokio::time::sleep(Duration::from_millis(state.jawn_latency.into())).await;
     }
     StatusCode::OK
 }
 
-pub(crate) async fn sign_s3_url(
-    State(state): State<AppState>,
-) -> impl IntoResponse {
+pub(crate) async fn sign_s3_url(State(state): State<AppState>) -> impl IntoResponse {
     if state.jawn_latency > 0 {
         crate::routes::sleep(state.jawn_latency).await;
     }
@@ -43,9 +38,7 @@ pub(crate) async fn sign_s3_url(
     Json(response)
 }
 
-pub(crate) async fn websocket_handler(
-    ws: WebSocketUpgrade,
-) -> impl IntoResponse {
+pub(crate) async fn websocket_handler(ws: WebSocketUpgrade) -> impl IntoResponse {
     ws.on_upgrade(|socket| websocket(socket))
 }
 

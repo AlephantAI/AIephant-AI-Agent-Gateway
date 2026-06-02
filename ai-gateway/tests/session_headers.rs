@@ -2,9 +2,8 @@ use ai_gateway::{
     error::invalid_req::InvalidRequestError,
     session_headers::{
         ALEPHANT_SESSION_ID_PROPERTY, ALEPHANT_SESSION_NAME_PROPERTY,
-        ALEPHANT_SESSION_PATH_PROPERTY, SessionHeaders,
-        inject_session_properties, parse_session_headers,
-        remove_session_headers,
+        ALEPHANT_SESSION_PATH_PROPERTY, SessionHeaders, inject_session_properties,
+        parse_session_headers, remove_session_headers,
     },
 };
 use http::{HeaderMap, HeaderValue};
@@ -94,8 +93,7 @@ fn parse_rejects_non_utf8_header_values() {
 #[test]
 fn remove_session_headers_removes_all_session_header_aliases() {
     let mut headers = HeaderMap::new();
-    headers
-        .insert("alephant-session-id", HeaderValue::from_static("session-1"));
+    headers.insert("alephant-session-id", HeaderValue::from_static("session-1"));
     headers.insert(
         "alephant-session-name",
         HeaderValue::from_static("session-name"),

@@ -82,13 +82,8 @@ impl BodyReader {
         });
         let client_response = axum_core::body::Body::from_stream(s);
         let size_hint = client_response.size_hint();
-        let response_body_for_logger = BodyReader::new(
-            rx,
-            tfft_tx,
-            size_hint,
-            append_newlines,
-            tfft_trigger,
-        );
+        let response_body_for_logger =
+            BodyReader::new(rx, tfft_tx, size_hint, append_newlines, tfft_trigger);
         (client_response, response_body_for_logger, tfft_rx)
     }
 }
@@ -108,9 +103,7 @@ impl hyper::body::Body for BodyReader {
                     TfftTrigger::FirstChunk => self.tfft_tx.is_some(),
                     TfftTrigger::FirstModelToken => {
                         self.tfft_tx.is_some()
-                            && crate::logger::first_token::chunk_has_first_model_token(
-                                &bytes,
-                            )
+                            && crate::logger::first_token::chunk_has_first_model_token(&bytes)
                     }
                 };
                 if should_signal

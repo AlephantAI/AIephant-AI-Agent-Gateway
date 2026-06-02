@@ -6,17 +6,15 @@ use std::collections::HashMap;
 
 use async_openai::types::{
     ChatCompletionNamedToolChoice, ChatCompletionRequestAssistantMessage,
-    ChatCompletionRequestDeveloperMessage,
-    ChatCompletionRequestDeveloperMessageContent, ChatCompletionRequestMessage,
-    ChatCompletionRequestSystemMessage,
-    ChatCompletionRequestSystemMessageContent,
-    ChatCompletionRequestUserMessage, ChatCompletionRequestUserMessageContent,
-    ChatCompletionTool, ChatCompletionToolChoiceOption, ChatCompletionToolType,
-    CreateChatCompletionRequest, CreateChatCompletionResponse,
+    ChatCompletionRequestDeveloperMessage, ChatCompletionRequestDeveloperMessageContent,
+    ChatCompletionRequestMessage, ChatCompletionRequestSystemMessage,
+    ChatCompletionRequestSystemMessageContent, ChatCompletionRequestUserMessage,
+    ChatCompletionRequestUserMessageContent, ChatCompletionTool, ChatCompletionToolChoiceOption,
+    ChatCompletionToolType, CreateChatCompletionRequest, CreateChatCompletionResponse,
     CreateChatCompletionStreamResponse, FinishReason, FunctionObject,
     responses::{
-        ContentType, CreateResponse, Input, InputContent, InputItem,
-        InputMessage, Role as RespRole, ToolChoice, ToolDefinition,
+        ContentType, CreateResponse, Input, InputContent, InputItem, InputMessage,
+        Role as RespRole, ToolChoice, ToolDefinition,
     },
 };
 use bytes::{BufMut, Bytes, BytesMut};
@@ -29,9 +27,8 @@ use uuid::Uuid;
 use crate::{
     endpoints::{ApiEndpoint, openai::OpenAI},
     error::{
-        api::ApiError, internal::InternalError,
-        invalid_req::InvalidRequestError, mapper::MapperError,
-        stream::StreamError,
+        api::ApiError, internal::InternalError, invalid_req::InvalidRequestError,
+        mapper::MapperError, stream::StreamError,
     },
     ide_adapation::responses_ingress_normalize,
     types::{extensions::MapperContext, model_id::ModelId, response::Response},
@@ -43,10 +40,7 @@ fn put_sse_data_record(buf: &mut BytesMut, payload: &[u8]) {
     buf.put_slice(b"\n\n");
 }
 
-fn put_sse_data_json<T: Serialize>(
-    buf: &mut BytesMut,
-    val: &T,
-) -> Result<(), ApiError> {
+fn put_sse_data_json<T: Serialize>(buf: &mut BytesMut, val: &T) -> Result<(), ApiError> {
     let json = serde_json::to_vec(val).map_err(|error| {
         ApiError::Internal(InternalError::Serialize {
             ty: std::any::type_name::<T>(),
@@ -57,17 +51,14 @@ fn put_sse_data_json<T: Serialize>(
     Ok(())
 }
 
-fn text_from_input_content(
-    content: &InputContent,
-) -> Result<String, MapperError> {
+fn text_from_input_content(content: &InputContent) -> Result<String, MapperError> {
     match content {
         InputContent::TextInput(s) => Ok(s.clone()),
         InputContent::InputItemContentList(parts) => {
             let mut acc = String::new();
             for p in parts {
                 if let ContentType::InputText(it) = p {
-                    let v = serde_json::to_value(it)
-                        .map_err(MapperError::SerdeError)?;
+                    let v = serde_json::to_value(it).map_err(MapperError::SerdeError)?;
                     if let Some(s) = v.get("text").and_then(|x| x.as_str()) {
                         acc.push_str(s);
                     }
@@ -78,23 +69,17 @@ fn text_from_input_content(
     }
 }
 
-fn input_message_to_chat(
-    m: &InputMessage,
-) -> Result<ChatCompletionRequestMessage, MapperError> {
+fn input_message_to_chat(m: &InputMessage) -> Result<ChatCompletionRequestMessage, MapperError> {
     let text = text_from_input_content(&m.content)?;
     Ok(match m.role {
-        RespRole::User => ChatCompletionRequestMessage::User(
-            ChatCompletionRequestUserMessage {
-                content: ChatCompletionRequestUserMessageContent::Text(text),
-                name: None,
-            },
-        ),
-        RespRole::Assistant => ChatCompletionRequestMessage::Assistant(
-            ChatCompletionRequestAssistantMessage {
+        RespRole::User => ChatCompletionRequestMessage::User(ChatCompletionRequestUserMessage {
+            content: ChatCompletionRequestUserMessageContent::Text(text),
+            name: None,
+        }),
+        RespRole::Assistant => {
+            ChatCompletionRequestMessage::Assistant(ChatCompletionRequestAssistantMessage {
                 content: Some(
-                    async_openai::types::ChatCompletionRequestAssistantMessageContent::Text(
-                        text,
-                    ),
+                    async_openai::types::ChatCompletionRequestAssistantMessageContent::Text(text),
                 ),
                 refusal: None,
                 name: None,
@@ -102,20 +87,20 @@ fn input_message_to_chat(
                 tool_calls: None,
                 #[allow(deprecated)]
                 function_call: None,
-            },
-        ),
-        RespRole::System => ChatCompletionRequestMessage::System(
-            ChatCompletionRequestSystemMessage {
+            })
+        }
+        RespRole::System => {
+            ChatCompletionRequestMessage::System(ChatCompletionRequestSystemMessage {
                 content: ChatCompletionRequestSystemMessageContent::Text(text),
                 name: None,
-            },
-        ),
-        RespRole::Developer => ChatCompletionRequestMessage::Developer(
-            ChatCompletionRequestDeveloperMessage {
+            })
+        }
+        RespRole::Developer => {
+            ChatCompletionRequestMessage::Developer(ChatCompletionRequestDeveloperMessage {
                 content: ChatCompletionRequestDeveloperMessageContent::Text(text),
                 name: None,
-            },
-        ),
+            })
+        }
     })
 }
 
@@ -125,8 +110,8 @@ fn input_item_to_chat_message(
     match item {
         InputItem::Message(m) => Ok(Some(input_message_to_chat(m)?)),
         InputItem::Custom(v) => {
-            let m: InputMessage = serde_json::from_value(v.clone())
-                .map_err(MapperError::SerdeError)?;
+            let m: InputMessage =
+                serde_json::from_value(v.clone()).map_err(MapperError::SerdeError)?;
             Ok(Some(input_message_to_chat(&m)?))
         }
     }
@@ -140,9 +125,7 @@ fn input_to_messages(
     if let Some(inst) = instructions.map(str::trim).filter(|s| !s.is_empty()) {
         out.push(ChatCompletionRequestMessage::System(
             ChatCompletionRequestSystemMessage {
-                content: ChatCompletionRequestSystemMessageContent::Text(
-                    inst.to_string(),
-                ),
+                content: ChatCompletionRequestSystemMessageContent::Text(inst.to_string()),
                 name: None,
             },
         ));
@@ -152,9 +135,7 @@ fn input_to_messages(
             if !s.trim().is_empty() {
                 out.push(ChatCompletionRequestMessage::User(
                     ChatCompletionRequestUserMessage {
-                        content: ChatCompletionRequestUserMessageContent::Text(
-                            s.clone(),
-                        ),
+                        content: ChatCompletionRequestUserMessageContent::Text(s.clone()),
                         name: None,
                     },
                 ));
@@ -204,16 +185,12 @@ fn map_tool_choice(tc: &ToolChoice) -> Option<ChatCompletionToolChoiceOption> {
                 ChatCompletionToolChoiceOption::Required
             }
         }),
-        ToolChoice::Function { name } => {
-            Some(ChatCompletionToolChoiceOption::Named(
-                ChatCompletionNamedToolChoice {
-                    r#type: ChatCompletionToolType::Function,
-                    function: async_openai::types::FunctionName {
-                        name: name.clone(),
-                    },
-                },
-            ))
-        }
+        ToolChoice::Function { name } => Some(ChatCompletionToolChoiceOption::Named(
+            ChatCompletionNamedToolChoice {
+                r#type: ChatCompletionToolType::Function,
+                function: async_openai::types::FunctionName { name: name.clone() },
+            },
+        )),
         ToolChoice::Hosted { .. } => None,
     }
 }
@@ -240,16 +217,16 @@ pub(crate) fn create_response_to_chat_request(
         async_openai::types::responses::TextResponseFormat::JsonObject => {
             async_openai::types::ResponseFormat::JsonObject
         }
-        async_openai::types::responses::TextResponseFormat::JsonSchema(
-            ref js,
-        ) => async_openai::types::ResponseFormat::JsonSchema {
-            json_schema: async_openai::types::ResponseFormatJsonSchema {
-                description: js.description.clone(),
-                name: js.name.clone(),
-                schema: js.schema.clone(),
-                strict: js.strict,
-            },
-        },
+        async_openai::types::responses::TextResponseFormat::JsonSchema(ref js) => {
+            async_openai::types::ResponseFormat::JsonSchema {
+                json_schema: async_openai::types::ResponseFormatJsonSchema {
+                    description: js.description.clone(),
+                    name: js.name.clone(),
+                    schema: js.schema.clone(),
+                    strict: js.strict,
+                },
+            }
+        }
     });
     let reasoning_effort = r.reasoning.as_ref().and_then(|x| x.effort.clone());
     Ok(CreateChatCompletionRequest {
@@ -336,10 +313,7 @@ fn delta_reasoning_text(raw: &Value) -> Option<String> {
     None
 }
 
-fn nonstream_choice_reasoning_text(
-    raw: &Value,
-    index: usize,
-) -> Option<String> {
+fn nonstream_choice_reasoning_text(raw: &Value, index: usize) -> Option<String> {
     let message = raw
         .get("choices")
         .and_then(|c| c.as_array())
@@ -434,10 +408,7 @@ impl CursorChatToResponsesStreamState {
         Ok(buf)
     }
 
-    fn ensure_message_streaming_shell(
-        &mut self,
-        buf: &mut BytesMut,
-    ) -> Result<(), ApiError> {
+    fn ensure_message_streaming_shell(&mut self, buf: &mut BytesMut) -> Result<(), ApiError> {
         if self.message_streaming_shell {
             return Ok(());
         }
@@ -473,10 +444,7 @@ impl CursorChatToResponsesStreamState {
         Ok(())
     }
 
-    fn ensure_reasoning_streaming_shell(
-        &mut self,
-        buf: &mut BytesMut,
-    ) -> Result<(), ApiError> {
+    fn ensure_reasoning_streaming_shell(&mut self, buf: &mut BytesMut) -> Result<(), ApiError> {
         if self.reasoning_streaming_shell {
             return Ok(());
         }
@@ -527,21 +495,20 @@ impl CursorChatToResponsesStreamState {
             }
             if let Some(tc) = &d.tool_calls {
                 for t in tc {
-                    let tr = self.tools.entry(t.index).or_insert_with(|| {
-                        ToolStreamTrack {
-                            item_id: format!(
-                                "item_{}",
-                                Uuid::new_v4().simple()
-                            ),
-                            call_id: t.id.clone().unwrap_or_else(|| {
-                                format!("call_{}", Uuid::new_v4().simple())
-                            }),
+                    let tr = self
+                        .tools
+                        .entry(t.index)
+                        .or_insert_with(|| ToolStreamTrack {
+                            item_id: format!("item_{}", Uuid::new_v4().simple()),
+                            call_id: t
+                                .id
+                                .clone()
+                                .unwrap_or_else(|| format!("call_{}", Uuid::new_v4().simple())),
                             name: String::new(),
                             arguments: String::new(),
                             added: false,
                             done: false,
-                        }
-                    });
+                        });
                     if let Some(id) = &t.id {
                         tr.call_id.clone_from(id);
                     }
@@ -550,9 +517,7 @@ impl CursorChatToResponsesStreamState {
                             tr.name.clone_from(n);
                         }
                     }
-                    if !tr.added
-                        && (!tr.name.is_empty() || t.function.is_some())
-                    {
+                    if !tr.added && (!tr.name.is_empty() || t.function.is_some()) {
                         let name = tr.name.clone();
                         if !name.is_empty() {
                             put_sse_data_json(
@@ -628,10 +593,7 @@ impl CursorChatToResponsesStreamState {
         Ok(buf.freeze())
     }
 
-    fn emit_tool_done_events(
-        &mut self,
-        buf: &mut BytesMut,
-    ) -> Result<(), ApiError> {
+    fn emit_tool_done_events(&mut self, buf: &mut BytesMut) -> Result<(), ApiError> {
         if !self.emit_tool_done_events {
             return Ok(());
         }
@@ -668,10 +630,7 @@ impl CursorChatToResponsesStreamState {
         Ok(())
     }
 
-    pub(crate) fn finalize_stream(
-        &mut self,
-        _origin: &CreateResponse,
-    ) -> Result<Bytes, ApiError> {
+    pub(crate) fn finalize_stream(&mut self, _origin: &CreateResponse) -> Result<Bytes, ApiError> {
         let mut buf = BytesMut::new();
         let rid = self
             .resp_id
@@ -760,9 +719,7 @@ pub(crate) async fn map_stream_response_chat_to_responses(
 ) -> Result<Response, ApiError> {
     use std::sync::{Arc, Mutex};
     let state = Arc::new(Mutex::new(
-        CursorChatToResponsesStreamState::with_tool_done_events(
-            emit_tool_done_events,
-        ),
+        CursorChatToResponsesStreamState::with_tool_done_events(emit_tool_done_events),
     ));
     let origin = Arc::new(origin);
     let st_main = Arc::clone(&state);
@@ -776,17 +733,15 @@ pub(crate) async fn map_stream_response_chat_to_responses(
             if payload.is_empty() || payload == b"[DONE]" {
                 return Ok(None);
             }
-            let chunk: CreateChatCompletionStreamResponse =
-                serde_json::from_slice(payload).map_err(|e| {
+            let chunk: CreateChatCompletionStreamResponse = serde_json::from_slice(payload)
+                .map_err(|e| {
                     ApiError::Internal(InternalError::Deserialize {
                         ty: "CreateChatCompletionStreamResponse",
                         error: e,
                     })
                 })?;
             let raw: Value = serde_json::to_value(&chunk).map_err(|e| {
-                ApiError::Internal(InternalError::MapperError(
-                    MapperError::SerdeError(e),
-                ))
+                ApiError::Internal(InternalError::MapperError(MapperError::SerdeError(e)))
             })?;
             let mut guard = st.lock().expect("cursor bridge mutex poisoned");
             let out = guard.process_upstream_chat_chunk(&chunk, &raw)?;
@@ -804,8 +759,7 @@ pub(crate) async fn map_stream_response_chat_to_responses(
         Ok::<Bytes, ApiError>(fin)
     });
     let merged = mapped.chain(tail);
-    let final_body =
-        axum_core::body::Body::new(reqwest::Body::wrap_stream(merged));
+    let final_body = axum_core::body::Body::new(reqwest::Body::wrap_stream(merged));
     Ok(Response::from_parts(parts, final_body))
 }
 
@@ -850,9 +804,7 @@ pub(crate) async fn map_json_response_chat_to_responses(
                 }]
             }));
         }
-        if let Some(text) =
-            ch.message.content.as_ref().filter(|s| !s.is_empty())
-        {
+        if let Some(text) = ch.message.content.as_ref().filter(|s| !s.is_empty()) {
             output.push(json!({
                 "id": format!("msg_{}", Uuid::new_v4().simple()),
                 "type": "message",
@@ -958,15 +910,14 @@ pub(crate) fn try_map_responses_to_compatible_chat(
     if !matches!(profile, P::CursorIde | P::CodexCli) {
         return Ok(None);
     }
-    let should_bridge =
-        matches!(source_endpoint, ApiEndpoint::OpenAI(OpenAI::Responses(_)))
-            && matches!(
-                target_endpoint,
-                ApiEndpoint::OpenAICompatible {
-                    openai_endpoint: OpenAI::Responses(_),
-                    ..
-                }
-            );
+    let should_bridge = matches!(source_endpoint, ApiEndpoint::OpenAI(OpenAI::Responses(_)))
+        && matches!(
+            target_endpoint,
+            ApiEndpoint::OpenAICompatible {
+                openai_endpoint: OpenAI::Responses(_),
+                ..
+            }
+        );
     if !should_bridge {
         return Ok(None);
     }
@@ -978,14 +929,12 @@ pub(crate) fn try_map_responses_to_compatible_chat(
         provider: provider.clone(),
         openai_endpoint: OpenAI::chat_completions(),
     };
-    let mut body_json: Value = serde_json::from_slice(body.as_ref())
-        .map_err(InvalidRequestError::InvalidRequestBody)?;
-    responses_ingress_normalize::rewrite_responses_input_items_for_create_response(
-        &mut body_json,
-    )
-    .map_err(|e| ApiError::Internal(InternalError::MapperError(e)))?;
-    let cr: CreateResponse = serde_json::from_value(body_json)
-        .map_err(InvalidRequestError::InvalidRequestBody)?;
+    let mut body_json: Value =
+        serde_json::from_slice(body.as_ref()).map_err(InvalidRequestError::InvalidRequestBody)?;
+    responses_ingress_normalize::rewrite_responses_input_items_for_create_response(&mut body_json)
+        .map_err(|e| ApiError::Internal(InternalError::MapperError(e)))?;
+    let cr: CreateResponse =
+        serde_json::from_value(body_json).map_err(InvalidRequestError::InvalidRequestBody)?;
     let origin = cr.clone();
     let chat_req = create_response_to_chat_request(cr)
         .map_err(|e| ApiError::Internal(InternalError::MapperError(e)))?;
@@ -996,18 +945,14 @@ pub(crate) fn try_map_responses_to_compatible_chat(
         ModelId::from_str_and_provider(provider.clone(), &chat_req.model)
             .map_err(InternalError::MapperError)?
     };
-    let chat_bytes =
-        Bytes::from(serde_json::to_vec(&chat_req).map_err(|error| {
-            ApiError::Internal(InternalError::Serialize {
-                ty: std::any::type_name::<CreateChatCompletionRequest>(),
-                error,
-            })
-        })?);
+    let chat_bytes = Bytes::from(serde_json::to_vec(&chat_req).map_err(|error| {
+        ApiError::Internal(InternalError::Serialize {
+            ty: std::any::type_name::<CreateChatCompletionRequest>(),
+            error,
+        })
+    })?);
     let converter = converter_registry
-        .get_converter(
-            &ApiEndpoint::OpenAI(OpenAI::chat_completions()),
-            &upstream,
-        )
+        .get_converter(&ApiEndpoint::OpenAI(OpenAI::chat_completions()), &upstream)
         .ok_or_else(|| {
             ApiError::Internal(InternalError::InvalidConverter(
                 ApiEndpoint::OpenAI(OpenAI::chat_completions()),
@@ -1039,9 +984,7 @@ mod bridge_mapping_tests {
         config::Config,
         endpoints::{ApiEndpoint, openai::OpenAI},
         ide_adapation::client_profile::ClientProfile,
-        middleware::mapper::{
-            model::ModelMapper, registry::EndpointConverterRegistry,
-        },
+        middleware::mapper::{model::ModelMapper, registry::EndpointConverterRegistry},
         types::{model_id::ModelId, provider::InferenceProvider},
     };
 
@@ -1081,8 +1024,7 @@ mod bridge_mapping_tests {
     }
 
     #[tokio::test]
-    async fn cursor_responses_bridge_preserves_unknown_model_when_unified_body_passthrough()
-     {
+    async fn cursor_responses_bridge_preserves_unknown_model_when_unified_body_passthrough() {
         let registry = registry().await;
         let (source, target) = endpoints();
 
@@ -1149,8 +1091,7 @@ mod bridge_mapping_tests {
     }
 
     #[tokio::test]
-    async fn cursor_responses_bridge_without_unified_body_passthrough_keeps_catalog_mapping()
-     {
+    async fn cursor_responses_bridge_without_unified_body_passthrough_keeps_catalog_mapping() {
         let registry = registry().await;
         let (source, target) = endpoints();
 
@@ -1172,7 +1113,7 @@ mod bridge_mapping_tests {
 
     #[tokio::test]
     async fn unknown_profile_does_not_trigger_responses_bridge_even_with_unified_body_passthrough()
-     {
+    {
         let registry = registry().await;
         let (source, target) = endpoints();
 
@@ -1191,7 +1132,7 @@ mod bridge_mapping_tests {
 
     #[tokio::test]
     async fn openclaw_profile_does_not_trigger_responses_bridge_even_with_unified_body_passthrough()
-     {
+    {
         let registry = registry().await;
         let (source, target) = endpoints();
 
@@ -1212,16 +1153,13 @@ mod bridge_mapping_tests {
 #[cfg(test)]
 mod stream_bridge_tests {
     use async_openai::types::{
-        ChatChoiceStream, ChatCompletionMessageToolCallChunk,
-        ChatCompletionStreamResponseDelta, CreateChatCompletionStreamResponse,
-        FinishReason, FunctionCallStream, Role,
+        ChatChoiceStream, ChatCompletionMessageToolCallChunk, ChatCompletionStreamResponseDelta,
+        CreateChatCompletionStreamResponse, FinishReason, FunctionCallStream, Role,
     };
     use http_body_util::BodyExt;
     use serde_json::json;
 
-    use super::{
-        CursorChatToResponsesStreamState, map_json_response_chat_to_responses,
-    };
+    use super::{CursorChatToResponsesStreamState, map_json_response_chat_to_responses};
 
     #[test]
     fn text_delta_emits_output_item_and_content_part_before_delta() {
@@ -1264,8 +1202,7 @@ mod stream_bridge_tests {
 
     #[test]
     fn reasoning_delta_uses_stable_reasoning_item_id() {
-        let mut state =
-            CursorChatToResponsesStreamState::with_tool_done_events(true);
+        let mut state = CursorChatToResponsesStreamState::with_tool_done_events(true);
         let reasoning_id = state.reasoning_item_id.clone();
         let chunk = CreateChatCompletionStreamResponse {
             id: "chatcmpl-r".to_string(),
@@ -1303,8 +1240,7 @@ mod stream_bridge_tests {
 
     #[test]
     fn tool_call_finish_emits_responses_done_events() {
-        let mut state =
-            CursorChatToResponsesStreamState::with_tool_done_events(true);
+        let mut state = CursorChatToResponsesStreamState::with_tool_done_events(true);
         let tool_chunk = CreateChatCompletionStreamResponse {
             id: "chatcmpl-tool".to_string(),
             choices: vec![ChatChoiceStream {
@@ -1315,9 +1251,7 @@ mod stream_bridge_tests {
                     tool_calls: Some(vec![ChatCompletionMessageToolCallChunk {
                         index: 0,
                         id: Some("call_read".to_string()),
-                        r#type: Some(
-                            async_openai::types::ChatCompletionToolType::Function,
-                        ),
+                        r#type: Some(async_openai::types::ChatCompletionToolType::Function),
                         function: Some(FunctionCallStream {
                             name: Some("read_file".to_string()),
                             arguments: Some("{\"path\":\"Cargo.toml\"}".to_string()),
@@ -1397,9 +1331,7 @@ mod stream_bridge_tests {
                     tool_calls: Some(vec![ChatCompletionMessageToolCallChunk {
                         index: 0,
                         id: Some("call_read".to_string()),
-                        r#type: Some(
-                            async_openai::types::ChatCompletionToolType::Function,
-                        ),
+                        r#type: Some(async_openai::types::ChatCompletionToolType::Function),
                         function: Some(FunctionCallStream {
                             name: Some("read_file".to_string()),
                             arguments: Some("{\"path\":\"Cargo.toml\"}".to_string()),
@@ -1476,9 +1408,7 @@ mod stream_bridge_tests {
             .0;
         let origin = async_openai::types::responses::CreateResponse {
             model: "openrouter/qwen".to_string(),
-            input: async_openai::types::responses::Input::Text(
-                "hi".to_string(),
-            ),
+            input: async_openai::types::responses::Input::Text("hi".to_string()),
             background: None,
             include: None,
             instructions: Some("be precise".to_string()),
@@ -1534,18 +1464,16 @@ mod stream_bridge_tests {
             .to_string(),
         );
 
-        let response =
-            map_json_response_chat_to_responses(parts, body, &origin)
-                .await
-                .expect("response maps");
+        let response = map_json_response_chat_to_responses(parts, body, &origin)
+            .await
+            .expect("response maps");
         let bytes = response
             .into_body()
             .collect()
             .await
             .expect("body collects")
             .to_bytes();
-        let mapped: serde_json::Value =
-            serde_json::from_slice(&bytes).expect("valid json");
+        let mapped: serde_json::Value = serde_json::from_slice(&bytes).expect("valid json");
 
         assert_eq!(mapped["output"][0]["type"], "reasoning");
         assert_eq!(mapped["output"][0]["status"], "completed");
@@ -1574,9 +1502,7 @@ mod stream_bridge_tests {
             .0;
         let origin = async_openai::types::responses::CreateResponse {
             model: "openrouter/qwen".to_string(),
-            input: async_openai::types::responses::Input::Text(
-                "hi".to_string(),
-            ),
+            input: async_openai::types::responses::Input::Text("hi".to_string()),
             background: None,
             include: None,
             instructions: None,
@@ -1628,18 +1554,16 @@ mod stream_bridge_tests {
             .to_string(),
         );
 
-        let response =
-            map_json_response_chat_to_responses(parts, body, &origin)
-                .await
-                .expect("response maps");
+        let response = map_json_response_chat_to_responses(parts, body, &origin)
+            .await
+            .expect("response maps");
         let bytes = response
             .into_body()
             .collect()
             .await
             .expect("body collects")
             .to_bytes();
-        let mapped: serde_json::Value =
-            serde_json::from_slice(&bytes).expect("valid json");
+        let mapped: serde_json::Value = serde_json::from_slice(&bytes).expect("valid json");
 
         assert_eq!(mapped["output"].as_array().expect("output").len(), 1);
         assert_eq!(mapped["output"][0]["type"], "message");

@@ -11,27 +11,20 @@ use ai_gateway::{
     app::App,
     config::Config,
     payment_proto::{
-        GetPaymentRequirementsRequest, GetPaymentRequirementsResponse,
-        RecordServiceResultRequest, RecordServiceResultResponse,
-        SettlePaymentRequest, SettlePaymentResponse,
-        VerifyAndSettlePaymentRequest, VerifyAndSettlePaymentResponse,
-        VerifyPaymentRequest, VerifyPaymentResponse,
-        x402_payment_service_server::{
-            X402PaymentService, X402PaymentServiceServer,
-        },
+        GetPaymentRequirementsRequest, GetPaymentRequirementsResponse, RecordServiceResultRequest,
+        RecordServiceResultResponse, SettlePaymentRequest, SettlePaymentResponse,
+        VerifyAndSettlePaymentRequest, VerifyAndSettlePaymentResponse, VerifyPaymentRequest,
+        VerifyPaymentResponse,
+        x402_payment_service_server::{X402PaymentService, X402PaymentServiceServer},
     },
     policy_proto::{
-        AgentPolicyScope, EvaluateRequest, EvaluateResponse,
-        ValidateAgentPolicyRequest, ValidateAgentPolicyResponse,
-        X402InboundDetail, X402InboundEvaluateRequest,
+        AgentPolicyScope, EvaluateRequest, EvaluateResponse, ValidateAgentPolicyRequest,
+        ValidateAgentPolicyResponse, X402InboundDetail, X402InboundEvaluateRequest,
         X402InboundEvaluateResponse,
         policy_service_server::{PolicyService, PolicyServiceServer},
     },
     types::secret::Secret,
-    x402::{
-        forward_signature::endpoint_secret_redis_key,
-        snapshot::endpoint_snapshot_redis_key,
-    },
+    x402::{forward_signature::endpoint_secret_redis_key, snapshot::endpoint_snapshot_redis_key},
 };
 use axum_core::body::Body;
 use bytes::Bytes;
@@ -60,9 +53,7 @@ async fn x402_agent_post_without_authorization_builds_with_app() {
     config.compat_mode = true;
     #[cfg(feature = "external")]
     {
-        use ai_gateway::{
-            config::cloudflare_kv::CloudflareKvConfig, types::secret::Secret,
-        };
+        use ai_gateway::{config::cloudflare_kv::CloudflareKvConfig, types::secret::Secret};
 
         config.cloudflare_kv = Some(CloudflareKvConfig {
             api_base: "https://api.cloudflare.com/client/v4".into(),
@@ -93,9 +84,7 @@ async fn x402_api_post_without_authorization_builds_with_app() {
     config.compat_mode = true;
     #[cfg(feature = "external")]
     {
-        use ai_gateway::{
-            config::cloudflare_kv::CloudflareKvConfig, types::secret::Secret,
-        };
+        use ai_gateway::{config::cloudflare_kv::CloudflareKvConfig, types::secret::Secret};
 
         config.cloudflare_kv = Some(CloudflareKvConfig {
             api_base: "https://api.cloudflare.com/client/v4".into(),
@@ -138,9 +127,7 @@ async fn x402_request_with_invalid_body_schema_returns_400_before_policy() {
             ),
         ),
         (
-            endpoint_secret_redis_key(
-                Uuid::parse_str(ENDPOINT_ID).expect("endpoint id"),
-            ),
+            endpoint_secret_redis_key(Uuid::parse_str(ENDPOINT_ID).expect("endpoint id")),
             "test-endpoint-secret".to_string(),
         ),
     ])
@@ -172,8 +159,7 @@ async fn x402_request_with_invalid_body_schema_returns_400_before_policy() {
 }
 
 #[tokio::test]
-async fn paid_x402_request_forwards_allowlisted_headers_and_injects_signature()
-{
+async fn paid_x402_request_forwards_allowlisted_headers_and_injects_signature() {
     let policy = spawn_policy_service(Arc::new(AtomicUsize::new(0))).await;
     let payment_calls = Arc::new(AtomicUsize::new(0));
     let payment = spawn_payment_service(payment_calls.clone()).await;
@@ -192,9 +178,7 @@ async fn paid_x402_request_forwards_allowlisted_headers_and_injects_signature()
             ),
         ),
         (
-            endpoint_secret_redis_key(
-                Uuid::parse_str(ENDPOINT_ID).expect("endpoint id"),
-            ),
+            endpoint_secret_redis_key(Uuid::parse_str(ENDPOINT_ID).expect("endpoint id")),
             "test-endpoint-secret".to_string(),
         ),
     ])
@@ -270,9 +254,7 @@ async fn x402_api_route_accepts_http_api_endpoint_type() {
             ),
         ),
         (
-            endpoint_secret_redis_key(
-                Uuid::parse_str(ENDPOINT_ID).expect("endpoint id"),
-            ),
+            endpoint_secret_redis_key(Uuid::parse_str(ENDPOINT_ID).expect("endpoint id")),
             "test-endpoint-secret".to_string(),
         ),
     ])
@@ -378,8 +360,7 @@ async fn x402_agents_route_rejects_http_api_endpoint_type() {
 }
 
 #[tokio::test]
-async fn x402_route_rejects_redis_snapshot_without_endpoint_type_when_db_missing()
- {
+async fn x402_route_rejects_redis_snapshot_without_endpoint_type_when_db_missing() {
     let policy = spawn_policy_service(Arc::new(AtomicUsize::new(0))).await;
     let payment_calls = Arc::new(AtomicUsize::new(0));
     let payment = spawn_payment_service(payment_calls.clone()).await;
@@ -415,25 +396,17 @@ async fn x402_route_rejects_redis_snapshot_without_endpoint_type_when_db_missing
     assert_eq!(upstream.requests.lock().await.len(), 0);
 }
 
-fn x402_config(
-    policy_endpoint: &str,
-    payment_endpoint: &str,
-    redis_endpoint: &str,
-) -> Config {
+fn x402_config(policy_endpoint: &str, payment_endpoint: &str, redis_endpoint: &str) -> Config {
     let mut config = Config::default();
     config.compat_mode = true;
     config.x402.enabled = true;
     config.x402.payment_grpc_endpoint = payment_endpoint.to_string();
-    config.x402.payment_service_key =
-        Secret::from("payment-service-secret".to_string());
+    config.x402.payment_service_key = Secret::from("payment-service-secret".to_string());
     config.policy.grpc_endpoint = policy_endpoint.to_string();
-    config.request_log.log_queue_redis_url =
-        Some(redis_endpoint.parse().expect("redis url"));
+    config.request_log.log_queue_redis_url = Some(redis_endpoint.parse().expect("redis url"));
     #[cfg(feature = "external")]
     {
-        use ai_gateway::{
-            config::cloudflare_kv::CloudflareKvConfig, types::secret::Secret,
-        };
+        use ai_gateway::{config::cloudflare_kv::CloudflareKvConfig, types::secret::Secret};
 
         config.cloudflare_kv = Some(CloudflareKvConfig {
             api_base: "https://api.cloudflare.com/client/v4".into(),
@@ -511,14 +484,7 @@ fn endpoint_snapshot_json_without_endpoint_type(
     body_schema: serde_json::Value,
     headers_policy: serde_json::Value,
 ) -> String {
-    endpoint_snapshot_value(
-        slug,
-        upstream_base_url,
-        body_schema,
-        headers_policy,
-        None,
-    )
-    .to_string()
+    endpoint_snapshot_value(slug, upstream_base_url, body_schema, headers_policy, None).to_string()
 }
 
 fn endpoint_snapshot_value(
@@ -749,25 +715,16 @@ impl X402PaymentService for TestPaymentService {
 
     async fn authorize_outbound_spend(
         &self,
-        _request: GrpcRequest<
-            ai_gateway::payment_proto::AuthorizeOutboundSpendRequest,
-        >,
-    ) -> Result<
-        GrpcResponse<ai_gateway::payment_proto::AuthorizeOutboundSpendResponse>,
-        Status,
-    > {
+        _request: GrpcRequest<ai_gateway::payment_proto::AuthorizeOutboundSpendRequest>,
+    ) -> Result<GrpcResponse<ai_gateway::payment_proto::AuthorizeOutboundSpendResponse>, Status>
+    {
         unimplemented!("not used by x402 inbound tests")
     }
 
     async fn record_outbound_result(
         &self,
-        _request: GrpcRequest<
-            ai_gateway::payment_proto::RecordOutboundResultRequest,
-        >,
-    ) -> Result<
-        GrpcResponse<ai_gateway::payment_proto::RecordOutboundResultResponse>,
-        Status,
-    > {
+        _request: GrpcRequest<ai_gateway::payment_proto::RecordOutboundResultRequest>,
+    ) -> Result<GrpcResponse<ai_gateway::payment_proto::RecordOutboundResultResponse>, Status> {
         unimplemented!("not used by x402 inbound tests")
     }
 }
@@ -794,22 +751,18 @@ async fn spawn_upstream_server() -> UpstreamFixture {
             let (mut stream, _) = listener.accept().await.expect("accept");
             let requests = requests_for_task.clone();
             tokio::spawn(async move {
-                let (headers, body_start, buffer) =
-                    read_http_request(&mut stream).await;
+                let (headers, body_start, buffer) = read_http_request(&mut stream).await;
                 let content_length = header_value(&buffer, "content-length")
                     .and_then(|value| value.parse::<usize>().ok())
                     .unwrap_or_default();
                 let already_read_body = buffer.len().saturating_sub(body_start);
                 if content_length > already_read_body {
-                    let mut remaining =
-                        vec![0; content_length - already_read_body];
+                    let mut remaining = vec![0; content_length - already_read_body];
                     stream.read_exact(&mut remaining).await.expect("read body");
                 }
                 requests.lock().await.push(UpstreamRequest { headers });
                 stream
-                    .write_all(
-                        b"HTTP/1.1 200 OK\r\ncontent-length: 2\r\n\r\nok",
-                    )
+                    .write_all(b"HTTP/1.1 200 OK\r\ncontent-length: 2\r\n\r\nok")
                     .await
                     .expect("write upstream response");
             });
@@ -829,8 +782,7 @@ struct RedisFixture {
 async fn spawn_redis_fixture(values: &[(String, String)]) -> RedisFixture {
     let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind redis");
     let addr = listener.local_addr().expect("redis addr");
-    let values: Arc<HashMap<String, String>> =
-        Arc::new(values.iter().cloned().collect());
+    let values: Arc<HashMap<String, String>> = Arc::new(values.iter().cloned().collect());
     let (shutdown_tx, mut shutdown_rx) = oneshot::channel();
     tokio::spawn(async move {
         loop {
@@ -851,10 +803,7 @@ async fn spawn_redis_fixture(values: &[(String, String)]) -> RedisFixture {
     }
 }
 
-async fn handle_redis_connection(
-    mut stream: TcpStream,
-    values: Arc<HashMap<String, String>>,
-) {
+async fn handle_redis_connection(mut stream: TcpStream, values: Arc<HashMap<String, String>>) {
     let mut buffer = Vec::new();
     loop {
         let mut chunk = [0_u8; 1024];
@@ -874,10 +823,7 @@ async fn handle_redis_connection(
     }
 }
 
-fn redis_response(
-    command: &[String],
-    values: &HashMap<String, String>,
-) -> String {
+fn redis_response(command: &[String], values: &HashMap<String, String>) -> String {
     match command
         .first()
         .map(|command| command.to_ascii_uppercase())
@@ -941,9 +887,7 @@ fn read_line(buffer: &[u8], start: usize) -> Option<(&[u8], usize)> {
     Some((&buffer[start..end], end + 2))
 }
 
-async fn read_http_request(
-    stream: &mut TcpStream,
-) -> (HeaderMap, usize, Vec<u8>) {
+async fn read_http_request(stream: &mut TcpStream) -> (HeaderMap, usize, Vec<u8>) {
     let mut buffer = Vec::new();
     let header_end = loop {
         let mut chunk = [0_u8; 1024];
@@ -962,8 +906,7 @@ async fn read_http_request(
             continue;
         };
         headers.insert(
-            http::HeaderName::from_bytes(name.trim().as_bytes())
-                .expect("header name"),
+            http::HeaderName::from_bytes(name.trim().as_bytes()).expect("header name"),
             http::HeaderValue::from_str(value.trim()).expect("header value"),
         );
     }

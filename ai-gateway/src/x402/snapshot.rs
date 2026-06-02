@@ -6,9 +6,8 @@ use crate::{
     app_state::AppState,
     error::{api::ApiError, internal::InternalError},
     x402::types::{
-        ResolvedSnapshot, SnapshotSource, X402EndpointSnapshot,
-        X402OriginAuthSnapshot, X402PolicySnapshot, X402TargetHeaderPolicyItem,
-        X402TargetSnapshot,
+        ResolvedSnapshot, SnapshotSource, X402EndpointSnapshot, X402OriginAuthSnapshot,
+        X402PolicySnapshot, X402TargetHeaderPolicyItem, X402TargetSnapshot,
     },
 };
 
@@ -59,9 +58,7 @@ pub fn endpoint_snapshot_redis_key(slug: &str, method: &str) -> String {
     )
 }
 
-pub fn parse_snapshot_json(
-    raw: &str,
-) -> Result<X402EndpointSnapshot, serde_json::Error> {
+pub fn parse_snapshot_json(raw: &str) -> Result<X402EndpointSnapshot, serde_json::Error> {
     serde_json::from_str(raw)
 }
 
@@ -75,9 +72,8 @@ pub(crate) fn normalize_endpoint_type(value: Option<String>) -> Option<String> {
 pub fn snapshot_from_db_row(
     row: DbX402EndpointSnapshotRow,
 ) -> Result<X402EndpointSnapshot, serde_json::Error> {
-    let headers_policy = serde_json::from_value::<
-        Vec<X402TargetHeaderPolicyItem>,
-    >(row.target_headers_policy)?;
+    let headers_policy =
+        serde_json::from_value::<Vec<X402TargetHeaderPolicyItem>>(row.target_headers_policy)?;
 
     Ok(X402EndpointSnapshot {
         endpoint_id: row.endpoint_id,
@@ -131,8 +127,7 @@ async fn fill_missing_endpoint_type_from_db(
     slug: &str,
     method: &str,
 ) -> Result<(), ApiError> {
-    snapshot.endpoint_type =
-        normalize_endpoint_type(snapshot.endpoint_type.take());
+    snapshot.endpoint_type = normalize_endpoint_type(snapshot.endpoint_type.take());
     if snapshot.endpoint_type.is_some() {
         return Ok(());
     }
@@ -161,25 +156,18 @@ pub async fn resolve_snapshot(
     if let Some(redis) = app_state.redis() {
         match redis.get_string(&key).await {
             Ok(Some(raw)) => {
-                let mut snapshot =
-                    parse_snapshot_json(&raw).map_err(|error| {
-                        tracing::error!(
-                            error = %error,
-                            key = %key,
-                            "x402 snapshot JSON parse failed"
-                        );
-                        InternalError::Deserialize {
-                            ty: "X402EndpointSnapshot",
-                            error,
-                        }
-                    })?;
-                fill_missing_endpoint_type_from_db(
-                    app_state,
-                    &mut snapshot,
-                    slug,
-                    method,
-                )
-                .await?;
+                let mut snapshot = parse_snapshot_json(&raw).map_err(|error| {
+                    tracing::error!(
+                        error = %error,
+                        key = %key,
+                        "x402 snapshot JSON parse failed"
+                    );
+                    InternalError::Deserialize {
+                        ty: "X402EndpointSnapshot",
+                        error,
+                    }
+                })?;
+                fill_missing_endpoint_type_from_db(app_state, &mut snapshot, slug, method).await?;
                 return Ok(Some(ResolvedSnapshot {
                     snapshot,
                     source: SnapshotSource::Redis,
@@ -374,8 +362,7 @@ mod tests {
             price_amount: "1.00000000".to_string(),
             asset: "USDC".to_string(),
             network: "base".to_string(),
-            receive_wallet_address: "0xtesttesttesttesttesttesttest"
-                .to_string(),
+            receive_wallet_address: "0xtesttesttesttesttesttesttest".to_string(),
             body_schema: serde_json::json!({
                 "type": "object",
                 "required": ["wallet_address", "chain"],

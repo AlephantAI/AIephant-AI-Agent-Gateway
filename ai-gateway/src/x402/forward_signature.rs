@@ -83,17 +83,12 @@ pub async fn resolve_endpoint_signing_secret(
     else {
         return Err(ForwardSignatureSecretError::NotFound);
     };
-    let secret =
-        crate::x402::secret::decrypt_secret_from_env(&secret_ciphertext)?;
+    let secret = crate::x402::secret::decrypt_secret_from_env(&secret_ciphertext)?;
     log_resolved_secret_metadata(endpoint_id, "db", &secret);
     Ok(secret)
 }
 
-fn log_resolved_secret_metadata(
-    endpoint_id: Uuid,
-    source: &'static str,
-    secret: &[u8],
-) {
+fn log_resolved_secret_metadata(endpoint_id: Uuid, source: &'static str, secret: &[u8]) {
     tracing::info!(
         endpoint_id = %endpoint_id,
         source,
@@ -126,14 +121,9 @@ pub fn sign_forwarded_request(
     path_with_query: &str,
     body: &Bytes,
 ) -> String {
-    let canonical = canonical_forward_signature_string(
-        timestamp,
-        method,
-        path_with_query,
-        body,
-    );
-    let mut mac = HmacSha256::new_from_slice(endpoint_secret)
-        .expect("HMAC accepts keys of any size");
+    let canonical = canonical_forward_signature_string(timestamp, method, path_with_query, body);
+    let mut mac =
+        HmacSha256::new_from_slice(endpoint_secret).expect("HMAC accepts keys of any size");
     mac.update(canonical.as_bytes());
     format!("v2={}", hex::encode(mac.finalize().into_bytes()))
 }
@@ -147,13 +137,8 @@ pub fn inject_forward_signature_headers(
     path_with_query: &str,
     body: &Bytes,
 ) -> Result<(), ForwardSignatureHeaderError> {
-    let signature = sign_forwarded_request(
-        endpoint_secret,
-        timestamp,
-        method,
-        path_with_query,
-        body,
-    );
+    let signature =
+        sign_forwarded_request(endpoint_secret, timestamp, method, path_with_query, body);
     let timestamp = HeaderValue::from_str(timestamp)
         .map_err(|_| ForwardSignatureHeaderError::InvalidTimestamp)?;
     let signature = HeaderValue::from_str(&signature)
@@ -218,8 +203,7 @@ mod tests {
     fn inject_forward_signature_headers_sets_expected_alephant_headers() {
         let mut headers = HeaderMap::new();
         headers.insert("x-keep", HeaderValue::from_static("yes"));
-        let endpoint_id =
-            Uuid::parse_str("11111111-1111-1111-1111-111111111111").unwrap();
+        let endpoint_id = Uuid::parse_str("11111111-1111-1111-1111-111111111111").unwrap();
 
         inject_forward_signature_headers(
             &mut headers,
@@ -246,8 +230,7 @@ mod tests {
 
     #[test]
     fn endpoint_secret_redis_key_uses_endpoint_id() {
-        let endpoint_id =
-            Uuid::parse_str("11111111-1111-1111-1111-111111111111").unwrap();
+        let endpoint_id = Uuid::parse_str("11111111-1111-1111-1111-111111111111").unwrap();
 
         assert_eq!(
             endpoint_secret_redis_key(endpoint_id),
@@ -257,10 +240,7 @@ mod tests {
 
     #[test]
     fn upstream_path_with_query_preserves_original_query_order() {
-        let url = reqwest::Url::parse(
-            "https://origin.test/xx?bdd=123&ftty=345&ayjj=234",
-        )
-        .unwrap();
+        let url = reqwest::Url::parse("https://origin.test/xx?bdd=123&ftty=345&ayjj=234").unwrap();
 
         assert_eq!(
             upstream_path_with_query(&url),

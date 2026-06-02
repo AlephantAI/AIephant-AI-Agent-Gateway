@@ -19,13 +19,8 @@ pub fn clamp_body_ttl_days(days: u16) -> u16 {
 /// If either side ≥ threshold → `"s3"` (Cloud: **both** bodies go to object
 /// storage), else `"clickhouse"` (inline on both sides).
 #[must_use]
-pub fn storage_location_for_sizes(
-    req_len: usize,
-    resp_len: usize,
-) -> &'static str {
-    if req_len >= LARGE_BODY_THRESHOLD_BYTES
-        || resp_len >= LARGE_BODY_THRESHOLD_BYTES
-    {
+pub fn storage_location_for_sizes(req_len: usize, resp_len: usize) -> &'static str {
+    if req_len >= LARGE_BODY_THRESHOLD_BYTES || resp_len >= LARGE_BODY_THRESHOLD_BYTES {
         "s3"
     } else {
         "clickhouse"

@@ -28,12 +28,9 @@ pub async fn resolve_cloud_log_bodies(
     response_body: &Bytes,
 ) -> Result<(String, String, u16, String), LoggerError> {
     let ttl = clamp_body_ttl_days(body_ttl_days);
-    let storage =
-        storage_location_for_sizes(request_body.len(), response_body.len())
-            .to_string();
+    let storage = storage_location_for_sizes(request_body.len(), response_body.len()).to_string();
     let threshold = LARGE_BODY_THRESHOLD_BYTES;
-    let store_both_on_s3 =
-        request_body.len() >= threshold || response_body.len() >= threshold;
+    let store_both_on_s3 = request_body.len() >= threshold || response_body.len() >= threshold;
 
     let request_body_str = if store_both_on_s3 {
         let key = format!(
@@ -92,13 +89,8 @@ mod tests {
         concat!(env!("CARGO_MANIFEST_DIR"), "/stubs/s3")
     }
 
-    async fn start_s3_mock(
-        put_expectation: Times,
-    ) -> (stubr::Stubr, BaseS3Client) {
-        let stubs = HashMap::from([(
-            "success:s3:upload_log_body_cloud",
-            put_expectation,
-        )]);
+    async fn start_s3_mock(put_expectation: Times) -> (stubr::Stubr, BaseS3Client) {
+        let stubs = HashMap::from([("success:s3:upload_log_body_cloud", put_expectation)]);
         let active = HashSet::from(["success:s3:upload_log_body_cloud"]);
         let mock = stubr::Stubr::try_start_with(
             s3_stub_path(),
@@ -172,10 +164,9 @@ mod tests {
         let req = Bytes::from(vec![b'R'; threshold + 1]);
         let resp = Bytes::from_static(b"{\"ok\":true}");
 
-        let (req_s, resp_s, ttl, loc) =
-            resolve_cloud_log_bodies(&s3, 90, rid, org, &req, &resp)
-                .await
-                .expect("resolve");
+        let (req_s, resp_s, ttl, loc) = resolve_cloud_log_bodies(&s3, 90, rid, org, &req, &resp)
+            .await
+            .expect("resolve");
 
         assert_eq!(loc, "s3");
         assert!(
@@ -199,8 +190,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn cloud_response_over_1_mib_yields_s3_and_presigned_response_field()
-    {
+    async fn cloud_response_over_1_mib_yields_s3_and_presigned_response_field() {
         let threshold = LARGE_BODY_THRESHOLD_BYTES;
         let (_mock, s3) = start_s3_mock(2.into()).await;
         let rid = Uuid::nil();
@@ -208,10 +198,9 @@ mod tests {
         let req = Bytes::from_static(br#"{"x":1}"#);
         let resp = Bytes::from(vec![b'S'; threshold + 1]);
 
-        let (req_s, resp_s, ttl, loc) =
-            resolve_cloud_log_bodies(&s3, 90, rid, org, &req, &resp)
-                .await
-                .expect("resolve");
+        let (req_s, resp_s, ttl, loc) = resolve_cloud_log_bodies(&s3, 90, rid, org, &req, &resp)
+            .await
+            .expect("resolve");
 
         assert_eq!(loc, "s3");
         assert!(
@@ -240,23 +229,16 @@ mod tests {
         let req = Bytes::from_static(b"hello");
         let resp = Bytes::from_static(b"world");
 
-        let (req_s, resp_s, ttl, loc) =
-            resolve_cloud_log_bodies(&s3, 90, rid, org, &req, &resp)
-                .await
-                .expect("resolve");
+        let (req_s, resp_s, ttl, loc) = resolve_cloud_log_bodies(&s3, 90, rid, org, &req, &resp)
+            .await
+            .expect("resolve");
 
         assert_eq!(loc, "clickhouse");
         assert_eq!(req_s, "hello");
         assert_eq!(resp_s, "world");
         assert_eq!(ttl, 90);
 
-        info_log_request_summary(
-            "both bodies < 1 MiB",
-            &req_s,
-            &resp_s,
-            ttl,
-            &loc,
-        );
+        info_log_request_summary("both bodies < 1 MiB", &req_s, &resp_s, ttl, &loc);
     }
 
     #[tokio::test]
@@ -268,23 +250,14 @@ mod tests {
         let req = Bytes::from(vec![b'A'; threshold]);
         let resp = Bytes::from(vec![b'B'; threshold]);
 
-        let (req_s, resp_s, ttl, loc) =
-            resolve_cloud_log_bodies(&s3, 90, rid, org, &req, &resp)
-                .await
-                .expect("resolve");
+        let (req_s, resp_s, ttl, loc) = resolve_cloud_log_bodies(&s3, 90, rid, org, &req, &resp)
+            .await
+            .expect("resolve");
 
         assert_eq!(loc, "s3");
         assert!(req_s.starts_with("http://") || req_s.starts_with("https://"));
-        assert!(
-            resp_s.starts_with("http://") || resp_s.starts_with("https://")
-        );
+        assert!(resp_s.starts_with("http://") || resp_s.starts_with("https://"));
 
-        info_log_request_summary(
-            "both bodies >= 1 MiB",
-            &req_s,
-            &resp_s,
-            ttl,
-            &loc,
-        );
+        info_log_request_summary("both bodies >= 1 MiB", &req_s, &resp_s, ttl, &loc);
     }
 }

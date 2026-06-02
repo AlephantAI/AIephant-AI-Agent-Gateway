@@ -16,9 +16,8 @@ use crate::{
         openai::{OpenAI, OpenAICompatibleChatCompletionRequest},
     },
     error::{
-        api::ApiError, internal::InternalError,
-        invalid_req::InvalidRequestError, mapper::MapperError,
-        stream::StreamError,
+        api::ApiError, internal::InternalError, invalid_req::InvalidRequestError,
+        mapper::MapperError, stream::StreamError,
     },
     ide_adapation::mapper_service_hooks,
     middleware::mapper::{
@@ -28,8 +27,7 @@ use crate::{
     },
     types::{
         extensions::{
-            MapperContext, MapperProfileContext,
-            MasterKeyUnifiedModelPassthrough, RequestContext,
+            MapperContext, MapperProfileContext, MasterKeyUnifiedModelPassthrough, RequestContext,
             UnifiedChatCompletionsResponsesBridge, UnifiedModelBodyPassthrough,
             UnifiedModelPolicyChecked,
         },
@@ -79,10 +77,7 @@ where
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
     #[inline]
-    fn poll_ready(
-        &mut self,
-        cx: &mut Context<'_>,
-    ) -> Poll<Result<(), Self::Error>> {
+    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         self.inner.poll_ready(cx)
     }
 
@@ -99,9 +94,7 @@ where
                 .get::<InferenceProvider>()
                 .cloned()
                 .ok_or_else(|| {
-                    ApiError::Internal(InternalError::ExtensionNotFound(
-                        "InferenceProvider",
-                    ))
+                    ApiError::Internal(InternalError::ExtensionNotFound("InferenceProvider"))
                 })?;
             if req
                 .extensions()
@@ -110,20 +103,18 @@ where
             {
                 target_provider = InferenceProvider::Custom;
             }
-            let extracted_path_and_query = req
-                .extensions_mut()
-                .remove::<PathAndQuery>()
-                .ok_or(ApiError::Internal(InternalError::ExtensionNotFound(
-                    "PathAndQuery",
-                )))?;
-            let source_endpoint =
-                req.extensions().get::<ApiEndpoint>().cloned();
+            let extracted_path_and_query =
+                req.extensions_mut()
+                    .remove::<PathAndQuery>()
+                    .ok_or(ApiError::Internal(InternalError::ExtensionNotFound(
+                        "PathAndQuery",
+                    )))?;
+            let source_endpoint = req.extensions().get::<ApiEndpoint>().cloned();
             let source_endpoint = source_endpoint.ok_or(ApiError::Internal(
                 InternalError::ExtensionNotFound("ApiEndpoint"),
             ))?;
             let source_endpoint_cloned = source_endpoint.clone();
-            let target_endpoint =
-                ApiEndpoint::mapped(source_endpoint, &target_provider)?;
+            let target_endpoint = ApiEndpoint::mapped(source_endpoint, &target_provider)?;
             let target_endpoint_cloned = target_endpoint.clone();
             // serialization/deserialization should be done on a dedicated
             // thread
@@ -211,41 +202,30 @@ async fn map_request(
         parts.extensions.insert(h);
     }
 
-    let filter_result =
-        match crate::content_filter::evaluate::evaluate_for_vk_request(
-            &app_state,
-            &parts.headers,
-            &parts.extensions,
-            &body,
-        )
-        .await
-        {
-            Ok(r) => r,
-            Err(ApiError::InvalidRequest(
+    let filter_result = match crate::content_filter::evaluate::evaluate_for_vk_request(
+        &app_state,
+        &parts.headers,
+        &parts.extensions,
+        &body,
+    )
+    .await
+    {
+        Ok(r) => r,
+        Err(ApiError::InvalidRequest(InvalidRequestError::ContentPolicyDenied { message })) => {
+            emit_mapper_policy_deny_log(&app_state, &parts, &body, &message, target_path_and_query);
+            return Err(ApiError::InvalidRequest(
                 InvalidRequestError::ContentPolicyDenied { message },
-            )) => {
-                emit_mapper_policy_deny_log(
-                    &app_state,
-                    &parts,
-                    &body,
-                    &message,
-                    target_path_and_query,
-                );
-                return Err(ApiError::InvalidRequest(
-                    InvalidRequestError::ContentPolicyDenied { message },
-                ));
-            }
-            Err(e) => return Err(e),
-        };
+            ));
+        }
+        Err(e) => return Err(e),
+    };
     let mut body = match filter_result.forward_body {
         crate::content_filter::ContentFilterForwardBody::UseOriginal => body,
         crate::content_filter::ContentFilterForwardBody::UseReplaced(b) => b,
     };
     if let Some(ref new_model) = filter_result.change_model {
         let (new_body, original) =
-            crate::content_filter::evaluate::apply_model_downgrade(
-                body, new_model,
-            );
+            crate::content_filter::evaluate::apply_model_downgrade(body, new_model);
         body = new_body;
         let original_model = original.unwrap_or_default();
         tracing::info!(
@@ -284,9 +264,10 @@ async fn map_request(
         body = crate::middleware::prompt_compression::apply_chat_completions(
             &mut parts, body, &provider,
         )?;
-        body = crate::ide_adapation::ide_ingress_adjust::apply_global_chat_completions_wire_normalize(
-            body,
-        )?;
+        body =
+            crate::ide_adapation::ide_ingress_adjust::apply_global_chat_completions_wire_normalize(
+                body,
+            )?;
     }
 
     let master_key_model_passthrough = parts
@@ -316,17 +297,15 @@ async fn map_request(
             body,
         )?;
 
-    let passthrough =
-        mapper_service_hooks::record_client_profile_passthrough_metrics_and_extension(
-            &app_state,
-            &mut parts,
-            &client_profile_resolution,
-            &source_endpoint,
-            &target_endpoint,
-        );
+    let passthrough = mapper_service_hooks::record_client_profile_passthrough_metrics_and_extension(
+        &app_state,
+        &mut parts,
+        &client_profile_resolution,
+        &source_endpoint,
+        &target_endpoint,
+    );
 
-    let skip_semantic_envelope =
-        should_skip_semantic_envelope(&parts.extensions, passthrough);
+    let skip_semantic_envelope = should_skip_semantic_envelope(&parts.extensions, passthrough);
     let request_envelope = if skip_semantic_envelope {
         None
     } else {
@@ -349,23 +328,19 @@ async fn map_request(
         })
     };
 
-    let (body, request_envelope) = if let Some(request_envelope) =
-        request_envelope
-    {
+    let (body, request_envelope) = if let Some(request_envelope) = request_envelope {
         let request_envelope =
             crate::middleware::mapper::request_rule_engine::prepare_request_envelope(
                 request_envelope,
             )
             .map_err(InternalError::MapperError)?;
         let body = Bytes::from(
-            serde_json::to_vec(&request_envelope.openai_request).map_err(
-                |error| InternalError::Serialize {
-                    ty: std::any::type_name::<
-                        async_openai::types::CreateChatCompletionRequest,
-                    >(),
+            serde_json::to_vec(&request_envelope.openai_request).map_err(|error| {
+                InternalError::Serialize {
+                    ty: std::any::type_name::<async_openai::types::CreateChatCompletionRequest>(),
                     error,
-                },
-            )?,
+                }
+            })?,
         );
 
         (body, Some(request_envelope))
@@ -373,10 +348,7 @@ async fn map_request(
         (body, None)
     };
     let body = if unified_model_body_passthrough {
-        normalize_unified_passthrough_body_model(
-            &body,
-            target_endpoint.provider(),
-        )?
+        normalize_unified_passthrough_body_model(&body, target_endpoint.provider())?
     } else {
         body
     };
@@ -400,10 +372,7 @@ async fn map_request(
         let converter = converter_registry
             .get_converter(&source_endpoint, &target_endpoint)
             .ok_or_else(|| {
-                InternalError::InvalidConverter(
-                    source_endpoint.clone(),
-                    target_endpoint.clone(),
-                )
+                InternalError::InvalidConverter(source_endpoint.clone(), target_endpoint.clone())
             })?;
         let (body, mapper_ctx) = if master_key_model_passthrough {
             match (&source_endpoint, &target_endpoint) {
@@ -414,25 +383,19 @@ async fn map_request(
                         openai_endpoint,
                     },
                 ) if *openai_endpoint == OpenAI::chat_completions() => {
-                    master_key_unified_passthrough_chat_completions(
-                        body,
-                        provider.clone(),
-                    )?
+                    master_key_unified_passthrough_chat_completions(body, provider.clone())?
                 }
                 _ => converter.convert_req_body(body)?,
             }
         } else if passthrough {
             let ctx = mapper_service_hooks::mapper_context_native_semantic_passthrough(
-                    &source_endpoint,
-                    &target_endpoint,
-                    &body,
-                )?;
-            (body, ctx)
-        } else if unified_model_body_passthrough {
-            if supports_unified_model_body_passthrough(
                 &source_endpoint,
                 &target_endpoint,
-            ) {
+                &body,
+            )?;
+            (body, ctx)
+        } else if unified_model_body_passthrough {
+            if supports_unified_model_body_passthrough(&source_endpoint, &target_endpoint) {
                 tracing::trace!(
                     source_endpoint = ?source_endpoint,
                     target_endpoint = ?target_endpoint,
@@ -454,17 +417,15 @@ async fn map_request(
     };
     mapper_ctx.unified_responses_bridge_chat_completions_sse =
         unified_responses_bridge_chat_completions_sse;
-    let base_path = upstream_endpoint
-        .path(mapper_ctx.model.as_ref(), mapper_ctx.is_stream)?;
+    let base_path = upstream_endpoint.path(mapper_ctx.model.as_ref(), mapper_ctx.is_stream)?;
 
+    let target_path_and_query = if let Some(query_params) = target_path_and_query.query() {
+        format!("{base_path}?{query_params}")
+    } else {
+        base_path
+    };
     let target_path_and_query =
-        if let Some(query_params) = target_path_and_query.query() {
-            format!("{base_path}?{query_params}")
-        } else {
-            base_path
-        };
-    let target_path_and_query = PathAndQuery::from_str(&target_path_and_query)
-        .map_err(InternalError::InvalidUri)?;
+        PathAndQuery::from_str(&target_path_and_query).map_err(InternalError::InvalidUri)?;
 
     let mut req = Request::from_parts(parts, axum_core::body::Body::from(body));
     if client_profile_resolution.profile
@@ -531,16 +492,16 @@ fn master_key_unified_passthrough_chat_completions(
         provider,
         inner: req,
     };
-    let target_bytes = Bytes::from(serde_json::to_vec(&wrapped).map_err(
-        |e| InternalError::Serialize {
-            ty: std::any::type_name::<OpenAICompatibleChatCompletionRequest>(),
-            error: e,
-        },
-    )?);
+    let target_bytes =
+        Bytes::from(
+            serde_json::to_vec(&wrapped).map_err(|e| InternalError::Serialize {
+                ty: std::any::type_name::<OpenAICompatibleChatCompletionRequest>(),
+                error: e,
+            })?,
+        );
     let anthropic_openai_usage = is_stream.then(|| {
         std::sync::Arc::new(std::sync::Mutex::new(
-            crate::types::extensions::AnthropicStreamOpenAiUsageState::default(
-            ),
+            crate::types::extensions::AnthropicStreamOpenAiUsageState::default(),
         ))
     });
     Ok((
@@ -572,8 +533,8 @@ pub fn enforce_vk_model_policy_for_source_endpoint(
     }
     use anthropic_ai_sdk::types::message::CreateMessageParams;
     use async_openai::types::{
-        CreateChatCompletionRequest, CreateCompletionRequest,
-        CreateEmbeddingRequest, CreateImageRequest, ImageModel,
+        CreateChatCompletionRequest, CreateCompletionRequest, CreateEmbeddingRequest,
+        CreateImageRequest, ImageModel,
     };
     const EP: &str = "router/mapper";
     let deny = |model: &str| {
@@ -586,9 +547,8 @@ pub fn enforce_vk_model_policy_for_source_endpoint(
     };
     match source_endpoint {
         ApiEndpoint::OpenAI(OpenAI::ChatCompletions(_)) => {
-            let req =
-                serde_json::from_slice::<CreateChatCompletionRequest>(body)
-                    .map_err(InvalidRequestError::InvalidRequestBody)?;
+            let req = serde_json::from_slice::<CreateChatCompletionRequest>(body)
+                .map_err(InvalidRequestError::InvalidRequestBody)?;
             if let Err(e) = deny(&req.model) {
                 tracing::warn!(
                     model = %req.model,
@@ -675,8 +635,7 @@ fn normalize_unified_passthrough_body_model(
     body: &Bytes,
     target_provider: InferenceProvider,
 ) -> Result<Bytes, ApiError> {
-    let Some(normalized) =
-        normalize_top_level_model_for_target_provider(body, &target_provider)?
+    let Some(normalized) = normalize_top_level_model_for_target_provider(body, &target_provider)?
     else {
         return Ok(body.clone());
     };
@@ -689,8 +648,7 @@ fn normalize_top_level_model_for_target_provider(
 ) -> Result<Option<Bytes>, ApiError> {
     let mut value = serde_json::from_slice::<serde_json::Value>(body)
         .map_err(InvalidRequestError::InvalidRequestBody)?;
-    let Some(model) = value.get("model").and_then(serde_json::Value::as_str)
-    else {
+    let Some(model) = value.get("model").and_then(serde_json::Value::as_str) else {
         return Ok(None);
     };
     let Some((prefix, raw_model)) = model.split_once('/') else {
@@ -725,10 +683,7 @@ fn supports_unified_model_body_passthrough(
                 (OpenAI::ChatCompletions(_), OpenAI::ChatCompletions(_))
                     | (OpenAI::Completions(_), OpenAI::Completions(_))
                     | (OpenAI::Embeddings(_), OpenAI::Embeddings(_))
-                    | (
-                        OpenAI::ImageGenerations(_),
-                        OpenAI::ImageGenerations(_)
-                    )
+                    | (OpenAI::ImageGenerations(_), OpenAI::ImageGenerations(_))
                     | (OpenAI::Responses(_), OpenAI::Responses(_))
             )
         }
@@ -738,18 +693,10 @@ fn supports_unified_model_body_passthrough(
                 openai_endpoint: OpenAI::ChatCompletions(_),
                 ..
             }
-            | ApiEndpoint::Anthropic(
-                crate::endpoints::anthropic::Anthropic::Messages(_),
-            )
-            | ApiEndpoint::Google(
-                crate::endpoints::google::Google::GenerateContents(_),
-            )
-            | ApiEndpoint::Bedrock(crate::endpoints::bedrock::Bedrock::Converse(
-                _,
-            ))
-            | ApiEndpoint::Ollama(
-                crate::endpoints::ollama::Ollama::ChatCompletions(_),
-            ),
+            | ApiEndpoint::Anthropic(crate::endpoints::anthropic::Anthropic::Messages(_))
+            | ApiEndpoint::Google(crate::endpoints::google::Google::GenerateContents(_))
+            | ApiEndpoint::Bedrock(crate::endpoints::bedrock::Bedrock::Converse(_))
+            | ApiEndpoint::Ollama(crate::endpoints::ollama::Ollama::ChatCompletions(_)),
         )
         | (
             ApiEndpoint::OpenAI(OpenAI::Responses(_)),
@@ -779,9 +726,7 @@ fn emit_mapper_policy_deny_log(
         session_headers::parse_session_headers,
         types::{
             body::{BodyReader, TfftTrigger},
-            extensions::{
-                MapperContext, PromptHeaderForRequestLog, RequestContext,
-            },
+            extensions::{MapperContext, PromptHeaderForRequestLog, RequestContext},
             provider::InferenceProvider,
             router::RouterId,
         },
@@ -790,8 +735,7 @@ fn emit_mapper_policy_deny_log(
     if !app_state.config().alephant.is_observability_enabled() {
         return;
     }
-    let req_ctx = match parts.extensions.get::<std::sync::Arc<RequestContext>>()
-    {
+    let req_ctx = match parts.extensions.get::<std::sync::Arc<RequestContext>>() {
         Some(ctx) => ctx.clone(),
         None => return,
     };
@@ -806,11 +750,8 @@ fn emit_mapper_policy_deny_log(
 
     let target_url = {
         let providers_config = app_state.get_providers_config();
-        let Some(provider_config) = providers_config.get(&target_provider)
-        else {
-            tracing::warn!(
-                "policy deny log (mapper): provider not configured, skipping"
-            );
+        let Some(provider_config) = providers_config.get(&target_provider) else {
+            tracing::warn!("policy deny log (mapper): provider not configured, skipping");
             return;
         };
         match provider_config
@@ -840,8 +781,7 @@ fn emit_mapper_policy_deny_log(
         .copied()
         .unwrap_or_else(Utc::now);
     let router_id = parts.extensions.get::<RouterId>().cloned();
-    let prompt_header =
-        parts.extensions.get::<PromptHeaderForRequestLog>().cloned();
+    let prompt_header = parts.extensions.get::<PromptHeaderForRequestLog>().cloned();
     let prompt_ctx = parts
         .extensions
         .get::<crate::types::extensions::PromptContext>()
@@ -860,9 +800,7 @@ fn emit_mapper_policy_deny_log(
     };
 
     let response_body_bytes =
-        crate::content_filter::evaluate::policy_denied_error_response_json(
-            deny_message,
-        );
+        crate::content_filter::evaluate::policy_denied_error_response_json(deny_message);
 
     let response_status = http::StatusCode::OK;
     let request_log_id = parts
@@ -950,44 +888,35 @@ async fn map_response(
         .ok_or(InternalError::ExtensionNotFound("MapperContext"))?;
     let is_stream = mapper_ctx.is_stream;
     let anthropic_openai_usage = mapper_ctx.anthropic_openai_usage.clone();
-    let bridge_chat_completions =
-        mapper_ctx.unified_responses_bridge_chat_completions_sse;
+    let bridge_chat_completions = mapper_ctx.unified_responses_bridge_chat_completions_sse;
     let (parts, body) = resp.into_parts();
-    let (parts, body) =
-        match mapper_service_hooks::map_response_cursor_responses_branch(
-            &mapper_ctx,
-            bridge_chat_completions,
-            parts,
-            body,
-        )
-        .await?
-        {
-            mapper_service_hooks::CursorResponsesMapOutcome::Done(resp) => {
-                return Ok(resp);
-            }
-            mapper_service_hooks::CursorResponsesMapOutcome::Continue {
-                parts,
-                body,
-            } => (parts, body),
-        };
+    let (parts, body) = match mapper_service_hooks::map_response_cursor_responses_branch(
+        &mapper_ctx,
+        bridge_chat_completions,
+        parts,
+        body,
+    )
+    .await?
+    {
+        mapper_service_hooks::CursorResponsesMapOutcome::Done(resp) => {
+            return Ok(resp);
+        }
+        mapper_service_hooks::CursorResponsesMapOutcome::Continue { parts, body } => (parts, body),
+    };
 
-    let (parts, body) =
-        match mapper_service_hooks::map_stream_unified_responses_chat_bridge(
-            bridge_chat_completions,
-            is_stream,
-            parts,
-            body,
-        )? {
-            mapper_service_hooks::UnifiedResponsesChatBridgeMapOutcome::Done(
-                resp,
-            ) => {
-                return Ok(resp);
-            }
-            mapper_service_hooks::UnifiedResponsesChatBridgeMapOutcome::Continue {
-                parts,
-                body,
-            } => (parts, body),
-        };
+    let (parts, body) = match mapper_service_hooks::map_stream_unified_responses_chat_bridge(
+        bridge_chat_completions,
+        is_stream,
+        parts,
+        body,
+    )? {
+        mapper_service_hooks::UnifiedResponsesChatBridgeMapOutcome::Done(resp) => {
+            return Ok(resp);
+        }
+        mapper_service_hooks::UnifiedResponsesChatBridgeMapOutcome::Continue { parts, body } => {
+            (parts, body)
+        }
+    };
 
     let is_responses_api = matches!(
         &source_endpoint,
@@ -998,9 +927,7 @@ async fn map_response(
             }
     );
     if is_responses_api && is_stream {
-        tracing::trace!(
-            "responses API stream passthrough (direct v1/responses)"
-        );
+        tracing::trace!("responses API stream passthrough (direct v1/responses)");
         let mapped_stream = body
             .into_data_stream()
             .map_err(|e| ApiError::StreamError(StreamError::BodyError(e)))
@@ -1011,9 +938,7 @@ async fn map_response(
                 new_bytes.put("\n\n".as_bytes());
                 new_bytes.freeze()
             });
-        let final_body = axum_core::body::Body::new(
-            reqwest::Body::wrap_stream(mapped_stream),
-        );
+        let final_body = axum_core::body::Body::new(reqwest::Body::wrap_stream(mapped_stream));
         let new_resp = Response::from_parts(parts, final_body);
         return Ok(new_resp);
     }
@@ -1030,9 +955,7 @@ async fn map_response(
                 new_bytes.put("\n\n".as_bytes());
                 new_bytes.freeze()
             });
-        let final_body = axum_core::body::Body::new(
-            reqwest::Body::wrap_stream(mapped_stream),
-        );
+        let final_body = axum_core::body::Body::new(reqwest::Body::wrap_stream(mapped_stream));
         let new_resp = Response::from_parts(parts, final_body);
         return Ok(new_resp);
     }
@@ -1040,14 +963,10 @@ async fn map_response(
     let converter = converter_registry
         .get_converter(&target_endpoint, &source_endpoint)
         .ok_or_else(|| {
-            InternalError::InvalidConverter(
-                target_endpoint.clone(),
-                source_endpoint.clone(),
-            )
+            InternalError::InvalidConverter(target_endpoint.clone(), source_endpoint.clone())
         })?;
 
-    let lenient_roles =
-        lenient_openai_chat_roles_for_target_endpoint(&target_endpoint);
+    let lenient_roles = lenient_openai_chat_roles_for_target_endpoint(&target_endpoint);
 
     if is_stream {
         tracing::trace!(
@@ -1055,8 +974,7 @@ async fn map_response(
             target_endpoint = ?source_endpoint,
             "mapped streaming response"
         );
-        let append_done_marker =
-            should_append_openai_sse_done_marker(&target_endpoint);
+        let append_done_marker = should_append_openai_sse_done_marker(&target_endpoint);
         // because we are using our custom body type, and we know it was
         // constructed in the dispatcher from either an SSE stream or a
         // stream of bytes, we can safely assume each frame is a single
@@ -1076,8 +994,7 @@ async fn map_response(
                     let resp_parts = resp_parts.clone();
                     let target_endpoint = target_endpoint_cloned.clone();
                     let source_endpoint = source_endpoint_cloned.clone();
-                    let anthropic_usage_for_chunk =
-                        anthropic_openai_usage.clone();
+                    let anthropic_usage_for_chunk = anthropic_openai_usage.clone();
                     async move {
                         let converter = registry_for_future
                             .get_converter(&target_endpoint, &source_endpoint)
@@ -1113,9 +1030,7 @@ async fn map_response(
             .chain(futures::stream::iter(append_done_marker.then(|| {
                 Ok::<Bytes, ApiError>(Bytes::from_static(b"data: [DONE]\n\n"))
             })));
-        let final_body = axum_core::body::Body::new(
-            reqwest::Body::wrap_stream(mapped_stream),
-        );
+        let final_body = axum_core::body::Body::new(reqwest::Body::wrap_stream(mapped_stream));
         let new_resp = Response::from_parts(parts, final_body);
         Ok(new_resp)
     } else {
@@ -1127,20 +1042,12 @@ async fn map_response(
             .to_bytes();
 
         let mapped_body_bytes = if bridge_chat_completions {
-            mapper_service_hooks::map_non_stream_unified_responses_chat_bridge(
-                &body_bytes,
-            )?
+            mapper_service_hooks::map_non_stream_unified_responses_chat_bridge(&body_bytes)?
         } else if mapper_ctx.native_semantic_passthrough {
             body_bytes
         } else {
             converter
-                .convert_resp_body(
-                    parts.clone(),
-                    body_bytes,
-                    is_stream,
-                    None,
-                    lenient_roles,
-                )?
+                .convert_resp_body(parts.clone(), body_bytes, is_stream, None, lenient_roles)?
                 .ok_or(MapperError::EmptyResponseBody)
                 .map_err(InternalError::MapperError)?
         };
@@ -1159,13 +1066,11 @@ async fn map_response(
 fn should_append_openai_sse_done_marker(endpoint: &ApiEndpoint) -> bool {
     matches!(
         endpoint,
-        ApiEndpoint::OpenAI(
-            OpenAI::ChatCompletions(_) | OpenAI::Completions(_)
-        ) | ApiEndpoint::OpenAICompatible {
-            openai_endpoint: OpenAI::ChatCompletions(_)
-                | OpenAI::Completions(_),
-            ..
-        }
+        ApiEndpoint::OpenAI(OpenAI::ChatCompletions(_) | OpenAI::Completions(_))
+            | ApiEndpoint::OpenAICompatible {
+                openai_endpoint: OpenAI::ChatCompletions(_) | OpenAI::Completions(_),
+                ..
+            }
     )
 }
 
@@ -1211,18 +1116,16 @@ mod tests {
         app::build_test_app,
         config::Config,
         endpoints::{
-            ApiEndpoint, anthropic::Anthropic, bedrock::Bedrock,
-            google::Google, ollama::Ollama, openai::OpenAI,
+            ApiEndpoint, anthropic::Anthropic, bedrock::Bedrock, google::Google, ollama::Ollama,
+            openai::OpenAI,
         },
         middleware::mapper::{
-            envelope::RequestEnvelope, model::ModelMapper,
-            registry::EndpointConverterRegistry,
+            envelope::RequestEnvelope, model::ModelMapper, registry::EndpointConverterRegistry,
         },
         types::{
             extensions::{
-                MapperContext, MapperProfileContext,
-                MasterKeyUnifiedModelPassthrough, PromptCompressionTokenPair,
-                UnifiedModelBodyPassthrough, UnifiedModelPolicyChecked,
+                MapperContext, MapperProfileContext, MasterKeyUnifiedModelPassthrough,
+                PromptCompressionTokenPair, UnifiedModelBodyPassthrough, UnifiedModelPolicyChecked,
             },
             provider::InferenceProvider,
         },
@@ -1291,8 +1194,7 @@ mod tests {
     }
 
     #[test]
-    fn should_skip_semantic_envelope_true_when_master_key_and_body_passthrough_markers_exist()
-     {
+    fn should_skip_semantic_envelope_true_when_master_key_and_body_passthrough_markers_exist() {
         let mut extensions = http::Extensions::new();
         extensions.insert(MasterKeyUnifiedModelPassthrough);
         extensions.insert(UnifiedModelBodyPassthrough);
@@ -1302,35 +1204,28 @@ mod tests {
 
     #[test]
     fn unified_passthrough_body_model_strips_matching_provider_prefix() {
-        let body = Bytes::from_static(
-            br#"{"model":"deepseek/deepseek-reasoner","messages":[]}"#,
-        );
+        let body = Bytes::from_static(br#"{"model":"deepseek/deepseek-reasoner","messages":[]}"#);
 
         let normalized = super::normalize_unified_passthrough_body_model(
             &body,
             InferenceProvider::Named("deepseek".into()),
         )
         .expect("body should normalize");
-        let value: Value =
-            serde_json::from_slice(&normalized).expect("json body");
+        let value: Value = serde_json::from_slice(&normalized).expect("json body");
 
         assert_eq!(value["model"], "deepseek-reasoner");
     }
 
     #[test]
-    fn unified_passthrough_body_model_keeps_cross_provider_openrouter_style_model()
-     {
-        let body = Bytes::from_static(
-            br#"{"model":"anthropic/claude-sonnet-4.6","messages":[]}"#,
-        );
+    fn unified_passthrough_body_model_keeps_cross_provider_openrouter_style_model() {
+        let body = Bytes::from_static(br#"{"model":"anthropic/claude-sonnet-4.6","messages":[]}"#);
 
         let normalized = super::normalize_unified_passthrough_body_model(
             &body,
             InferenceProvider::Named("openrouter".into()),
         )
         .expect("body should normalize");
-        let value: Value =
-            serde_json::from_slice(&normalized).expect("json body");
+        let value: Value = serde_json::from_slice(&normalized).expect("json body");
 
         assert_eq!(value["model"], "anthropic/claude-sonnet-4.6");
     }
@@ -1376,14 +1271,9 @@ mod tests {
         path: &'static str,
         body: Value,
     ) -> Value {
-        map_unified_body_passthrough_with_path(
-            source_endpoint,
-            target_endpoint,
-            path,
-            body,
-        )
-        .await
-        .0
+        map_unified_body_passthrough_with_path(source_endpoint, target_endpoint, path, body)
+            .await
+            .0
     }
 
     async fn map_unified_body_passthrough_with_path(
@@ -1395,8 +1285,7 @@ mod tests {
         let app = build_test_app(Config::default()).await.expect("build app");
         let model_mapper = ModelMapper::new(app.state.clone());
         let registry = EndpointConverterRegistry::new(&model_mapper);
-        let request_body =
-            Bytes::from(serde_json::to_vec(&body).expect("request body"));
+        let request_body = Bytes::from(serde_json::to_vec(&body).expect("request body"));
         let mut request = http::Request::builder()
             .method(http::Method::POST)
             .uri(format!("http://router.alephant.test{path}"))
@@ -1428,8 +1317,7 @@ mod tests {
             .expect("mapped body should collect")
             .to_bytes();
         (
-            serde_json::from_slice(&upstream_bytes)
-                .expect("mapped body should be valid json"),
+            serde_json::from_slice(&upstream_bytes).expect("mapped body should be valid json"),
             target_path,
         )
     }
@@ -1463,22 +1351,16 @@ mod tests {
             client_expects_responses_wire: false,
         });
 
-        let mapped = super::map_response(
-            registry,
-            upstream_endpoint,
-            client_endpoint,
-            resp,
-        )
-        .await
-        .expect("streaming response should map");
+        let mapped = super::map_response(registry, upstream_endpoint, client_endpoint, resp)
+            .await
+            .expect("streaming response should map");
         let (_, body) = mapped.into_parts();
         let bytes = body
             .collect()
             .await
             .expect("body should collect")
             .to_bytes();
-        let body_text =
-            std::str::from_utf8(&bytes).expect("mapped SSE should be utf8");
+        let body_text = std::str::from_utf8(&bytes).expect("mapped SSE should be utf8");
 
         assert!(body_text.contains("data: {"));
         assert!(body_text.ends_with("data: [DONE]\n\n"));
@@ -1486,8 +1368,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn unified_model_body_passthrough_openai_chat_preserves_model_and_stream_usage()
-     {
+    async fn unified_model_body_passthrough_openai_chat_preserves_model_and_stream_usage() {
         let upstream_body = map_unified_body_passthrough(
             ApiEndpoint::OpenAI(OpenAI::chat_completions()),
             ApiEndpoint::OpenAI(OpenAI::chat_completions()),
@@ -1570,7 +1451,7 @@ mod tests {
 
     #[tokio::test]
     async fn unified_model_body_passthrough_openai_compatible_chat_strips_matching_provider_prefix()
-     {
+    {
         let upstream_body = map_unified_body_passthrough(
             ApiEndpoint::OpenAI(OpenAI::chat_completions()),
             ApiEndpoint::OpenAICompatible {
@@ -1589,8 +1470,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn unified_model_body_passthrough_openai_compatible_responses_preserves_unknown_model()
-     {
+    async fn unified_model_body_passthrough_openai_compatible_responses_preserves_unknown_model() {
         let upstream_body = map_unified_body_passthrough(
             ApiEndpoint::OpenAI(OpenAI::responses()),
             ApiEndpoint::OpenAICompatible {
@@ -1630,8 +1510,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn unified_model_body_passthrough_openai_chat_to_google_preserves_model_and_messages()
-     {
+    async fn unified_model_body_passthrough_openai_chat_to_google_preserves_model_and_messages() {
         let upstream_body = map_unified_body_passthrough(
             ApiEndpoint::OpenAI(OpenAI::chat_completions()),
             ApiEndpoint::Google(Google::generate_contents()),
@@ -1650,7 +1529,7 @@ mod tests {
 
     #[tokio::test]
     async fn unified_model_body_passthrough_openai_chat_to_bedrock_preserves_model_id_and_messages()
-     {
+    {
         let upstream_body = map_unified_body_passthrough(
             ApiEndpoint::OpenAI(OpenAI::chat_completions()),
             ApiEndpoint::Bedrock(Bedrock::converse()),
@@ -1671,19 +1550,17 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn unified_model_body_passthrough_openai_chat_to_bedrock_allows_raw_model_id()
-     {
-        let (upstream_body, target_path) =
-            map_unified_body_passthrough_with_path(
-                ApiEndpoint::OpenAI(OpenAI::chat_completions()),
-                ApiEndpoint::Bedrock(Bedrock::converse()),
-                "/v1/chat/completions",
-                json!({
-                    "model": "claude-sonnet-4.6",
-                    "messages": [{"role": "user", "content": "hello"}]
-                }),
-            )
-            .await;
+    async fn unified_model_body_passthrough_openai_chat_to_bedrock_allows_raw_model_id() {
+        let (upstream_body, target_path) = map_unified_body_passthrough_with_path(
+            ApiEndpoint::OpenAI(OpenAI::chat_completions()),
+            ApiEndpoint::Bedrock(Bedrock::converse()),
+            "/v1/chat/completions",
+            json!({
+                "model": "claude-sonnet-4.6",
+                "messages": [{"role": "user", "content": "hello"}]
+            }),
+        )
+        .await;
 
         assert_eq!(upstream_body["modelId"], "claude-sonnet-4.6");
         assert_eq!(target_path, "/model/claude-sonnet-4.6/converse");
@@ -1692,19 +1569,18 @@ mod tests {
     #[tokio::test]
     async fn unified_model_body_passthrough_openai_chat_to_bedrock_strips_provider_prefix_and_keeps_thinking()
      {
-        let (upstream_body, target_path) =
-            map_unified_body_passthrough_with_path(
-                ApiEndpoint::OpenAI(OpenAI::chat_completions()),
-                ApiEndpoint::Bedrock(Bedrock::converse()),
-                "/v1/chat/completions",
-                json!({
-                    "model": "bedrock/anthropic.claude-3-5-sonnet-20240620-v1:0",
-                    "messages": [{"role": "user", "content": "hello"}],
-                    "max_completion_tokens": 2048,
-                    "reasoning_effort": "high"
-                }),
-            )
-            .await;
+        let (upstream_body, target_path) = map_unified_body_passthrough_with_path(
+            ApiEndpoint::OpenAI(OpenAI::chat_completions()),
+            ApiEndpoint::Bedrock(Bedrock::converse()),
+            "/v1/chat/completions",
+            json!({
+                "model": "bedrock/anthropic.claude-3-5-sonnet-20240620-v1:0",
+                "messages": [{"role": "user", "content": "hello"}],
+                "max_completion_tokens": 2048,
+                "reasoning_effort": "high"
+            }),
+        )
+        .await;
 
         assert_eq!(
             upstream_body["modelId"],
@@ -1715,37 +1591,30 @@ mod tests {
             "/model/anthropic.claude-3-5-sonnet-20240620-v1:0/converse"
         );
         assert_eq!(
-            upstream_body["additionalModelRequestFields"]["object"]["thinking"]
-                ["object"]["type"]["string"],
+            upstream_body["additionalModelRequestFields"]["object"]["thinking"]["object"]["type"]["string"],
             "enabled"
         );
     }
 
     #[tokio::test]
-    async fn unified_model_body_passthrough_openai_chat_to_bedrock_encodes_slash_model_path()
-     {
-        let (upstream_body, target_path) =
-            map_unified_body_passthrough_with_path(
-                ApiEndpoint::OpenAI(OpenAI::chat_completions()),
-                ApiEndpoint::Bedrock(Bedrock::converse()),
-                "/v1/chat/completions",
-                json!({
-                    "model": "anthropic/claude-sonnet-4.6",
-                    "messages": [{"role": "user", "content": "hello"}]
-                }),
-            )
-            .await;
+    async fn unified_model_body_passthrough_openai_chat_to_bedrock_encodes_slash_model_path() {
+        let (upstream_body, target_path) = map_unified_body_passthrough_with_path(
+            ApiEndpoint::OpenAI(OpenAI::chat_completions()),
+            ApiEndpoint::Bedrock(Bedrock::converse()),
+            "/v1/chat/completions",
+            json!({
+                "model": "anthropic/claude-sonnet-4.6",
+                "messages": [{"role": "user", "content": "hello"}]
+            }),
+        )
+        .await;
 
         assert_eq!(upstream_body["modelId"], "anthropic/claude-sonnet-4.6");
-        assert_eq!(
-            target_path,
-            "/model/anthropic%2Fclaude-sonnet-4.6/converse"
-        );
+        assert_eq!(target_path, "/model/anthropic%2Fclaude-sonnet-4.6/converse");
     }
 
     #[tokio::test]
-    async fn unified_model_body_passthrough_openai_chat_to_ollama_preserves_model_and_messages()
-     {
+    async fn unified_model_body_passthrough_openai_chat_to_ollama_preserves_model_and_messages() {
         let upstream_body = map_unified_body_passthrough(
             ApiEndpoint::OpenAI(OpenAI::chat_completions()),
             ApiEndpoint::Ollama(Ollama::chat_completions()),
@@ -1763,16 +1632,14 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn map_request_runs_post_policy_prompt_compression_on_chat_completions()
-     {
+    async fn map_request_runs_post_policy_prompt_compression_on_chat_completions() {
         let app = build_test_app(Config::default()).await.expect("build app");
         let model_mapper = ModelMapper::new(app.state.clone());
         let registry = EndpointConverterRegistry::new(&model_mapper);
         let source_endpoint = ApiEndpoint::OpenAI(OpenAI::chat_completions());
         let provider = InferenceProvider::Named("qwen".into());
         let target_endpoint =
-            ApiEndpoint::mapped(source_endpoint.clone(), &provider)
-                .expect("mapped endpoint");
+            ApiEndpoint::mapped(source_endpoint.clone(), &provider).expect("mapped endpoint");
 
         let request_body = Bytes::from(
             serde_json::to_vec(&json!({
@@ -1815,8 +1682,8 @@ mod tests {
             .await
             .expect("mapped body should collect")
             .to_bytes();
-        let upstream_body: Value = serde_json::from_slice(&upstream_bytes)
-            .expect("mapped body should be valid json");
+        let upstream_body: Value =
+            serde_json::from_slice(&upstream_bytes).expect("mapped body should be valid json");
         assert_eq!(upstream_body["messages"][0]["content"], "a b");
     }
 
@@ -1828,8 +1695,7 @@ mod tests {
         let source_endpoint = ApiEndpoint::OpenAI(OpenAI::chat_completions());
         let provider = InferenceProvider::Named("openrouter".into());
         let target_endpoint =
-            ApiEndpoint::mapped(source_endpoint.clone(), &provider)
-                .expect("mapped endpoint");
+            ApiEndpoint::mapped(source_endpoint.clone(), &provider).expect("mapped endpoint");
 
         let request_body = Bytes::from(
             serde_json::to_vec(&json!({
@@ -1880,8 +1746,8 @@ mod tests {
             .await
             .expect("mapped body should collect")
             .to_bytes();
-        let upstream_body: Value = serde_json::from_slice(&upstream_bytes)
-            .expect("mapped body should be valid json");
+        let upstream_body: Value =
+            serde_json::from_slice(&upstream_bytes).expect("mapped body should be valid json");
 
         assert_eq!(upstream_body["model"], "claude-sonnet-4.6");
         assert_eq!(upstream_body["max_completion_tokens"], 256);
@@ -1896,8 +1762,7 @@ mod tests {
         let source_endpoint = ApiEndpoint::OpenAI(OpenAI::chat_completions());
         let provider = InferenceProvider::Named("qwen".into());
         let target_endpoint =
-            ApiEndpoint::mapped(source_endpoint.clone(), &provider)
-                .expect("mapped endpoint");
+            ApiEndpoint::mapped(source_endpoint.clone(), &provider).expect("mapped endpoint");
         let request_body = Bytes::from(
             serde_json::to_vec(&json!({
                 "model": "qwen/qwen3-32b",
@@ -1941,8 +1806,8 @@ mod tests {
             .await
             .expect("mapped body should collect")
             .to_bytes();
-        let upstream_body: Value = serde_json::from_slice(&upstream_bytes)
-            .expect("mapped body should be valid json");
+        let upstream_body: Value =
+            serde_json::from_slice(&upstream_bytes).expect("mapped body should be valid json");
 
         assert_eq!(upstream_body["model"], "qwen3-32b");
         assert!(upstream_body["reasoning_effort"].is_null());
@@ -1956,8 +1821,7 @@ mod tests {
         let source_endpoint = ApiEndpoint::OpenAI(OpenAI::chat_completions());
         let provider = InferenceProvider::Named("deepseek".into());
         let target_endpoint =
-            ApiEndpoint::mapped(source_endpoint.clone(), &provider)
-                .expect("mapped endpoint");
+            ApiEndpoint::mapped(source_endpoint.clone(), &provider).expect("mapped endpoint");
         let request_body = Bytes::from(
             serde_json::to_vec(&json!({
                 "model": "deepseek/deepseek-reasoner",
@@ -2003,8 +1867,8 @@ mod tests {
             .await
             .expect("mapped body should collect")
             .to_bytes();
-        let upstream_body: Value = serde_json::from_slice(&upstream_bytes)
-            .expect("mapped body should be valid json");
+        let upstream_body: Value =
+            serde_json::from_slice(&upstream_bytes).expect("mapped body should be valid json");
 
         assert_eq!(upstream_body["model"], "deepseek-reasoner");
         assert_eq!(upstream_body["reasoning_effort"], json!("high"));
@@ -2018,8 +1882,7 @@ mod tests {
         let source_endpoint = ApiEndpoint::OpenAI(OpenAI::chat_completions());
         let provider = InferenceProvider::Named("deepseek".into());
         let target_endpoint =
-            ApiEndpoint::mapped(source_endpoint.clone(), &provider)
-                .expect("mapped endpoint");
+            ApiEndpoint::mapped(source_endpoint.clone(), &provider).expect("mapped endpoint");
         let request_body = Bytes::from(
             serde_json::to_vec(&json!({
                 "model": "deepseek/deepseek-reasoner",
@@ -2059,13 +1922,10 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn map_request_native_semantic_passthrough_skips_envelope_for_claude_cli()
-     {
+    async fn map_request_native_semantic_passthrough_skips_envelope_for_claude_cli() {
         use crate::{
             endpoints::anthropic::Anthropic,
-            ide_adapation::client_profile::{
-                ClientProfile, ClientProfileResolution,
-            },
+            ide_adapation::client_profile::{ClientProfile, ClientProfileResolution},
             types::extensions::{MapperContext, NativeSemanticPassthrough},
         };
 
@@ -2131,8 +1991,8 @@ mod tests {
             .await
             .expect("mapped body should collect")
             .to_bytes();
-        let upstream_body: Value = serde_json::from_slice(&upstream_bytes)
-            .expect("mapped body should be valid json");
+        let upstream_body: Value =
+            serde_json::from_slice(&upstream_bytes).expect("mapped body should be valid json");
         assert_eq!(upstream_body["model"], json!("claude-3-5-haiku-20241022"));
     }
 }

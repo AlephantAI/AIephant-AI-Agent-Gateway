@@ -24,9 +24,7 @@ pub fn model_field_from_json_body(body: &[u8]) -> Option<String> {
 
 /// Split `provider/model` on the first `/`. Fails if `/` is missing or a side
 /// is empty after trim.
-pub fn split_provider_model(
-    model: &str,
-) -> Result<ParsedProviderModel<'_>, ()> {
+pub fn split_provider_model(model: &str) -> Result<ParsedProviderModel<'_>, ()> {
     let (a, b) = model.split_once('/').ok_or(())?;
     let a = a.trim();
     let b = b.trim();

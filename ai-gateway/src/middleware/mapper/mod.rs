@@ -39,8 +39,8 @@ pub use self::service::*;
 use crate::{
     endpoints::{AiRequest, Endpoint},
     error::{
-        api::ApiError, internal::InternalError,
-        invalid_req::InvalidRequestError, mapper::MapperError,
+        api::ApiError, internal::InternalError, invalid_req::InvalidRequestError,
+        mapper::MapperError,
     },
     types::{
         extensions::{AnthropicOpenAiUsageCell, MapperContext},
@@ -55,10 +55,7 @@ pub(crate) const DEFAULT_MAX_TOKENS: u32 = 2000;
 pub trait TryConvert<Source, Target>: Sized {
     type Error;
 
-    fn try_convert(
-        &self,
-        value: Source,
-    ) -> std::result::Result<Target, Self::Error>;
+    fn try_convert(&self, value: Source) -> std::result::Result<Target, Self::Error>;
 
     fn try_convert_model_passthrough(
         &self,
@@ -67,10 +64,7 @@ pub trait TryConvert<Source, Target>: Sized {
         self.try_convert(value)
     }
 
-    fn passthrough_model_for_mapper_context(
-        &self,
-        _target: &Target,
-    ) -> Option<String> {
+    fn passthrough_model_for_mapper_context(&self, _target: &Target) -> Option<String> {
         None
     }
 }
@@ -97,9 +91,7 @@ pub trait TryConvertStreamData<Source, Target>: Sized {
     ) -> std::result::Result<Option<Target>, Self::Error>;
 }
 
-pub trait ResponseBodyConverter<Source, Target>:
-    TryConvert<Source, Target>
-{
+pub trait ResponseBodyConverter<Source, Target>: TryConvert<Source, Target> {
     fn try_convert_response(
         &self,
         _resp_parts: &Parts,
@@ -115,10 +107,7 @@ pub trait EndpointConverter {
     /// `MapperContext` is used to determine if the request is a stream
     /// since within the converter we have deserialized the request
     /// bytes to a concrete type.
-    fn convert_req_body(
-        &self,
-        req_body_bytes: Bytes,
-    ) -> Result<(Bytes, MapperContext), ApiError>;
+    fn convert_req_body(&self, req_body_bytes: Bytes) -> Result<(Bytes, MapperContext), ApiError>;
 
     /// Convert a request body while preserving the client-provided model when
     /// the concrete converter supports Unified API model passthrough.
@@ -204,8 +193,8 @@ where
             <C as TryConvert<S::RequestBody, T::RequestBody>>::Error,
         >,
     {
-        let source_request: S::RequestBody = serde_json::from_slice(&bytes)
-            .map_err(InvalidRequestError::InvalidRequestBody)?;
+        let source_request: S::RequestBody =
+            serde_json::from_slice(&bytes).map_err(InvalidRequestError::InvalidRequestBody)?;
         let is_stream = source_request.is_stream();
         let target_request = convert(&self.converter, source_request)
             .map_err(|e| InternalError::MapperError(e.into()))?;
@@ -241,13 +230,12 @@ where
             cursor_responses_origin: None,
             client_expects_responses_wire: false,
         };
-        let target_bytes =
-            Bytes::from(serde_json::to_vec(&target_request).map_err(|e| {
-                InternalError::Serialize {
-                    ty: std::any::type_name::<T::RequestBody>(),
-                    error: e,
-                }
-            })?);
+        let target_bytes = Bytes::from(serde_json::to_vec(&target_request).map_err(|e| {
+            InternalError::Serialize {
+                ty: std::any::type_name::<T::RequestBody>(),
+                error: e,
+            }
+        })?);
 
         Ok((target_bytes, mapper_ctx))
     }
@@ -275,10 +263,7 @@ where
         Into<MapperError>,
     <C as TryConvertError<T::ErrorResponseBody, S::ErrorResponseBody>>::Error: Into<MapperError>,
 {
-    fn convert_req_body(
-        &self,
-        bytes: Bytes,
-    ) -> Result<(Bytes, MapperContext), ApiError> {
+    fn convert_req_body(&self, bytes: Bytes) -> Result<(Bytes, MapperContext), ApiError> {
         self.convert_req_body_with(bytes, C::try_convert, false)
     }
 
@@ -286,11 +271,7 @@ where
         &self,
         bytes: Bytes,
     ) -> Result<(Bytes, MapperContext), ApiError> {
-        self.convert_req_body_with(
-            bytes,
-            C::try_convert_model_passthrough,
-            true,
-        )
+        self.convert_req_body_with(bytes, C::try_convert_model_passthrough, true)
     }
 
     fn convert_resp_body(
@@ -302,39 +283,31 @@ where
         lenient_openai_chat_completion_roles: bool,
     ) -> Result<Option<Bytes>, ApiError> {
         if is_stream {
-            let source_response: T::StreamResponseBody = if lenient_openai_chat_completion_roles
-            {
-                let mut value: serde_json::Value = serde_json::from_slice(&bytes)
-                    .map_err(|e| InternalError::Deserialize {
+            let source_response: T::StreamResponseBody = if lenient_openai_chat_completion_roles {
+                let mut value: serde_json::Value =
+                    serde_json::from_slice(&bytes).map_err(|e| InternalError::Deserialize {
                         ty: std::any::type_name::<T::StreamResponseBody>(),
                         error: e,
                     })?;
                 chat_completion_role_normalize::normalize_chat_completion_roles_in_place(
-                    &mut value,
-                    true,
+                    &mut value, true,
                 );
                 chat_completion_role_normalize::ensure_openai_chat_completion_required_fields_in_place(
                     &mut value,
                     true,
                 );
-                let patched = serde_json::to_vec(&value).map_err(|e| {
-                    InternalError::Serialize {
-                        ty: std::any::type_name::<T::StreamResponseBody>(),
-                        error: e,
-                    }
+                let patched = serde_json::to_vec(&value).map_err(|e| InternalError::Serialize {
+                    ty: std::any::type_name::<T::StreamResponseBody>(),
+                    error: e,
                 })?;
-                serde_json::from_slice(&patched).map_err(|e| {
-                    InternalError::Deserialize {
-                        ty: std::any::type_name::<T::StreamResponseBody>(),
-                        error: e,
-                    }
+                serde_json::from_slice(&patched).map_err(|e| InternalError::Deserialize {
+                    ty: std::any::type_name::<T::StreamResponseBody>(),
+                    error: e,
                 })?
             } else {
-                serde_json::from_slice(&bytes).map_err(|e| {
-                    InternalError::Deserialize {
-                        ty: std::any::type_name::<T::StreamResponseBody>(),
-                        error: e,
-                    }
+                serde_json::from_slice(&bytes).map_err(|e| InternalError::Deserialize {
+                    ty: std::any::type_name::<T::StreamResponseBody>(),
+                    error: e,
                 })?
             };
             let target_response: Option<S::StreamResponseBody> = self
@@ -344,12 +317,10 @@ where
 
             if let Some(target_response) = target_response {
                 let target_bytes =
-                serde_json::to_vec(&target_response).map_err(|e| {
-                    InternalError::Serialize {
+                    serde_json::to_vec(&target_response).map_err(|e| InternalError::Serialize {
                         ty: std::any::type_name::<T::ResponseBody>(),
                         error: e,
-                    }
-                })?;
+                    })?;
 
                 Ok(Some(Bytes::from(target_bytes)))
             } else {
@@ -360,16 +331,13 @@ where
                 if std::any::TypeId::of::<T::ErrorResponseBody>()
                     == std::any::TypeId::of::<WrappedError>()
                 {
-                    let wrapped =
-                        wrapped_error_lenient::deserialize_wrapped_error_lenient(&bytes);
-                    serde_json::from_value(
-                        serde_json::to_value(&wrapped).map_err(|e| {
-                            InternalError::Serialize {
-                                ty: std::any::type_name::<WrappedError>(),
-                                error: e,
-                            }
-                        })?,
-                    )
+                    let wrapped = wrapped_error_lenient::deserialize_wrapped_error_lenient(&bytes);
+                    serde_json::from_value(serde_json::to_value(&wrapped).map_err(|e| {
+                        InternalError::Serialize {
+                            ty: std::any::type_name::<WrappedError>(),
+                            error: e,
+                        }
+                    })?)
                     .map_err(|e| InternalError::Deserialize {
                         ty: std::any::type_name::<T::ErrorResponseBody>(),
                         error: e,
@@ -379,19 +347,16 @@ where
                         crate::endpoints::anthropic::messages::AnthropicApiError,
                     >()
                 {
-                    let anthropic = anthropic_error_lenient::deserialize_anthropic_error_lenient(
-                        &bytes,
-                    );
-                    serde_json::from_value(
-                        serde_json::to_value(&anthropic).map_err(|e| {
-                            InternalError::Serialize {
-                                ty: std::any::type_name::<
-                                    crate::endpoints::anthropic::messages::AnthropicApiError,
-                                >(),
-                                error: e,
-                            }
-                        })?,
-                    )
+                    let anthropic =
+                        anthropic_error_lenient::deserialize_anthropic_error_lenient(&bytes);
+                    serde_json::from_value(serde_json::to_value(&anthropic).map_err(|e| {
+                        InternalError::Serialize {
+                            ty: std::any::type_name::<
+                                crate::endpoints::anthropic::messages::AnthropicApiError,
+                            >(),
+                            error: e,
+                        }
+                    })?)
                     .map_err(|e| InternalError::Deserialize {
                         ty: std::any::type_name::<T::ErrorResponseBody>(),
                         error: e,
@@ -408,61 +373,50 @@ where
                 .map_err(|e| InternalError::MapperError(e.into()))?;
 
             let target_bytes =
-            serde_json::to_vec(&target_response).map_err(|e| {
-                InternalError::Serialize {
+                serde_json::to_vec(&target_response).map_err(|e| InternalError::Serialize {
                     ty: std::any::type_name::<T::ResponseBody>(),
                     error: e,
-                }
-            })?;
+                })?;
 
             Ok(Some(Bytes::from(target_bytes)))
         } else {
             let source_response: T::ResponseBody = if lenient_openai_chat_completion_roles {
-                let mut value: serde_json::Value = serde_json::from_slice(&bytes)
-                    .map_err(|e| InternalError::Deserialize {
+                let mut value: serde_json::Value =
+                    serde_json::from_slice(&bytes).map_err(|e| InternalError::Deserialize {
                         ty: std::any::type_name::<T::ResponseBody>(),
                         error: e,
                     })?;
                 chat_completion_role_normalize::normalize_chat_completion_roles_in_place(
-                    &mut value,
-                    false,
+                    &mut value, false,
                 );
                 chat_completion_role_normalize::ensure_openai_chat_completion_required_fields_in_place(
                     &mut value,
                     false,
                 );
-                let patched = serde_json::to_vec(&value).map_err(|e| {
-                    InternalError::Serialize {
-                        ty: std::any::type_name::<T::ResponseBody>(),
-                        error: e,
-                    }
+                let patched = serde_json::to_vec(&value).map_err(|e| InternalError::Serialize {
+                    ty: std::any::type_name::<T::ResponseBody>(),
+                    error: e,
                 })?;
-                serde_json::from_slice(&patched).map_err(|e| {
-                    InternalError::Deserialize {
-                        ty: std::any::type_name::<T::ResponseBody>(),
-                        error: e,
-                    }
+                serde_json::from_slice(&patched).map_err(|e| InternalError::Deserialize {
+                    ty: std::any::type_name::<T::ResponseBody>(),
+                    error: e,
                 })?
             } else {
-                serde_json::from_slice(&bytes).map_err(|e| {
-                    InternalError::Deserialize {
-                        ty: std::any::type_name::<T::ResponseBody>(),
-                        error: e,
-                    }
+                serde_json::from_slice(&bytes).map_err(|e| InternalError::Deserialize {
+                    ty: std::any::type_name::<T::ResponseBody>(),
+                    error: e,
                 })?
             };
             let target_response: S::ResponseBody = self
-            .converter
-            .try_convert_response(&resp_parts, source_response)
-            .map_err(|e| InternalError::MapperError(e.into()))?;
+                .converter
+                .try_convert_response(&resp_parts, source_response)
+                .map_err(|e| InternalError::MapperError(e.into()))?;
 
             let target_bytes =
-            serde_json::to_vec(&target_response).map_err(|e| {
-                InternalError::Serialize {
+                serde_json::to_vec(&target_response).map_err(|e| InternalError::Serialize {
                     ty: std::any::type_name::<T::ResponseBody>(),
                     error: e,
-                }
-            })?;
+                })?;
 
             Ok(Some(Bytes::from(target_bytes)))
         }
@@ -518,24 +472,24 @@ mod request_envelope_tests {
 
     #[test]
     fn request_envelope_captures_openai_chat_request_metadata() {
-        let request: CreateChatCompletionRequest =
-            serde_json::from_value(json!({
-                "model": "openai/gpt-4o-mini",
-                "messages": [
-                    {
-                        "role": "user",
-                        "content": "hello"
-                    }
-                ],
-                "stream": true
-            }))
-            .expect("request should deserialize");
+        let request: CreateChatCompletionRequest = serde_json::from_value(json!({
+            "model": "openai/gpt-4o-mini",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": "hello"
+                }
+            ],
+            "stream": true
+        }))
+        .expect("request should deserialize");
 
-        let envelope = crate::middleware::mapper::envelope::RequestEnvelope::from_openai_chat_request(
-            ApiEndpoint::OpenAI(OpenAI::chat_completions()),
-            InferenceProvider::Anthropic,
-            request,
-        );
+        let envelope =
+            crate::middleware::mapper::envelope::RequestEnvelope::from_openai_chat_request(
+                ApiEndpoint::OpenAI(OpenAI::chat_completions()),
+                InferenceProvider::Anthropic,
+                request,
+            );
 
         assert_eq!(envelope.raw_model, "openai/gpt-4o-mini");
         assert!(envelope.is_stream);
@@ -543,49 +497,47 @@ mod request_envelope_tests {
     }
 
     #[test]
-    fn request_rule_engine_applies_named_provider_rules_to_non_stream_openai_envelope()
-     {
-        let request: CreateChatCompletionRequest =
-            serde_json::from_value(json!({
-                "model": "qwen/qwen3-32b",
-                "messages": [
-                    {
-                        "role": "user",
-                        "content": "hello"
+    fn request_rule_engine_applies_named_provider_rules_to_non_stream_openai_envelope() {
+        let request: CreateChatCompletionRequest = serde_json::from_value(json!({
+            "model": "qwen/qwen3-32b",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": "hello"
+                }
+            ],
+            "tools": [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "lookup_weather"
                     }
-                ],
-                "tools": [
-                    {
-                        "type": "function",
-                        "function": {
-                            "name": "lookup_weather"
-                        }
-                    }
-                ],
-                "tool_choice": "auto",
-                "parallel_tool_calls": true,
-                "response_format": {
-                    "type": "json_object"
-                },
-                "reasoning_effort": "high"
-            }))
-            .expect("request should deserialize");
+                }
+            ],
+            "tool_choice": "auto",
+            "parallel_tool_calls": true,
+            "response_format": {
+                "type": "json_object"
+            },
+            "reasoning_effort": "high"
+        }))
+        .expect("request should deserialize");
 
         let provider = InferenceProvider::Named("qwen".into());
-        let envelope = crate::middleware::mapper::envelope::RequestEnvelope::from_openai_chat_request(
-            ApiEndpoint::OpenAI(OpenAI::chat_completions()),
-            provider.clone(),
-            request,
-        )
-        .with_resolved_metadata(
-            resolve_mapper_metadata(&provider, Some("qwen/qwen3-32b"))
-                .expect("metadata should resolve"),
-        );
+        let envelope =
+            crate::middleware::mapper::envelope::RequestEnvelope::from_openai_chat_request(
+                ApiEndpoint::OpenAI(OpenAI::chat_completions()),
+                provider.clone(),
+                request,
+            )
+            .with_resolved_metadata(
+                resolve_mapper_metadata(&provider, Some("qwen/qwen3-32b"))
+                    .expect("metadata should resolve"),
+            );
 
-        let prepared = crate::middleware::mapper::request_rule_engine::prepare_request_envelope(
-            envelope,
-        )
-        .expect("request rule engine should succeed");
+        let prepared =
+            crate::middleware::mapper::request_rule_engine::prepare_request_envelope(envelope)
+                .expect("request rule engine should succeed");
 
         assert!(prepared.request_rule_context.is_some());
         assert!(prepared.openai_request.tools.is_some());

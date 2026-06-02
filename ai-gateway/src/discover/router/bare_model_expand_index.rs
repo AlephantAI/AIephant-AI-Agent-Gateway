@@ -29,10 +29,7 @@ impl BareModelExpandIndex {
 
     /// `code/model` list for bare `model_id` from policy; empty `Vec` if none.
     #[must_use]
-    pub fn gateway_models_for_bare_id(
-        &self,
-        bare_trimmed: &str,
-    ) -> Vec<String> {
+    pub fn gateway_models_for_bare_id(&self, bare_trimmed: &str) -> Vec<String> {
         self.inner
             .get(&bare_trimmed.to_ascii_lowercase())
             .cloned()

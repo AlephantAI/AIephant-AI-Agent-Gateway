@@ -4,9 +4,7 @@ use url::Url;
 use crate::types::secret::Secret;
 
 /// The request url format of a S3 bucket.
-#[derive(
-    Default, Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash,
-)]
+#[derive(Default, Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(rename_all = "kebab-case")]
 pub enum UrlStyle {
     /// Requests will use "path-style" url: i.e:

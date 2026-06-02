@@ -41,12 +41,8 @@ pub fn extract_model_hint(body: &Bytes) -> String {
 /// Client IP for policy: leftmost `X-Forwarded-For` entry when present, else
 /// the peer address from the server's `SocketAddr` extension.
 #[must_use]
-pub fn resolve_client_ip(
-    headers: &http::HeaderMap,
-    extensions: &Extensions,
-) -> String {
-    if let Some(raw) =
-        headers.get("x-forwarded-for").and_then(|h| h.to_str().ok())
+pub fn resolve_client_ip(headers: &http::HeaderMap, extensions: &Extensions) -> String {
+    if let Some(raw) = headers.get("x-forwarded-for").and_then(|h| h.to_str().ok())
         && let Some(first) = raw.split(',').next()
     {
         let trimmed = first.trim();
@@ -61,9 +57,7 @@ pub fn resolve_client_ip(
 }
 
 #[must_use]
-pub fn build_policy_headers_map(
-    headers: &http::HeaderMap,
-) -> HashMap<String, String> {
+pub fn build_policy_headers_map(headers: &http::HeaderMap) -> HashMap<String, String> {
     let mut out = HashMap::new();
 
     for (name, value) in headers {
@@ -174,10 +168,7 @@ mod tests {
             http::HeaderValue::from_static("203.0.113.1, 10.0.0.1"),
         );
         let ext = Extensions::new();
-        assert_eq!(
-            resolve_client_ip(&headers, &ext),
-            "203.0.113.1".to_string()
-        );
+        assert_eq!(resolve_client_ip(&headers, &ext), "203.0.113.1".to_string());
     }
 
     #[test]
@@ -198,24 +189,17 @@ mod tests {
     #[test]
     fn build_policy_headers_map_preserves_single_header_value() {
         let mut headers = http::HeaderMap::new();
-        headers
-            .insert("x-request-id", http::HeaderValue::from_static("req-123"));
+        headers.insert("x-request-id", http::HeaderValue::from_static("req-123"));
 
         let out = build_policy_headers_map(&headers);
 
-        assert_eq!(
-            out.get("x-request-id").map(String::as_str),
-            Some("req-123")
-        );
+        assert_eq!(out.get("x-request-id").map(String::as_str), Some("req-123"));
     }
 
     #[test]
     fn build_policy_headers_map_joins_same_name_values_with_comma() {
         let mut headers = http::HeaderMap::new();
-        headers.append(
-            "accept",
-            http::HeaderValue::from_static("application/json"),
-        );
+        headers.append("accept", http::HeaderValue::from_static("application/json"));
         headers.append(
             "accept",
             http::HeaderValue::from_static("text/event-stream"),
@@ -234,8 +218,7 @@ mod tests {
         let mut headers = http::HeaderMap::new();
         headers.insert(
             "x-binary",
-            http::HeaderValue::from_bytes(&[0xff])
-                .expect("opaque bytes are valid header values"),
+            http::HeaderValue::from_bytes(&[0xff]).expect("opaque bytes are valid header values"),
         );
         headers.insert("x-text", http::HeaderValue::from_static("ok"));
 

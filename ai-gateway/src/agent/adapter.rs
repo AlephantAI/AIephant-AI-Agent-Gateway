@@ -1,15 +1,12 @@
 use crate::agent::{
     context::{
-        AgentConfidence, AgentEventPhase, AgentEventSourceTrust,
-        AgentPolicyStage, AgentStepKind, AgentStepSource,
+        AgentConfidence, AgentEventPhase, AgentEventSourceTrust, AgentPolicyStage, AgentStepKind,
+        AgentStepSource,
     },
     event::{AgentEventInput, AgentEventSource},
 };
 
-pub fn adapt_agent_event(
-    source: AgentEventSource,
-    mut event: AgentEventInput,
-) -> AgentEventInput {
+pub fn adapt_agent_event(source: AgentEventSource, mut event: AgentEventInput) -> AgentEventInput {
     event.source = Some(source);
     match source {
         AgentEventSource::Alephant => {
@@ -21,17 +18,13 @@ pub fn adapt_agent_event(
         AgentEventSource::N8n => adapt_n8n_event(event),
         AgentEventSource::CrewAi => adapt_crewai_event(event),
         AgentEventSource::Mastra => adapt_mastra_event(event),
-        AgentEventSource::Unknown => {
-            adapt_unknown_event(AgentEventSource::Unknown, event)
-        }
+        AgentEventSource::Unknown => adapt_unknown_event(AgentEventSource::Unknown, event),
     }
 }
 
 fn adapt_langgraph_event(mut event: AgentEventInput) -> AgentEventInput {
     let raw_event_type = event.event_type.clone();
-    if let Some((event_type, step_kind, phase, stage)) =
-        map_langgraph_event_type(&raw_event_type)
-    {
+    if let Some((event_type, step_kind, phase, stage)) = map_langgraph_event_type(&raw_event_type) {
         set_mapping(
             &mut event,
             event_type,
@@ -43,8 +36,8 @@ fn adapt_langgraph_event(mut event: AgentEventInput) -> AgentEventInput {
         );
     }
     if event.graph_node.is_none() {
-        event.graph_node = metadata_string(&event.metadata, "langgraph_node")
-            .or_else(|| event.name.clone());
+        event.graph_node =
+            metadata_string(&event.metadata, "langgraph_node").or_else(|| event.name.clone());
     }
     enrich_adapter_metadata(
         &mut event.metadata,
@@ -58,16 +51,14 @@ fn adapt_langgraph_event(mut event: AgentEventInput) -> AgentEventInput {
 
 fn adapt_openai_agents_event(mut event: AgentEventInput) -> AgentEventInput {
     let run_id = raw_string(&event, "trace_id");
-    let step_id =
-        raw_string(&event, "span_id").or_else(|| raw_string(&event, "item_id"));
+    let step_id = raw_string(&event, "span_id").or_else(|| raw_string(&event, "item_id"));
     let parent_step_id = raw_string(&event, "parent_id");
     fill_option(&mut event.run_id, run_id);
     fill_option(&mut event.step_id, step_id);
     fill_option(&mut event.parent_step_id, parent_step_id);
 
     let raw_event_type = event.event_type.clone();
-    let Some((event_type, step_kind, phase, stage)) =
-        map_openai_agents_event_type(&raw_event_type)
+    let Some((event_type, step_kind, phase, stage)) = map_openai_agents_event_type(&raw_event_type)
     else {
         return adapt_unknown_event(AgentEventSource::OpenAiAgents, event);
     };
@@ -86,11 +77,7 @@ fn adapt_openai_agents_event(mut event: AgentEventInput) -> AgentEventInput {
             metadata_insert_string(&mut event.metadata, "tool_name", name);
         }
     }
-    finish_framework_event(
-        event,
-        AgentEventSource::OpenAiAgents,
-        &raw_event_type,
-    )
+    finish_framework_event(event, AgentEventSource::OpenAiAgents, &raw_event_type)
 }
 
 fn adapt_n8n_event(mut event: AgentEventInput) -> AgentEventInput {
@@ -136,9 +123,7 @@ fn adapt_crewai_event(mut event: AgentEventInput) -> AgentEventInput {
     }
 
     let raw_event_type = event.event_type.clone();
-    let Some((event_type, step_kind, phase, stage)) =
-        map_crewai_event_type(&raw_event_type)
-    else {
+    let Some((event_type, step_kind, phase, stage)) = map_crewai_event_type(&raw_event_type) else {
         return adapt_unknown_event(AgentEventSource::CrewAi, event);
     };
 
@@ -164,9 +149,7 @@ fn adapt_mastra_event(mut event: AgentEventInput) -> AgentEventInput {
     }
 
     let raw_event_type = event.event_type.clone();
-    let Some((event_type, step_kind, phase, stage)) =
-        map_mastra_event_type(&raw_event_type)
-    else {
+    let Some((event_type, step_kind, phase, stage)) = map_mastra_event_type(&raw_event_type) else {
         return adapt_unknown_event(AgentEventSource::Mastra, event);
     };
 
@@ -182,17 +165,12 @@ fn adapt_mastra_event(mut event: AgentEventInput) -> AgentEventInput {
     finish_framework_event(event, AgentEventSource::Mastra, &raw_event_type)
 }
 
-fn adapt_unknown_event(
-    source: AgentEventSource,
-    mut event: AgentEventInput,
-) -> AgentEventInput {
+fn adapt_unknown_event(source: AgentEventSource, mut event: AgentEventInput) -> AgentEventInput {
     if matches!(source, AgentEventSource::Unknown) {
         event.event_source_trust = AgentEventSourceTrust::SelfReported;
     }
     let raw_event_type = event.event_type.clone();
-    if let Some((event_type, step_kind)) =
-        map_unknown_event_type(&raw_event_type)
-    {
+    if let Some((event_type, step_kind)) = map_unknown_event_type(&raw_event_type) {
         event.event_type = event_type.to_string();
         event.step_kind = Some(step_kind);
         event.step_source = AgentStepSource::Heuristic;
@@ -586,9 +564,7 @@ fn map_mastra_event_type(
     }
 }
 
-fn map_unknown_event_type(
-    event_type: &str,
-) -> Option<(&'static str, AgentStepKind)> {
+fn map_unknown_event_type(event_type: &str) -> Option<(&'static str, AgentStepKind)> {
     let compact = event_type.to_ascii_lowercase();
     if is_ambiguous_incomplete_event(&compact) {
         None
@@ -631,9 +607,7 @@ fn is_ambiguous_incomplete_event(event_type: &str) -> bool {
         .any(|suffix| {
             event_type
                 .strip_suffix(suffix)
-                .and_then(|prefix| {
-                    prefix.rsplit(['.', '_', '-', ':', '/']).next()
-                })
+                .and_then(|prefix| prefix.rsplit(['.', '_', '-', ':', '/']).next())
                 .is_some_and(|token| token == "not")
         })
 }
@@ -641,9 +615,7 @@ fn is_ambiguous_incomplete_event(event_type: &str) -> bool {
 fn has_not_completion_tokens(event_type: &str) -> bool {
     let mut previous = None;
     for token in event_tokens(event_type) {
-        if previous == Some("not")
-            && matches!(token, "completed" | "complete" | "end")
-        {
+        if previous == Some("not") && matches!(token, "completed" | "complete" | "end") {
             return true;
         }
         previous = Some(token);
@@ -661,8 +633,7 @@ fn has_llm_token(event_type: &str) -> bool {
         if token == "llm" {
             return true;
         }
-        if token == "chat" && tokens.peek().is_some_and(|next| *next == "model")
-        {
+        if token == "chat" && tokens.peek().is_some_and(|next| *next == "model") {
             return true;
         }
     }
@@ -676,8 +647,7 @@ fn has_approval_token(event_type: &str) -> bool {
 fn event_tokens(event_type: &str) -> impl Iterator<Item = &str> {
     event_type
         .split(|character: char| {
-            matches!(character, '.' | '_' | '-' | ':' | '/')
-                || character.is_whitespace()
+            matches!(character, '.' | '_' | '-' | ':' | '/') || character.is_whitespace()
         })
         .filter(|token| !token.is_empty())
 }
@@ -740,11 +710,7 @@ fn fill_option(target: &mut Option<String>, value: Option<String>) {
     }
 }
 
-fn metadata_insert_string(
-    metadata: &mut serde_json::Value,
-    key: &str,
-    value: String,
-) {
+fn metadata_insert_string(metadata: &mut serde_json::Value, key: &str, value: String) {
     if !metadata.is_object() {
         *metadata = serde_json::json!({ "value": metadata.take() });
     }
@@ -773,12 +739,12 @@ fn enrich_adapter_metadata(
     let Some(object) = metadata.as_object_mut() else {
         return;
     };
-    object.entry("framework").or_insert_with(|| {
-        serde_json::Value::String(source.as_str().to_string())
-    });
-    object.entry("rawEventType").or_insert_with(|| {
-        serde_json::Value::String(raw_event_type.to_string())
-    });
+    object
+        .entry("framework")
+        .or_insert_with(|| serde_json::Value::String(source.as_str().to_string()));
+    object
+        .entry("rawEventType")
+        .or_insert_with(|| serde_json::Value::String(raw_event_type.to_string()));
     if let Some(name) = name {
         object
             .entry("rawName")
@@ -829,8 +795,8 @@ mod tests {
 
     use crate::agent::{
         context::{
-            AgentConfidence, AgentEventPhase, AgentEventSourceTrust,
-            AgentPolicyStage, AgentStepKind, AgentStepSource,
+            AgentConfidence, AgentEventPhase, AgentEventSourceTrust, AgentPolicyStage,
+            AgentStepKind, AgentStepSource,
         },
         event::{AgentEventSource, AgentEventsRequest},
     };
@@ -859,10 +825,7 @@ mod tests {
         assert_eq!(sourced.len(), 1);
         assert_eq!(sourced[0].source, AgentEventSource::LangGraph);
 
-        let adapted = super::adapt_agent_event(
-            sourced[0].source,
-            sourced[0].event.clone(),
-        );
+        let adapted = super::adapt_agent_event(sourced[0].source, sourced[0].event.clone());
 
         assert_eq!(adapted.event_type, "tool.call.requested");
         assert_eq!(adapted.step_kind, Some(AgentStepKind::ToolCall));
@@ -894,10 +857,7 @@ mod tests {
         let request: AgentEventsRequest = serde_json::from_value(raw).unwrap();
         let sourced = request.into_sourced_events();
 
-        let adapted = super::adapt_agent_event(
-            sourced[0].source,
-            sourced[0].event.clone(),
-        );
+        let adapted = super::adapt_agent_event(sourced[0].source, sourced[0].event.clone());
 
         assert_eq!(adapted.event_type, "llm.call.started");
         assert_eq!(adapted.step_kind, Some(AgentStepKind::LlmCall));
@@ -921,10 +881,7 @@ mod tests {
         });
         let request: AgentEventsRequest = serde_json::from_value(raw).unwrap();
         let sourced = request.into_sourced_events();
-        let adapted = super::adapt_agent_event(
-            sourced[0].source,
-            sourced[0].event.clone(),
-        );
+        let adapted = super::adapt_agent_event(sourced[0].source, sourced[0].event.clone());
 
         assert_eq!(sourced[0].source, AgentEventSource::Unknown);
         assert_eq!(adapted.event_type, "tool.call.requested");
@@ -949,10 +906,7 @@ mod tests {
         });
         let request: AgentEventsRequest = serde_json::from_value(raw).unwrap();
         let sourced = request.into_sourced_events();
-        let adapted = super::adapt_agent_event(
-            sourced[0].source,
-            sourced[0].event.clone(),
-        );
+        let adapted = super::adapt_agent_event(sourced[0].source, sourced[0].event.clone());
 
         assert_eq!(sourced[0].source, AgentEventSource::Unknown);
         assert_eq!(adapted.event_type, "tool.call.requested");
@@ -983,10 +937,7 @@ mod tests {
         });
         let request: AgentEventsRequest = serde_json::from_value(raw).unwrap();
         let sourced = request.into_sourced_events();
-        let adapted = super::adapt_agent_event(
-            sourced[0].source,
-            sourced[0].event.clone(),
-        );
+        let adapted = super::adapt_agent_event(sourced[0].source, sourced[0].event.clone());
 
         assert_eq!(adapted.event_type, "tool.call.requested");
         assert_eq!(adapted.step_kind, Some(AgentStepKind::ToolCall));
@@ -1008,10 +959,7 @@ mod tests {
         });
         let request: AgentEventsRequest = serde_json::from_value(raw).unwrap();
         let sourced = request.into_sourced_events();
-        let adapted = super::adapt_agent_event(
-            sourced[0].source,
-            sourced[0].event.clone(),
-        );
+        let adapted = super::adapt_agent_event(sourced[0].source, sourced[0].event.clone());
 
         assert_eq!(adapted.event_type, "tool.call.requested");
         assert_eq!(
@@ -1033,10 +981,7 @@ mod tests {
         });
         let request: AgentEventsRequest = serde_json::from_value(raw).unwrap();
         let sourced = request.into_sourced_events();
-        let adapted = super::adapt_agent_event(
-            sourced[0].source,
-            sourced[0].event.clone(),
-        );
+        let adapted = super::adapt_agent_event(sourced[0].source, sourced[0].event.clone());
 
         assert_eq!(adapted.event_type, "unknown");
         assert_eq!(adapted.step_kind, Some(AgentStepKind::Unknown));
@@ -1060,10 +1005,7 @@ mod tests {
         });
         let request: AgentEventsRequest = serde_json::from_value(raw).unwrap();
         let sourced = request.into_sourced_events();
-        let adapted = super::adapt_agent_event(
-            sourced[0].source,
-            sourced[0].event.clone(),
-        );
+        let adapted = super::adapt_agent_event(sourced[0].source, sourced[0].event.clone());
 
         assert_eq!(adapted.event_type, "unknown");
         assert_eq!(adapted.step_kind, Some(AgentStepKind::Unknown));
@@ -1083,10 +1025,7 @@ mod tests {
         });
         let request: AgentEventsRequest = serde_json::from_value(raw).unwrap();
         let sourced = request.into_sourced_events();
-        let adapted = super::adapt_agent_event(
-            sourced[0].source,
-            sourced[0].event.clone(),
-        );
+        let adapted = super::adapt_agent_event(sourced[0].source, sourced[0].event.clone());
 
         assert_eq!(adapted.event_type, "step.completed");
         assert_eq!(adapted.step_kind, Some(AgentStepKind::Unknown));
@@ -1108,13 +1047,9 @@ mod tests {
                     "step_id": "step-1"
                 }]
             });
-            let request: AgentEventsRequest =
-                serde_json::from_value(raw).unwrap();
+            let request: AgentEventsRequest = serde_json::from_value(raw).unwrap();
             let sourced = request.into_sourced_events();
-            let adapted = super::adapt_agent_event(
-                sourced[0].source,
-                sourced[0].event.clone(),
-            );
+            let adapted = super::adapt_agent_event(sourced[0].source, sourced[0].event.clone());
 
             assert_eq!(adapted.event_type, "tool.call.completed");
             assert_eq!(adapted.step_kind, Some(AgentStepKind::ToolCall));
@@ -1138,10 +1073,7 @@ mod tests {
         });
         let request: AgentEventsRequest = serde_json::from_value(raw).unwrap();
         let sourced = request.into_sourced_events();
-        let adapted = super::adapt_agent_event(
-            sourced[0].source,
-            sourced[0].event.clone(),
-        );
+        let adapted = super::adapt_agent_event(sourced[0].source, sourced[0].event.clone());
 
         assert_eq!(adapted.event_type, "step.completed");
         assert_eq!(adapted.step_source, AgentStepSource::Heuristic);
@@ -1160,13 +1092,9 @@ mod tests {
                     "step_id": "step-1"
                 }]
             });
-            let request: AgentEventsRequest =
-                serde_json::from_value(raw).unwrap();
+            let request: AgentEventsRequest = serde_json::from_value(raw).unwrap();
             let sourced = request.into_sourced_events();
-            let adapted = super::adapt_agent_event(
-                sourced[0].source,
-                sourced[0].event.clone(),
-            );
+            let adapted = super::adapt_agent_event(sourced[0].source, sourced[0].event.clone());
 
             assert_eq!(adapted.event_type, "unknown");
             assert_eq!(adapted.step_confidence, AgentConfidence::Low);
@@ -1192,13 +1120,9 @@ mod tests {
                     "step_id": "step-1"
                 }]
             });
-            let request: AgentEventsRequest =
-                serde_json::from_value(raw).unwrap();
+            let request: AgentEventsRequest = serde_json::from_value(raw).unwrap();
             let sourced = request.into_sourced_events();
-            let adapted = super::adapt_agent_event(
-                sourced[0].source,
-                sourced[0].event.clone(),
-            );
+            let adapted = super::adapt_agent_event(sourced[0].source, sourced[0].event.clone());
 
             assert_eq!(adapted.event_type, "unknown");
             assert_eq!(adapted.step_kind, Some(AgentStepKind::Unknown));
@@ -1225,13 +1149,9 @@ mod tests {
                     "step_id": "step-1"
                 }]
             });
-            let request: AgentEventsRequest =
-                serde_json::from_value(raw).unwrap();
+            let request: AgentEventsRequest = serde_json::from_value(raw).unwrap();
             let sourced = request.into_sourced_events();
-            let adapted = super::adapt_agent_event(
-                sourced[0].source,
-                sourced[0].event.clone(),
-            );
+            let adapted = super::adapt_agent_event(sourced[0].source, sourced[0].event.clone());
 
             assert_eq!(adapted.event_type, "unknown");
             assert_eq!(adapted.step_kind, Some(AgentStepKind::Unknown));
@@ -1243,9 +1163,7 @@ mod tests {
 
     #[test]
     fn unknown_tool_and_llm_substrings_remain_conservative_unknowns() {
-        for raw_event_type in
-            ["tooling.started", "workflow.tooling.end", "allm.started"]
-        {
+        for raw_event_type in ["tooling.started", "workflow.tooling.end", "allm.started"] {
             let raw = json!({
                 "framework": "unknown",
                 "events": [{
@@ -1255,13 +1173,9 @@ mod tests {
                     "step_id": "step-1"
                 }]
             });
-            let request: AgentEventsRequest =
-                serde_json::from_value(raw).unwrap();
+            let request: AgentEventsRequest = serde_json::from_value(raw).unwrap();
             let sourced = request.into_sourced_events();
-            let adapted = super::adapt_agent_event(
-                sourced[0].source,
-                sourced[0].event.clone(),
-            );
+            let adapted = super::adapt_agent_event(sourced[0].source, sourced[0].event.clone());
 
             assert_eq!(adapted.event_type, "unknown");
             assert_eq!(adapted.step_confidence, AgentConfidence::Low);
@@ -1283,10 +1197,7 @@ mod tests {
         });
         let request: AgentEventsRequest = serde_json::from_value(raw).unwrap();
         let sourced = request.into_sourced_events();
-        let adapted = super::adapt_agent_event(
-            sourced[0].source,
-            sourced[0].event.clone(),
-        );
+        let adapted = super::adapt_agent_event(sourced[0].source, sourced[0].event.clone());
 
         assert_eq!(adapted.event_type, "unknown");
         assert_eq!(adapted.step_confidence, AgentConfidence::Low);
@@ -1308,10 +1219,7 @@ mod tests {
         });
         let request: AgentEventsRequest = serde_json::from_value(raw).unwrap();
         let sourced = request.into_sourced_events();
-        let adapted = super::adapt_agent_event(
-            sourced[0].source,
-            sourced[0].event.clone(),
-        );
+        let adapted = super::adapt_agent_event(sourced[0].source, sourced[0].event.clone());
 
         assert_eq!(adapted.event_type, "tool.call.requested");
         assert_eq!(adapted.step_kind, Some(AgentStepKind::ToolCall));
@@ -1335,10 +1243,7 @@ mod tests {
         });
         let request: AgentEventsRequest = serde_json::from_value(raw).unwrap();
         let sourced = request.into_sourced_events();
-        let adapted = super::adapt_agent_event(
-            sourced[0].source,
-            sourced[0].event.clone(),
-        );
+        let adapted = super::adapt_agent_event(sourced[0].source, sourced[0].event.clone());
 
         assert_eq!(adapted.event_type, "tool.result.received");
         assert_eq!(adapted.step_kind, Some(AgentStepKind::ToolResult));
@@ -1359,10 +1264,7 @@ mod tests {
         });
         let request: AgentEventsRequest = serde_json::from_value(raw).unwrap();
         let sourced = request.into_sourced_events();
-        let adapted = super::adapt_agent_event(
-            sourced[0].source,
-            sourced[0].event.clone(),
-        );
+        let adapted = super::adapt_agent_event(sourced[0].source, sourced[0].event.clone());
 
         assert_eq!(adapted.event_type, "handoff.requested");
         assert_eq!(adapted.step_kind, Some(AgentStepKind::Handoff));
@@ -1386,10 +1288,7 @@ mod tests {
         });
         let request: AgentEventsRequest = serde_json::from_value(raw).unwrap();
         let sourced = request.into_sourced_events();
-        let adapted = super::adapt_agent_event(
-            sourced[0].source,
-            sourced[0].event.clone(),
-        );
+        let adapted = super::adapt_agent_event(sourced[0].source, sourced[0].event.clone());
 
         assert_eq!(adapted.event_type, "tool.call.requested");
         assert_eq!(adapted.step_kind, Some(AgentStepKind::ToolCall));
@@ -1416,10 +1315,7 @@ mod tests {
         });
         let request: AgentEventsRequest = serde_json::from_value(raw).unwrap();
         let sourced = request.into_sourced_events();
-        let adapted = super::adapt_agent_event(
-            sourced[0].source,
-            sourced[0].event.clone(),
-        );
+        let adapted = super::adapt_agent_event(sourced[0].source, sourced[0].event.clone());
 
         assert_eq!(adapted.event_type, "step.started");
         assert_eq!(adapted.step_kind, Some(AgentStepKind::Unknown));
@@ -1442,10 +1338,7 @@ mod tests {
         });
         let request: AgentEventsRequest = serde_json::from_value(raw).unwrap();
         let sourced = request.into_sourced_events();
-        let adapted = super::adapt_agent_event(
-            sourced[0].source,
-            sourced[0].event.clone(),
-        );
+        let adapted = super::adapt_agent_event(sourced[0].source, sourced[0].event.clone());
 
         assert_eq!(adapted.event_type, "step.completed");
         assert_eq!(adapted.step_kind, Some(AgentStepKind::Unknown));
@@ -1468,10 +1361,7 @@ mod tests {
         });
         let request: AgentEventsRequest = serde_json::from_value(raw).unwrap();
         let sourced = request.into_sourced_events();
-        let adapted = super::adapt_agent_event(
-            sourced[0].source,
-            sourced[0].event.clone(),
-        );
+        let adapted = super::adapt_agent_event(sourced[0].source, sourced[0].event.clone());
 
         assert_eq!(adapted.event_type, "step.started");
         assert_eq!(adapted.step_kind, Some(AgentStepKind::Unknown));
@@ -1494,10 +1384,7 @@ mod tests {
         });
         let request: AgentEventsRequest = serde_json::from_value(raw).unwrap();
         let sourced = request.into_sourced_events();
-        let adapted = super::adapt_agent_event(
-            sourced[0].source,
-            sourced[0].event.clone(),
-        );
+        let adapted = super::adapt_agent_event(sourced[0].source, sourced[0].event.clone());
 
         assert_eq!(adapted.event_type, "step.completed");
         assert_eq!(adapted.step_kind, Some(AgentStepKind::Unknown));
@@ -1517,10 +1404,7 @@ mod tests {
         });
         let request: AgentEventsRequest = serde_json::from_value(raw).unwrap();
         let sourced = request.into_sourced_events();
-        let adapted = super::adapt_agent_event(
-            sourced[0].source,
-            sourced[0].event.clone(),
-        );
+        let adapted = super::adapt_agent_event(sourced[0].source, sourced[0].event.clone());
 
         assert_eq!(adapted.event_type, "run.completed");
         assert_eq!(adapted.event_phase, AgentEventPhase::State);
@@ -1539,10 +1423,7 @@ mod tests {
         });
         let request: AgentEventsRequest = serde_json::from_value(raw).unwrap();
         let sourced = request.into_sourced_events();
-        let adapted = super::adapt_agent_event(
-            sourced[0].source,
-            sourced[0].event.clone(),
-        );
+        let adapted = super::adapt_agent_event(sourced[0].source, sourced[0].event.clone());
 
         assert_eq!(adapted.event_type, "run.failed");
         assert_eq!(adapted.event_phase, AgentEventPhase::State);
@@ -1562,10 +1443,7 @@ mod tests {
         });
         let request: AgentEventsRequest = serde_json::from_value(raw).unwrap();
         let sourced = request.into_sourced_events();
-        let adapted = super::adapt_agent_event(
-            sourced[0].source,
-            sourced[0].event.clone(),
-        );
+        let adapted = super::adapt_agent_event(sourced[0].source, sourced[0].event.clone());
 
         assert_eq!(adapted.event_type, "tool.call.requested");
         assert_eq!(adapted.step_kind, Some(AgentStepKind::ToolCall));
@@ -1587,10 +1465,7 @@ mod tests {
         });
         let request: AgentEventsRequest = serde_json::from_value(raw).unwrap();
         let sourced = request.into_sourced_events();
-        let adapted = super::adapt_agent_event(
-            sourced[0].source,
-            sourced[0].event.clone(),
-        );
+        let adapted = super::adapt_agent_event(sourced[0].source, sourced[0].event.clone());
 
         assert_eq!(adapted.event_type, "run.failed");
         assert_eq!(adapted.event_phase, AgentEventPhase::State);
@@ -1610,10 +1485,7 @@ mod tests {
         });
         let request: AgentEventsRequest = serde_json::from_value(raw).unwrap();
         let sourced = request.into_sourced_events();
-        let adapted = super::adapt_agent_event(
-            sourced[0].source,
-            sourced[0].event.clone(),
-        );
+        let adapted = super::adapt_agent_event(sourced[0].source, sourced[0].event.clone());
 
         assert_eq!(adapted.event_type, "tool.call.requested");
         assert_eq!(adapted.step_kind, Some(AgentStepKind::ToolCall));
@@ -1635,10 +1507,7 @@ mod tests {
         });
         let request: AgentEventsRequest = serde_json::from_value(raw).unwrap();
         let sourced = request.into_sourced_events();
-        let adapted = super::adapt_agent_event(
-            sourced[0].source,
-            sourced[0].event.clone(),
-        );
+        let adapted = super::adapt_agent_event(sourced[0].source, sourced[0].event.clone());
 
         assert_eq!(adapted.event_type, "run.failed");
         assert_eq!(adapted.event_phase, AgentEventPhase::State);
@@ -1661,13 +1530,9 @@ mod tests {
                     "name": "native_name"
                 }]
             });
-            let request: AgentEventsRequest =
-                serde_json::from_value(raw).unwrap();
+            let request: AgentEventsRequest = serde_json::from_value(raw).unwrap();
             let sourced = request.into_sourced_events();
-            let adapted = super::adapt_agent_event(
-                sourced[0].source,
-                sourced[0].event.clone(),
-            );
+            let adapted = super::adapt_agent_event(sourced[0].source, sourced[0].event.clone());
 
             assert_eq!(adapted.event_type, "unknown");
             assert_eq!(adapted.step_kind, Some(AgentStepKind::Unknown));
@@ -1693,10 +1558,7 @@ mod tests {
         });
         let request: AgentEventsRequest = serde_json::from_value(raw).unwrap();
         let sourced = request.into_sourced_events();
-        let adapted = super::adapt_agent_event(
-            sourced[0].source,
-            sourced[0].event.clone(),
-        );
+        let adapted = super::adapt_agent_event(sourced[0].source, sourced[0].event.clone());
 
         assert_eq!(adapted.metadata["executionId"], "exec-1");
         assert_eq!(adapted.metadata["workflowId"], "workflow-1");
@@ -1720,10 +1582,7 @@ mod tests {
         });
         let request: AgentEventsRequest = serde_json::from_value(raw).unwrap();
         let sourced = request.into_sourced_events();
-        let adapted = super::adapt_agent_event(
-            sourced[0].source,
-            sourced[0].event.clone(),
-        );
+        let adapted = super::adapt_agent_event(sourced[0].source, sourced[0].event.clone());
 
         assert_eq!(adapted.metadata["executionId"], "metadata-exec");
         assert_eq!(adapted.metadata["rawEventType"], "node.started");

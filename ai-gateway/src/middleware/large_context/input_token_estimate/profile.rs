@@ -36,13 +36,9 @@ pub fn resolve_profile(
 
 fn profile_from_model_id(mid: &ModelId) -> EstimateProfile {
     match mid {
-        ModelId::ModelIdWithVersion { provider, .. } => {
-            profile_for_inference_provider(provider)
-        }
+        ModelId::ModelIdWithVersion { provider, .. } => profile_for_inference_provider(provider),
         ModelId::Bedrock(_) => EstimateProfile::BedrockMultiFoundation,
-        ModelId::Ollama(_) | ModelId::Unknown(_) => {
-            EstimateProfile::HeuristicDefault
-        }
+        ModelId::Ollama(_) | ModelId::Unknown(_) => EstimateProfile::HeuristicDefault,
     }
 }
 
@@ -91,10 +87,7 @@ mod tests {
     #[test]
     fn profile_prefers_inference_provider_when_some() {
         assert_eq!(
-            resolve_profile(
-                Some(&InferenceProvider::Anthropic),
-                "openai/gpt-4o-mini",
-            ),
+            resolve_profile(Some(&InferenceProvider::Anthropic), "openai/gpt-4o-mini",),
             EstimateProfile::AnthropicMessages,
         );
     }
@@ -110,10 +103,7 @@ mod tests {
     #[test]
     fn profile_from_model_id_bedrock() {
         assert_eq!(
-            resolve_profile(
-                None,
-                "bedrock/anthropic.claude-3-sonnet-20240229-v1:0"
-            ),
+            resolve_profile(None, "bedrock/anthropic.claude-3-sonnet-20240229-v1:0"),
             EstimateProfile::BedrockMultiFoundation,
         );
     }
@@ -133,9 +123,7 @@ mod tests {
     fn profile_unknown_named_falls_back_to_heuristic() {
         assert_eq!(
             resolve_profile(
-                Some(&InferenceProvider::Named(
-                    "totally-unknown-vendor".into()
-                )),
+                Some(&InferenceProvider::Named("totally-unknown-vendor".into())),
                 "totally-unknown-vendor/foo",
             ),
             EstimateProfile::HeuristicDefault,

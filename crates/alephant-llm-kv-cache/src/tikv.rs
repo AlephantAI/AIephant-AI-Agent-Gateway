@@ -29,9 +29,7 @@ impl TikvKvClient {
 
         let mut config = TikvConfig::default()
             .with_timeout(Duration::from_millis(request_timeout_ms))
-            .with_grpc_max_decoding_message_size(
-                max_value_bytes.saturating_add(1024 * 1024),
-            );
+            .with_grpc_max_decoding_message_size(max_value_bytes.saturating_add(1024 * 1024));
         if let Some(ca) = ca_cert_path {
             config.ca_path = Some(ca.to_path_buf());
         }
@@ -49,16 +47,14 @@ impl TikvKvClient {
 
 #[async_trait]
 impl LlmKvBackend for TikvKvClient {
-    async fn get(
-        &self,
-        key: &str,
-    ) -> Result<Option<String>, crate::error::LlmKvCacheError> {
+    async fn get(&self, key: &str) -> Result<Option<String>, crate::error::LlmKvCacheError> {
         tracing::info!("[TiKV KV get] key={key}");
         let k = key.to_string();
-        let v =
-            self.raw.get(k).await.map_err(|e| {
-                crate::error::LlmKvCacheError::Tikv(e.to_string())
-            })?;
+        let v = self
+            .raw
+            .get(k)
+            .await
+            .map_err(|e| crate::error::LlmKvCacheError::Tikv(e.to_string()))?;
         match &v {
             None => tracing::info!("[TiKV KV get] key={key} result=miss"),
             Some(bytes) => tracing::info!(
@@ -92,10 +88,7 @@ impl LlmKvBackend for TikvKvClient {
         let k = key.to_string();
         let ttl = tikv_util::normalized_ttl_secs(expiration_ttl_secs);
         let v = value.to_string();
-        tracing::info!(
-            "[TiKV KV put] key={key} ttl={ttl} value_len={}",
-            v.len()
-        );
+        tracing::info!("[TiKV KV put] key={key} ttl={ttl} value_len={}", v.len());
 
         match self.raw.put_with_ttl(k.clone(), v.clone(), ttl).await {
             Ok(()) => {
@@ -111,9 +104,10 @@ impl LlmKvBackend for TikvKvClient {
                     error = %e,
                     "llm kv tikv: put_with_ttl failed, retrying put without TTL"
                 );
-                self.raw.put(k, v).await.map_err(|e2| {
-                    crate::error::LlmKvCacheError::Tikv(e2.to_string())
-                })?;
+                self.raw
+                    .put(k, v)
+                    .await
+                    .map_err(|e2| crate::error::LlmKvCacheError::Tikv(e2.to_string()))?;
                 tracing::info!("[TiKV KV put] key={key} ok (plain put)");
                 Ok(())
             }

@@ -54,8 +54,7 @@ where
     }
 }
 
-impl<B, T, E, Fut, FutureFn, RF, NF, AF>
-    RetryWithResult<B, T, E, Fut, FutureFn, RF, NF, AF>
+impl<B, T, E, Fut, FutureFn, RF, NF, AF> RetryWithResult<B, T, E, Fut, FutureFn, RF, NF, AF>
 where
     B: Backoff,
     Fut: Future<Output = Result<T, E>>,
@@ -94,9 +93,7 @@ where
         }
     }
 
-    pub fn adjust<
-        NAF: FnMut(&Result<T, E>, Option<Duration>) -> Option<Duration>,
-    >(
+    pub fn adjust<NAF: FnMut(&Result<T, E>, Option<Duration>) -> Option<Duration>>(
         self,
         adjust: NAF,
     ) -> RetryWithResult<B, T, E, Fut, FutureFn, RF, NF, NAF> {
@@ -113,12 +110,7 @@ where
 }
 
 #[derive(Default)]
-enum State<
-    T,
-    E,
-    Fut: Future<Output = Result<T, E>>,
-    SleepFut: Future<Output = ()>,
-> {
+enum State<T, E, Fut: Future<Output = Result<T, E>>, SleepFut: Future<Output = ()>> {
     #[default]
     Idle,
     Polling(Fut),
@@ -165,14 +157,12 @@ where
                     if !(this.retryable_fn)(&result) {
                         return Poll::Ready(result);
                     }
-                    let adjusted_backoff =
-                        (this.adjust_fn)(&result, this.backoff.next());
+                    let adjusted_backoff = (this.adjust_fn)(&result, this.backoff.next());
                     match adjusted_backoff {
                         None => return Poll::Ready(result),
                         Some(dur) => {
                             (this.notify_fn)(&result, dur);
-                            this.state =
-                                State::Sleeping(this.sleep_fn.sleep(dur));
+                            this.state = State::Sleeping(this.sleep_fn.sleep(dur));
                         }
                     }
                 }

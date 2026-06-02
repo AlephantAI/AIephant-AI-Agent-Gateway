@@ -438,9 +438,7 @@ impl<'de> Deserialize<'de> for AgentEventSourceTrust {
     }
 }
 
-#[derive(
-    Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default,
-)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum AgentTrustLevel {
     #[default]
@@ -636,10 +634,7 @@ mod tests {
         };
 
         assert_eq!(
-            ctx.agent_identity_for_namespace(
-                Some(workspace_id),
-                Some(Uuid::from_u128(7))
-            ),
+            ctx.agent_identity_for_namespace(Some(workspace_id), Some(Uuid::from_u128(7))),
             "00000000-0000-0000-0000-00000000002a"
         );
     }
@@ -655,13 +650,11 @@ mod tests {
         let without_agent = AgentContext::default();
 
         assert_eq!(
-            with_agent
-                .agent_identity_for_namespace(Some(workspace_id), Some(vk)),
+            with_agent.agent_identity_for_namespace(Some(workspace_id), Some(vk)),
             "coding-agent"
         );
         assert_eq!(
-            without_agent
-                .agent_identity_for_namespace(Some(workspace_id), Some(vk)),
+            without_agent.agent_identity_for_namespace(Some(workspace_id), Some(vk)),
             "vk:00000000-0000-0000-0000-000000000007"
         );
     }

@@ -9,8 +9,7 @@ use tokio::sync::Mutex;
 use crate::{
     backend::LlmKvBackend,
     backoff::{
-        DEFAULT_BACKOFF_BASE_MS, DEFAULT_BACKOFF_CAP_MS,
-        DEFAULT_BACKOFF_MAX_SHIFT, next_delay_ms,
+        DEFAULT_BACKOFF_BASE_MS, DEFAULT_BACKOFF_CAP_MS, DEFAULT_BACKOFF_MAX_SHIFT, next_delay_ms,
     },
     cloudflare::{CfKvErrorKind, CloudflareKvClient},
     put_retry::PutClassifiedError,
@@ -56,10 +55,7 @@ impl LazyCloudflareKvBackend {
 
 #[async_trait]
 impl LlmKvBackend for LazyCloudflareKvBackend {
-    async fn get(
-        &self,
-        key: &str,
-    ) -> Result<Option<String>, crate::error::LlmKvCacheError> {
+    async fn get(&self, key: &str) -> Result<Option<String>, crate::error::LlmKvCacheError> {
         {
             let g = self.gate.lock().await;
             if Instant::now() < g.0 {

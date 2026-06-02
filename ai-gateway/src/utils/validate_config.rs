@@ -89,20 +89,14 @@ where
 {
     type Response = Response;
     type Error = S::Error;
-    type Future =
-        Either<BoxFuture<'static, Result<Response, S::Error>>, S::Future>;
+    type Future = Either<BoxFuture<'static, Result<Response, S::Error>>, S::Future>;
 
-    fn poll_ready(
-        &mut self,
-        cx: &mut Context<'_>,
-    ) -> Poll<Result<(), Self::Error>> {
+    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         self.inner.poll_ready(cx)
     }
 
     fn call(&mut self, req: Request<ReqBody>) -> Self::Future {
-        if req.method() == Method::POST
-            && req.uri().path() == "/validate-router-config"
-        {
+        if req.method() == Method::POST && req.uri().path() == "/validate-router-config" {
             let fut = async move {
                 let config = match req.into_body().collect().await {
                     Ok(body) => body.to_bytes(),
@@ -113,17 +107,16 @@ where
                     }
                 };
 
-                let config =
-                    match serde_json::from_slice::<RouterConfig>(&config) {
-                        Ok(config) => config,
-                        Err(e) => {
-                            let body = Json(ValidateRouterConfigResponse {
-                                valid: false,
-                                error: Some(e.to_string()),
-                            });
-                            return Ok(body.into_response());
-                        }
-                    };
+                let config = match serde_json::from_slice::<RouterConfig>(&config) {
+                    Ok(config) => config,
+                    Err(e) => {
+                        let body = Json(ValidateRouterConfigResponse {
+                            valid: false,
+                            error: Some(e.to_string()),
+                        });
+                        return Ok(body.into_response());
+                    }
+                };
 
                 let validate_result = config.validate();
                 if let Err(e) = validate_result {

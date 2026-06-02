@@ -16,8 +16,7 @@ pub async fn read_bucket(
     let fut = async {
         let futs: Vec<_> = keys.iter().map(|k| backend.get(k)).collect();
         let outs = try_join_all(futs).await.ok()?;
-        let mut slots: Vec<Option<LlmCacheEntry>> =
-            Vec::with_capacity(outs.len());
+        let mut slots: Vec<Option<LlmCacheEntry>> = Vec::with_capacity(outs.len());
         for o in outs {
             match o {
                 None => slots.push(None),
@@ -55,8 +54,7 @@ pub async fn try_save_to_first_free_slot(
         info!("[LLM KV try_save]   key[{i}]={k}");
     }
 
-    let outs =
-        futures::future::join_all(keys.iter().map(|k| backend.get(k))).await;
+    let outs = futures::future::join_all(keys.iter().map(|k| backend.get(k))).await;
     for (i, r) in outs.iter().enumerate() {
         match r {
             Ok(None) => {
@@ -78,10 +76,8 @@ pub async fn try_save_to_first_free_slot(
         }
     }
 
-    let slots: Vec<Option<String>> =
-        outs.into_iter().map(|r| r.unwrap()).collect();
-    let Some(free_idx) = slots.iter().position(std::option::Option::is_none)
-    else {
+    let slots: Vec<Option<String>> = outs.into_iter().map(|r| r.unwrap()).collect();
+    let Some(free_idx) = slots.iter().position(std::option::Option::is_none) else {
         info!(
             "[LLM KV try_save] no free slot (all {} keys occupied) -> skip put",
             keys.len()
@@ -133,10 +129,7 @@ mod tests {
 
     #[async_trait]
     impl LlmKvBackend for MockBackend {
-        async fn get(
-            &self,
-            key: &str,
-        ) -> Result<Option<String>, crate::error::LlmKvCacheError> {
+        async fn get(&self, key: &str) -> Result<Option<String>, crate::error::LlmKvCacheError> {
             Ok(self.0.lock().expect("lock").get(key).cloned())
         }
 

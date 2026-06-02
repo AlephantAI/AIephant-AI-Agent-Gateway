@@ -112,10 +112,7 @@ impl<R, S: Service<R>> Service<R> for Weighted<S> {
     type Future = S::Future;
 
     #[inline]
-    fn poll_ready(
-        &mut self,
-        cx: &mut Context<'_>,
-    ) -> Poll<Result<(), Self::Error>> {
+    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         self.inner.poll_ready(cx)
     }
 
@@ -168,22 +165,18 @@ where
 {
     type Item = Result<Change<D::Key, Weighted<D::Service>>, D::Error>;
 
-    fn poll_next(
-        self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-    ) -> Poll<Option<Self::Item>> {
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         use self::Change::{Insert, Remove};
 
         let this = self.project();
-        let change =
-            match ready!(this.discover.poll_discover(cx)).transpose()? {
-                None => return Poll::Ready(None),
-                Some(Insert(k, svc)) => {
-                    let w = k.weight();
-                    Insert(k, Weighted::new(svc, w))
-                }
-                Some(Remove(k)) => Remove(k),
-            };
+        let change = match ready!(this.discover.poll_discover(cx)).transpose()? {
+            None => return Poll::Ready(None),
+            Some(Insert(k, svc)) => {
+                let w = k.weight();
+                Insert(k, Weighted::new(svc, w))
+            }
+            Some(Remove(k)) => Remove(k),
+        };
 
         Poll::Ready(Some(Ok(change)))
     }

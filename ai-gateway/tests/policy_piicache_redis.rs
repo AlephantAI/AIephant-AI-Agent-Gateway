@@ -4,9 +4,7 @@ use std::sync::Arc;
 
 use ai_gateway::{
     app_redis::AppRedis,
-    content_filter::piicache::{
-        attach_request_body_from_piicache_redis, piicache_redis_key,
-    },
+    content_filter::piicache::{attach_request_body_from_piicache_redis, piicache_redis_key},
     metrics::VkMetrics,
     policy_proto::EvaluateRequest,
 };
@@ -22,8 +20,7 @@ fn test_redis_url() -> url::Url {
 }
 
 async fn test_conn() -> redis::aio::MultiplexedConnection {
-    let client =
-        redis::Client::open(test_redis_url().as_str()).expect("redis client");
+    let client = redis::Client::open(test_redis_url().as_str()).expect("redis client");
     client
         .get_multiplexed_async_connection()
         .await
@@ -58,14 +55,7 @@ async fn attach_request_body_when_piicache_true() {
         ..Default::default()
     };
 
-    attach_request_body_from_piicache_redis(
-        Some(&redis),
-        &ws,
-        &body,
-        &mut req,
-        &vk,
-    )
-    .await;
+    attach_request_body_from_piicache_redis(Some(&redis), &ws, &body, &mut req, &vk).await;
 
     assert_eq!(req.body, body.to_vec());
 

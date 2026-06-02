@@ -77,9 +77,7 @@ impl From<&MapperError> for MapperErrorMetric {
             MapperError::ProviderNotSupported(_) => Self::ProviderNotSupported,
             MapperError::ToolMappingInvalid(_) => Self::ToolMappingInvalid,
             MapperError::ImageMappingInvalid(_) => Self::ImageMappingInvalid,
-            MapperError::FailedToMapBedrockMessage(_) => {
-                Self::FailedToMapBedrockMessage
-            }
+            MapperError::FailedToMapBedrockMessage(_) => Self::FailedToMapBedrockMessage,
         }
     }
 }

@@ -8,9 +8,7 @@ use serde::{Deserialize, Serialize};
 
 const DEFAULT_ERROR_THRESHOLD: f64 = 0.15;
 
-#[derive(
-    Debug, Default, Clone, PartialEq, Eq, Deserialize, Serialize, Hash,
-)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Deserialize, Serialize, Hash)]
 #[serde(deny_unknown_fields, default, rename_all = "kebab-case")]
 pub struct MonitorConfig {
     pub health: HealthMonitorConfig,
@@ -29,9 +27,7 @@ impl MonitorConfig {
     #[must_use]
     pub fn grace_period(&self) -> &GracePeriod {
         match &self.health {
-            HealthMonitorConfig::ErrorRatio { grace_period, .. } => {
-                grace_period
-            }
+            HealthMonitorConfig::ErrorRatio { grace_period, .. } => grace_period,
         }
     }
 

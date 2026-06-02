@@ -4,9 +4,7 @@ use serde::Serialize;
 use sha2::{Digest, Sha256};
 use url::Url;
 
-use crate::{
-    app_state::AppState, error::logger::LoggerError, types::secret::Secret,
-};
+use crate::{app_state::AppState, error::logger::LoggerError, types::secret::Secret};
 
 pub const ZERO_UUID: &str = "00000000-0000-0000-0000-000000000000";
 const X402_PAYMENT_LOG_HTTP_PATH: &str = "/v1/log/x402-payment";
@@ -122,9 +120,7 @@ pub async fn write_x402_log(
 ) -> Result<(), LoggerError> {
     let payload = serde_json::to_string(message)?;
     let Some(redis) = app_state.redis() else {
-        tracing::warn!(
-            "x402 payment log Redis unavailable; using HTTP fallback"
-        );
+        tracing::warn!("x402 payment log Redis unavailable; using HTTP fallback");
         return send_x402_log_http(app_state, payload).await;
     };
 
@@ -181,11 +177,7 @@ fn x402_payment_log_debug_header_lines(headers: &header::HeaderMap) -> String {
     lines.join("\n")
 }
 
-fn log_x402_payment_log_http_request(
-    url: &Url,
-    headers: &header::HeaderMap,
-    payload: &str,
-) {
+fn log_x402_payment_log_http_request(url: &Url, headers: &header::HeaderMap, payload: &str) {
     if debug_env_flag_enabled(DEBUG_HEADERS_ENV) {
         let headers = x402_payment_log_debug_header_lines(headers);
         tracing::info!(
@@ -204,12 +196,8 @@ fn log_x402_payment_log_http_request(
     }
 }
 
-async fn send_x402_log_http(
-    app_state: &AppState,
-    payload: String,
-) -> Result<(), LoggerError> {
-    let log_url =
-        x402_payment_log_url(&app_state.config().alephant.log_collector_url)?;
+async fn send_x402_log_http(app_state: &AppState, payload: String) -> Result<(), LoggerError> {
+    let log_url = x402_payment_log_url(&app_state.config().alephant.log_collector_url)?;
     tracing::trace!(
         body_byte_len = payload.len(),
         "[x402 payment log http] sending log POST"
@@ -225,12 +213,11 @@ async fn send_x402_log_http(
             .alephant
             .logs_collector_x402_http_auth_token,
     ) {
-        let auth_value =
-            header::HeaderValue::from_str(&auth_value).map_err(|error| {
-                LoggerError::UnexpectedResponse(format!(
-                    "invalid x402 payment log auth header: {error}"
-                ))
-            })?;
+        let auth_value = header::HeaderValue::from_str(&auth_value).map_err(|error| {
+            LoggerError::UnexpectedResponse(format!(
+                "invalid x402 payment log auth header: {error}"
+            ))
+        })?;
         headers.insert(header::AUTHORIZATION, auth_value);
     }
     log_x402_payment_log_http_request(&log_url, &headers, &payload);
@@ -293,8 +280,7 @@ mod tests {
     #[test]
     fn payment_log_serialization_omits_payment_signature_hash() {
         let raw_signature = "raw-payment-signature";
-        let mut message =
-            X402PaymentLogMessage::new(X402LogStage::VerifyFailed);
+        let mut message = X402PaymentLogMessage::new(X402LogStage::VerifyFailed);
         message.failure_reason = raw_signature.to_string();
 
         let json = serde_json::to_string(&message).unwrap();
@@ -314,14 +300,8 @@ mod tests {
             value["workspace_id"],
             "00000000-0000-0000-0000-000000000000"
         );
-        assert_eq!(
-            value["activity_id"],
-            "00000000-0000-0000-0000-000000000000"
-        );
-        assert_eq!(
-            value["endpoint_id"],
-            "00000000-0000-0000-0000-000000000000"
-        );
+        assert_eq!(value["activity_id"], "00000000-0000-0000-0000-000000000000");
+        assert_eq!(value["endpoint_id"], "00000000-0000-0000-0000-000000000000");
         assert_eq!(value["agent_id"], "00000000-0000-0000-0000-000000000000");
         assert_eq!(value["direction"], "inbound");
         assert_eq!(value["source"], "ai_gateway");
@@ -388,11 +368,9 @@ mod tests {
 
     #[test]
     fn x402_payment_log_http_auth_value_uses_bearer_token() {
-        let token =
-            crate::types::secret::Secret::from("x402-token".to_string());
+        let token = crate::types::secret::Secret::from("x402-token".to_string());
 
-        let value = x402_payment_log_auth_value(&token)
-            .expect("auth value should be present");
+        let value = x402_payment_log_auth_value(&token).expect("auth value should be present");
 
         assert_eq!(value, "Bearer x402-token");
     }
@@ -413,8 +391,7 @@ mod tests {
         let (request_tx, request_rx) = oneshot::channel::<String>();
 
         tokio::spawn(async move {
-            let (mut stream, _) =
-                listener.accept().await.expect("accept log request");
+            let (mut stream, _) = listener.accept().await.expect("accept log request");
             let mut buf = vec![0_u8; 4096];
             let n = stream.read(&mut buf).await.expect("read request");
             let raw = String::from_utf8_lossy(&buf[..n]).to_string();
@@ -442,14 +419,11 @@ mod tests {
             .expect("log collector should receive request");
         let lower_request = raw_request.to_ascii_lowercase();
         assert!(raw_request.starts_with("POST /v1/log/x402-payment "));
-        assert!(
-            lower_request.contains("authorization: bearer collector-token\r\n")
-        );
+        assert!(lower_request.contains("authorization: bearer collector-token\r\n"));
     }
 
     #[test]
-    fn x402_payment_log_http_request_debug_logs_headers_and_body_when_enabled()
-    {
+    fn x402_payment_log_http_request_debug_logs_headers_and_body_when_enabled() {
         static ENV_LOCK: Mutex<()> = Mutex::new(());
         let _guard = ENV_LOCK.lock().unwrap();
         let _env_guard = EnvGuard::set_many(&[
@@ -457,8 +431,7 @@ mod tests {
             ("AI_GATEWAY_DEBUG_BODY", "true"),
         ]);
         let events = Arc::new(Mutex::new(Vec::new()));
-        let subscriber =
-            tracing_subscriber::registry().with(CaptureLayer(events.clone()));
+        let subscriber = tracing_subscriber::registry().with(CaptureLayer(events.clone()));
         let url = "http://logger.local/v1/log/x402-payment".parse().unwrap();
         let mut headers = header::HeaderMap::new();
         headers.insert(
@@ -505,11 +478,7 @@ mod tests {
     where
         S: Subscriber,
     {
-        fn on_event(
-            &self,
-            event: &Event<'_>,
-            _ctx: tracing_subscriber::layer::Context<'_, S>,
-        ) {
+        fn on_event(&self, event: &Event<'_>, _ctx: tracing_subscriber::layer::Context<'_, S>) {
             let mut visitor = StringVisitor(String::new());
             event.record(&mut visitor);
             self.0.lock().unwrap().push(visitor.0);
@@ -523,11 +492,7 @@ mod tests {
             self.0.push_str(&format!("{}={value};", field.name()));
         }
 
-        fn record_debug(
-            &mut self,
-            field: &tracing::field::Field,
-            value: &dyn std::fmt::Debug,
-        ) {
+        fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
             self.0.push_str(&format!("{}={value:?};", field.name()));
         }
     }

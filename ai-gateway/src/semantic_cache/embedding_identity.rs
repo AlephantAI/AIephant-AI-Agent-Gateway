@@ -12,11 +12,7 @@ impl EmbeddingIdentity {
     }
 
     #[must_use]
-    pub fn params_hash_identity(
-        &self,
-        base_url: &str,
-        dimension: usize,
-    ) -> String {
+    pub fn params_hash_identity(&self, base_url: &str, dimension: usize) -> String {
         format!(
             "provider={}\0model={}\0base_url={}\0dimension={}",
             self.provider,
@@ -27,9 +23,7 @@ impl EmbeddingIdentity {
     }
 }
 
-pub fn parse_embedding_identity(
-    raw: &str,
-) -> Result<EmbeddingIdentity, String> {
+pub fn parse_embedding_identity(raw: &str) -> Result<EmbeddingIdentity, String> {
     let trimmed = raw.trim();
     if trimmed.is_empty() {
         return Err("embedding model is empty".to_string());
@@ -97,15 +91,11 @@ fn slug(input: &str) -> Result<String, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        EmbeddingIdentity, collection_name_for_embedding,
-        parse_embedding_identity,
-    };
+    use super::{EmbeddingIdentity, collection_name_for_embedding, parse_embedding_identity};
 
     #[test]
     fn parse_embedding_identity_keeps_explicit_provider() {
-        let parsed =
-            parse_embedding_identity("voyage/voyage-3-lite").expect("identity");
+        let parsed = parse_embedding_identity("voyage/voyage-3-lite").expect("identity");
 
         assert_eq!(
             parsed,
@@ -119,8 +109,7 @@ mod tests {
 
     #[test]
     fn parse_embedding_identity_defaults_provider_to_openai() {
-        let parsed = parse_embedding_identity("text-embedding-3-small")
-            .expect("identity");
+        let parsed = parse_embedding_identity("text-embedding-3-small").expect("identity");
 
         assert_eq!(parsed.provider, "openai");
         assert_eq!(parsed.model, "text-embedding-3-small");
@@ -136,8 +125,7 @@ mod tests {
 
     #[test]
     fn collection_name_includes_provider_model_and_dimension() {
-        let identity =
-            parse_embedding_identity("openai/text-embedding-3-large").unwrap();
+        let identity = parse_embedding_identity("openai/text-embedding-3-large").unwrap();
 
         assert_eq!(
             collection_name_for_embedding(&identity, 3072).unwrap(),
@@ -175,8 +163,7 @@ mod tests {
 
     #[test]
     fn collection_name_rejects_zero_dimension() {
-        let identity =
-            parse_embedding_identity("openai/text-embedding-3-small").unwrap();
+        let identity = parse_embedding_identity("openai/text-embedding-3-small").unwrap();
 
         assert_eq!(
             collection_name_for_embedding(&identity, 0).unwrap_err(),

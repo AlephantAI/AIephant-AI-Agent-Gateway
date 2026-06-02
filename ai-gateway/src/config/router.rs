@@ -15,9 +15,7 @@ use crate::{
     types::{provider::InferenceProvider, router::RouterId},
 };
 
-#[derive(
-    Debug, Default, Clone, Deserialize, Serialize, Eq, PartialEq, AsRef, AsMut,
-)]
+#[derive(Debug, Default, Clone, Deserialize, Serialize, Eq, PartialEq, AsRef, AsMut)]
 pub struct RouterConfigs(HashMap<RouterId, RouterConfig>);
 
 impl RouterConfigs {
@@ -51,8 +49,7 @@ impl RouterConfig {
         for balance_config in self.load_balance.0.values() {
             match balance_config {
                 BalanceConfigInner::ProviderWeighted { providers } => {
-                    let total =
-                        providers.iter().map(|t| t.weight).sum::<Decimal>();
+                    let total = providers.iter().map(|t| t.weight).sum::<Decimal>();
                     if total != Decimal::from(1) {
                         return Err(InitError::InvalidBalancer(format!(
                             "Balance weights dont sum to 1: {total}"
@@ -60,8 +57,7 @@ impl RouterConfig {
                     }
                 }
                 BalanceConfigInner::ModelWeighted { models } => {
-                    let total =
-                        models.iter().map(|m| m.weight).sum::<Decimal>();
+                    let total = models.iter().map(|m| m.weight).sum::<Decimal>();
                     if total != Decimal::from(1) {
                         return Err(InitError::InvalidBalancer(format!(
                             "Balance weights dont sum to 1: {total}"
@@ -139,8 +135,7 @@ mod tests {
     fn router_config_round_trip() {
         let config = test_router_config();
         let serialized = serde_json::to_string(&config).unwrap();
-        let deserialized =
-            serde_json::from_str::<RouterConfig>(&serialized).unwrap();
+        let deserialized = serde_json::from_str::<RouterConfig>(&serialized).unwrap();
         assert_eq!(config, deserialized);
     }
 
@@ -148,8 +143,7 @@ mod tests {
     fn router_configs_round_trip() {
         let config = RouterConfigs::default();
         let serialized = serde_json::to_string(&config).unwrap();
-        let deserialized =
-            serde_json::from_str::<RouterConfigs>(&serialized).unwrap();
+        let deserialized = serde_json::from_str::<RouterConfigs>(&serialized).unwrap();
         assert_eq!(config, deserialized);
     }
 

@@ -3,10 +3,10 @@ use std::str::FromStr;
 use http::response::Parts;
 
 use super::{
-    TryConvertStreamData, capabilities::ProviderCapabilities,
-    model::ModelMapper, non_stream_profile::NonStreamFormatProfile,
-    non_stream_profile_data::default_non_stream_profile,
-    params::OpenAiRequestParams, rules::ProviderRuleSet,
+    TryConvertStreamData, capabilities::ProviderCapabilities, model::ModelMapper,
+    non_stream_profile::NonStreamFormatProfile,
+    non_stream_profile_data::default_non_stream_profile, params::OpenAiRequestParams,
+    rules::ProviderRuleSet,
 };
 use crate::{
     endpoints::openai::OpenAICompatibleChatCompletionRequest,
@@ -30,14 +30,10 @@ impl OpenAICompatibleConverter {
         rules: &ProviderRuleSet,
     ) -> NonStreamFormatProfile {
         let mut non_stream_profile = default_non_stream_profile(provider);
-        non_stream_profile.request.tool_choice_mode =
-            rules.request.tool_choice_mode;
-        non_stream_profile.request.response_format_mode =
-            rules.request.response_format_mode;
-        non_stream_profile.request.reasoning_mode =
-            rules.request.reasoning_mode;
-        non_stream_profile.request.multimodal_mode =
-            rules.request.multimodal_mode;
+        non_stream_profile.request.tool_choice_mode = rules.request.tool_choice_mode;
+        non_stream_profile.request.response_format_mode = rules.request.response_format_mode;
+        non_stream_profile.request.reasoning_mode = rules.request.reasoning_mode;
+        non_stream_profile.request.multimodal_mode = rules.request.multimodal_mode;
         non_stream_profile
     }
 
@@ -45,8 +41,7 @@ impl OpenAICompatibleConverter {
     pub fn new(provider: InferenceProvider, model_mapper: ModelMapper) -> Self {
         let capabilities = ProviderCapabilities::for_provider(&provider);
         let rules = super::rule_data::default_provider_rules(&provider);
-        let non_stream_profile =
-            Self::derived_profile_from_metadata(&provider, &rules);
+        let non_stream_profile = Self::derived_profile_from_metadata(&provider, &rules);
         Self::new_with_profile_metadata(
             provider,
             capabilities,
@@ -63,8 +58,7 @@ impl OpenAICompatibleConverter {
         rules: ProviderRuleSet,
         model_mapper: ModelMapper,
     ) -> Self {
-        let non_stream_profile =
-            Self::derived_profile_from_metadata(&provider, &rules);
+        let non_stream_profile = Self::derived_profile_from_metadata(&provider, &rules);
         Self::new_with_profile_metadata(
             provider,
             capabilities,
@@ -98,8 +92,7 @@ impl OpenAICompatibleConverter {
         rules: ProviderRuleSet,
         model_mapper: ModelMapper,
     ) -> Result<Self, MapperError> {
-        let non_stream_profile =
-            Self::derived_profile_from_metadata(&provider, &rules);
+        let non_stream_profile = Self::derived_profile_from_metadata(&provider, &rules);
         Self::try_new_with_profile_metadata(
             provider,
             capabilities,
@@ -122,17 +115,11 @@ impl OpenAICompatibleConverter {
                 super::families::ProviderProtocolFamily::OpenAiCompatible
             )
         {
-            return Err(MapperError::ProviderNotSupported(
-                provider.to_string(),
-            ));
+            return Err(MapperError::ProviderNotSupported(provider.to_string()));
         }
 
-        if non_stream_profile.provider != provider
-            || non_stream_profile.family != rules.family
-        {
-            return Err(MapperError::ProviderNotSupported(
-                provider.to_string(),
-            ));
+        if non_stream_profile.provider != provider || non_stream_profile.family != rules.family {
+            return Err(MapperError::ProviderNotSupported(provider.to_string()));
         }
 
         Ok(Self {
@@ -162,9 +149,7 @@ impl
                 super::families::ProviderProtocolFamily::OpenAiCompatible
             )
         {
-            return Err(MapperError::ProviderNotSupported(
-                self.provider.to_string(),
-            ));
+            return Err(MapperError::ProviderNotSupported(self.provider.to_string()));
         }
 
         #[allow(deprecated)]
@@ -183,20 +168,16 @@ impl
         } else {
             let source_model = OpenAiRequestParams::from_request(&value)
                 .source_model
-                .ok_or_else(|| {
-                    MapperError::InvalidModelName(value.model.clone())
-                })?;
-            let target_model =
-                self.model_mapper.map_model(&source_model, &self.provider)?;
+                .ok_or_else(|| MapperError::InvalidModelName(value.model.clone()))?;
+            let target_model = self.model_mapper.map_model(&source_model, &self.provider)?;
             tracing::trace!(source_model = ?source_model, target_model = ?target_model, "mapped model");
             value.model = target_model.to_string();
         }
 
         if value.stream.unwrap_or(false) && value.stream_options.is_none() {
-            value.stream_options =
-                Some(async_openai::types::ChatCompletionStreamOptions {
-                    include_usage: true,
-                });
+            value.stream_options = Some(async_openai::types::ChatCompletionStreamOptions {
+                include_usage: true,
+            });
         }
 
         Ok(OpenAICompatibleChatCompletionRequest {
@@ -215,9 +196,7 @@ impl
                 super::families::ProviderProtocolFamily::OpenAiCompatible
             )
         {
-            return Err(MapperError::ProviderNotSupported(
-                self.provider.to_string(),
-            ));
+            return Err(MapperError::ProviderNotSupported(self.provider.to_string()));
         }
 
         #[allow(deprecated)]
@@ -244,8 +223,7 @@ impl
     fn try_convert(
         &self,
         value: async_openai::types::CreateChatCompletionResponse,
-    ) -> Result<async_openai::types::CreateChatCompletionResponse, Self::Error>
-    {
+    ) -> Result<async_openai::types::CreateChatCompletionResponse, Self::Error> {
         Ok(value)
     }
 }
@@ -269,8 +247,7 @@ impl
             );
         } else {
             let source_model = ModelId::from_str(&value.model)?;
-            let target_model =
-                self.model_mapper.map_model(&source_model, &self.provider)?;
+            let target_model = self.model_mapper.map_model(&source_model, &self.provider)?;
             tracing::trace!(
                 source_model = ?source_model,
                 target_model = ?target_model,
@@ -322,11 +299,8 @@ impl
     fn try_convert_chunk(
         &self,
         value: async_openai::types::CreateEmbeddingResponse,
-        _anthropic_openai_usage: Option<
-            &crate::types::extensions::AnthropicOpenAiUsageCell,
-        >,
-    ) -> Result<Option<async_openai::types::CreateEmbeddingResponse>, Self::Error>
-    {
+        _anthropic_openai_usage: Option<&crate::types::extensions::AnthropicOpenAiUsageCell>,
+    ) -> Result<Option<async_openai::types::CreateEmbeddingResponse>, Self::Error> {
         Ok(Some(value))
     }
 }
@@ -341,8 +315,7 @@ impl
         &self,
         resp_parts: &Parts,
         value: async_openai::types::CreateChatCompletionResponse,
-    ) -> Result<async_openai::types::CreateChatCompletionResponse, Self::Error>
-    {
+    ) -> Result<async_openai::types::CreateChatCompletionResponse, Self::Error> {
         super::non_stream_response_interpreter::apply_non_stream_response_profile(
             super::non_stream_response_interpreter::profile_from_response_parts(
                 resp_parts,
@@ -364,22 +337,14 @@ impl
     fn try_convert_chunk(
         &self,
         value: async_openai::types::CreateChatCompletionStreamResponse,
-        _anthropic_openai_usage: Option<
-            &crate::types::extensions::AnthropicOpenAiUsageCell,
-        >,
-    ) -> Result<
-        Option<async_openai::types::CreateChatCompletionStreamResponse>,
-        Self::Error,
-    > {
+        _anthropic_openai_usage: Option<&crate::types::extensions::AnthropicOpenAiUsageCell>,
+    ) -> Result<Option<async_openai::types::CreateChatCompletionStreamResponse>, Self::Error> {
         Ok(Some(value))
     }
 }
 
-impl
-    TryConvertError<
-        async_openai::error::WrappedError,
-        async_openai::error::WrappedError,
-    > for OpenAICompatibleConverter
+impl TryConvertError<async_openai::error::WrappedError, async_openai::error::WrappedError>
+    for OpenAICompatibleConverter
 {
     type Error = MapperError;
 
@@ -402,8 +367,7 @@ impl
     fn try_convert(
         &self,
         mut value: async_openai::types::responses::CreateResponse,
-    ) -> Result<async_openai::types::responses::CreateResponse, Self::Error>
-    {
+    ) -> Result<async_openai::types::responses::CreateResponse, Self::Error> {
         if self.model_mapper.target_skips_model_catalog(&self.provider) {
             tracing::trace!(
                 raw_model = %value.model,
@@ -412,8 +376,7 @@ impl
             );
         } else {
             let source_model = ModelId::from_str(&value.model)?;
-            let target_model =
-                self.model_mapper.map_model(&source_model, &self.provider)?;
+            let target_model = self.model_mapper.map_model(&source_model, &self.provider)?;
             tracing::trace!(
                 source_model = ?source_model,
                 target_model = ?target_model,
@@ -427,17 +390,13 @@ impl
     fn try_convert_model_passthrough(
         &self,
         value: async_openai::types::responses::CreateResponse,
-    ) -> Result<async_openai::types::responses::CreateResponse, Self::Error>
-    {
+    ) -> Result<async_openai::types::responses::CreateResponse, Self::Error> {
         Ok(value)
     }
 }
 
-impl
-    TryConvert<
-        async_openai::types::responses::Response,
-        async_openai::types::responses::Response,
-    > for OpenAICompatibleConverter
+impl TryConvert<async_openai::types::responses::Response, async_openai::types::responses::Response>
+    for OpenAICompatibleConverter
 {
     type Error = MapperError;
     fn try_convert(
@@ -466,20 +425,15 @@ impl
     fn try_convert_chunk(
         &self,
         value: async_openai::types::responses::Response,
-        _anthropic_openai_usage: Option<
-            &crate::types::extensions::AnthropicOpenAiUsageCell,
-        >,
-    ) -> Result<Option<async_openai::types::responses::Response>, Self::Error>
-    {
+        _anthropic_openai_usage: Option<&crate::types::extensions::AnthropicOpenAiUsageCell>,
+    ) -> Result<Option<async_openai::types::responses::Response>, Self::Error> {
         Ok(Some(value))
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use async_openai::types::{
-        CreateChatCompletionRequest, CreateEmbeddingRequest,
-    };
+    use async_openai::types::{CreateChatCompletionRequest, CreateEmbeddingRequest};
     use indexmap::IndexSet;
     use rustc_hash::FxHashMap;
     use serde_json::json;
@@ -521,21 +475,17 @@ mod tests {
                 )
                 .expect("model should parse"),
             ]),
-            base_url: Url::parse("http://127.0.0.1:8011/v1")
-                .expect("url should parse"),
+            base_url: Url::parse("http://127.0.0.1:8011/v1").expect("url should parse"),
             cn_base_url: None,
             version: None,
             upstream_auth: Default::default(),
         }
     }
 
-    fn sample_responses_request()
-    -> async_openai::types::responses::CreateResponse {
+    fn sample_responses_request() -> async_openai::types::responses::CreateResponse {
         async_openai::types::responses::CreateResponse {
             model: "custom-openai/gpt-4o-mini".to_string(),
-            input: async_openai::types::responses::Input::Text(
-                "hello".to_string(),
-            ),
+            input: async_openai::types::responses::Input::Text("hello".to_string()),
             ..Default::default()
         }
     }
@@ -590,11 +540,9 @@ mod tests {
             rules,
             model_mapper,
         );
-        let converted = crate::middleware::mapper::TryConvert::try_convert(
-            &converter,
-            sample_request(),
-        )
-        .expect("conversion should succeed");
+        let converted =
+            crate::middleware::mapper::TryConvert::try_convert(&converter, sample_request())
+                .expect("conversion should succeed");
 
         assert_eq!(converted.provider, named_provider);
         assert_eq!(converted.inner.model, "gpt-4o-mini");
@@ -618,17 +566,14 @@ mod tests {
             rules,
             model_mapper,
         );
-        let request: CreateChatCompletionRequest =
-            serde_json::from_value(json!({
-                "model": "openai/gpt-4",
-                "messages": [{"role": "user", "content": "hello"}]
-            }))
-            .expect("request should deserialize");
+        let request: CreateChatCompletionRequest = serde_json::from_value(json!({
+            "model": "openai/gpt-4",
+            "messages": [{"role": "user", "content": "hello"}]
+        }))
+        .expect("request should deserialize");
 
-        let converted = crate::middleware::mapper::TryConvert::try_convert(
-            &converter, request,
-        )
-        .expect("conversion should succeed");
+        let converted = crate::middleware::mapper::TryConvert::try_convert(&converter, request)
+            .expect("conversion should succeed");
 
         assert_eq!(converted.inner.model, "openai/gpt-4");
     }
@@ -650,25 +595,21 @@ mod tests {
             rules,
             model_mapper,
         );
-        let request: CreateChatCompletionRequest =
-            serde_json::from_value(json!({
-                "model": "gpt-5.4",
-                "messages": [{"role": "user", "content": "hello"}]
-            }))
-            .expect("request should deserialize");
+        let request: CreateChatCompletionRequest = serde_json::from_value(json!({
+            "model": "gpt-5.4",
+            "messages": [{"role": "user", "content": "hello"}]
+        }))
+        .expect("request should deserialize");
 
-        let converted = crate::middleware::mapper::TryConvert::try_convert(
-            &converter, request,
-        )
-        .expect("conversion should succeed");
+        let converted = crate::middleware::mapper::TryConvert::try_convert(&converter, request)
+            .expect("conversion should succeed");
 
         assert_eq!(converted.provider, openrouter);
         assert_eq!(converted.inner.model, "gpt-5.4");
     }
 
     #[tokio::test]
-    async fn openrouter_when_db_snapshot_marks_not_router_runs_catalog_mapping()
-    {
+    async fn openrouter_when_db_snapshot_marks_not_router_runs_catalog_mapping() {
         let config = crate::config::Config::default();
         let app = crate::app::build_test_app(config).await.expect("build app");
         let mut flags = FxHashMap::default();
@@ -684,17 +625,14 @@ mod tests {
             rules,
             model_mapper,
         );
-        let request: CreateChatCompletionRequest =
-            serde_json::from_value(json!({
-                "model": "openai/gpt-4",
-                "messages": [{"role": "user", "content": "hello"}]
-            }))
-            .expect("request should deserialize");
+        let request: CreateChatCompletionRequest = serde_json::from_value(json!({
+            "model": "openai/gpt-4",
+            "messages": [{"role": "user", "content": "hello"}]
+        }))
+        .expect("request should deserialize");
 
-        let err = crate::middleware::mapper::TryConvert::try_convert(
-            &converter, request,
-        )
-        .expect_err("expected catalog mapping when is_router is false");
+        let err = crate::middleware::mapper::TryConvert::try_convert(&converter, request)
+            .expect_err("expected catalog mapping when is_router is false");
 
         assert!(
             matches!(
@@ -724,13 +662,10 @@ mod tests {
             model_mapper,
         );
         let mut request = sample_request();
-        request.reasoning_effort =
-            Some(async_openai::types::ReasoningEffort::High);
+        request.reasoning_effort = Some(async_openai::types::ReasoningEffort::High);
 
-        let converted = crate::middleware::mapper::TryConvert::try_convert(
-            &converter, request,
-        )
-        .expect("conversion should succeed");
+        let converted = crate::middleware::mapper::TryConvert::try_convert(&converter, request)
+            .expect("conversion should succeed");
 
         assert_eq!(
             converted.inner.reasoning_effort,
@@ -739,8 +674,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn openai_compatible_converter_does_not_reapply_capability_gated_request_rules()
-     {
+    async fn openai_compatible_converter_does_not_reapply_capability_gated_request_rules() {
         let mut config = crate::config::Config::default();
         let provider = InferenceProvider::Named("custom-openai".into());
         config
@@ -764,26 +698,23 @@ mod tests {
             rules,
             model_mapper,
         );
-        let request: CreateChatCompletionRequest =
-            serde_json::from_value(json!({
-                "model": "custom-openai/gpt-4o-mini",
-                "messages": [
-                    {
-                        "role": "user",
-                        "content": "hello"
-                    }
-                ],
-                "parallel_tool_calls": true,
-                "response_format": {
-                    "type": "json_object"
+        let request: CreateChatCompletionRequest = serde_json::from_value(json!({
+            "model": "custom-openai/gpt-4o-mini",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": "hello"
                 }
-            }))
-            .expect("request should deserialize");
+            ],
+            "parallel_tool_calls": true,
+            "response_format": {
+                "type": "json_object"
+            }
+        }))
+        .expect("request should deserialize");
 
-        let converted = crate::middleware::mapper::TryConvert::try_convert(
-            &converter, request,
-        )
-        .expect("conversion should succeed");
+        let converted = crate::middleware::mapper::TryConvert::try_convert(&converter, request)
+            .expect("conversion should succeed");
 
         assert_eq!(converted.inner.parallel_tool_calls, Some(true));
         assert_eq!(
@@ -816,42 +747,39 @@ mod tests {
             rules,
             model_mapper,
         );
-        let request: CreateChatCompletionRequest =
-            serde_json::from_value(json!({
-                "model": "custom-openai/gpt-4o-mini",
-                "messages": [
-                    {
-                        "role": "user",
-                        "content": "hello"
-                    }
-                ],
-                "tools": [
-                    {
-                        "type": "function",
-                        "function": {
-                            "name": "weather",
-                            "description": "lookup weather",
-                            "parameters": {
-                                "type": "object",
-                                "properties": {
-                                    "city": {
-                                        "type": "string"
-                                    }
-                                },
-                                "required": ["city"]
-                            }
+        let request: CreateChatCompletionRequest = serde_json::from_value(json!({
+            "model": "custom-openai/gpt-4o-mini",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": "hello"
+                }
+            ],
+            "tools": [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "weather",
+                        "description": "lookup weather",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "city": {
+                                    "type": "string"
+                                }
+                            },
+                            "required": ["city"]
                         }
                     }
-                ],
-                "tool_choice": "auto",
-                "parallel_tool_calls": true
-            }))
-            .expect("request should deserialize");
+                }
+            ],
+            "tool_choice": "auto",
+            "parallel_tool_calls": true
+        }))
+        .expect("request should deserialize");
 
-        let converted = crate::middleware::mapper::TryConvert::try_convert(
-            &converter, request,
-        )
-        .expect("conversion should succeed");
+        let converted = crate::middleware::mapper::TryConvert::try_convert(&converter, request)
+            .expect("conversion should succeed");
 
         assert!(converted.inner.tools.is_some());
         assert_eq!(
@@ -862,8 +790,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn openai_compatible_converter_does_not_reject_multimodal_without_request_engine()
-     {
+    async fn openai_compatible_converter_does_not_reject_multimodal_without_request_engine() {
         let mut config = crate::config::Config::default();
         let provider = InferenceProvider::Named("custom-openai".into());
         config
@@ -931,8 +858,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn openai_compatible_converter_does_not_reapply_non_stream_profile_to_response_format()
-     {
+    async fn openai_compatible_converter_does_not_reapply_non_stream_profile_to_response_format() {
         let mut config = crate::config::Config::default();
         let provider = InferenceProvider::Named("custom-openai".into());
         config
@@ -943,36 +869,34 @@ mod tests {
         let capabilities = ProviderCapabilities::for_provider(&provider);
         let rules = default_provider_rules(&provider);
         let mut non_stream_profile =
-            crate::middleware::mapper::non_stream_profile_data::default_non_stream_profile(&provider);
+            crate::middleware::mapper::non_stream_profile_data::default_non_stream_profile(
+                &provider,
+            );
         non_stream_profile.request.response_format_mode =
             crate::middleware::mapper::rules::ResponseFormatMode::Unsupported;
-        let converter =
-            super::OpenAICompatibleConverter::new_with_profile_metadata(
-                provider,
-                capabilities,
-                rules,
-                non_stream_profile,
-                model_mapper,
-            );
-        let request: CreateChatCompletionRequest =
-            serde_json::from_value(json!({
-                "model": "custom-openai/gpt-4o-mini",
-                "messages": [
-                    {
-                        "role": "user",
-                        "content": "hello"
-                    }
-                ],
-                "response_format": {
-                    "type": "json_object"
+        let converter = super::OpenAICompatibleConverter::new_with_profile_metadata(
+            provider,
+            capabilities,
+            rules,
+            non_stream_profile,
+            model_mapper,
+        );
+        let request: CreateChatCompletionRequest = serde_json::from_value(json!({
+            "model": "custom-openai/gpt-4o-mini",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": "hello"
                 }
-            }))
-            .expect("request should deserialize");
+            ],
+            "response_format": {
+                "type": "json_object"
+            }
+        }))
+        .expect("request should deserialize");
 
-        let converted = crate::middleware::mapper::TryConvert::try_convert(
-            &converter, request,
-        )
-        .expect("conversion should succeed");
+        let converted = crate::middleware::mapper::TryConvert::try_convert(&converter, request)
+            .expect("conversion should succeed");
 
         assert_eq!(
             converted
@@ -986,8 +910,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn openai_compatible_converter_does_not_reapply_non_stream_profile_to_tool_fields()
-     {
+    async fn openai_compatible_converter_does_not_reapply_non_stream_profile_to_tool_fields() {
         let mut config = crate::config::Config::default();
         let provider = InferenceProvider::Named("custom-openai".into());
         config
@@ -997,57 +920,53 @@ mod tests {
         let model_mapper = ModelMapper::new(app.state.clone());
         let capabilities = ProviderCapabilities::for_provider(&provider);
         let mut rules = default_provider_rules(&provider);
-        rules.request.tool_choice_mode =
-            crate::middleware::mapper::rules::ToolChoiceMode::Native;
-        let mut non_stream_profile = crate::middleware::mapper::non_stream_profile_data::default_non_stream_profile(
-            &provider,
-        );
+        rules.request.tool_choice_mode = crate::middleware::mapper::rules::ToolChoiceMode::Native;
+        let mut non_stream_profile =
+            crate::middleware::mapper::non_stream_profile_data::default_non_stream_profile(
+                &provider,
+            );
         non_stream_profile.request.tool_choice_mode =
             crate::middleware::mapper::rules::ToolChoiceMode::Unsupported;
-        let converter =
-            super::OpenAICompatibleConverter::new_with_profile_metadata(
-                provider,
-                capabilities,
-                rules,
-                non_stream_profile,
-                model_mapper,
-            );
-        let request: CreateChatCompletionRequest =
-            serde_json::from_value(json!({
-                "model": "custom-openai/gpt-4o-mini",
-                "messages": [
-                    {
-                        "role": "user",
-                        "content": "hello"
-                    }
-                ],
-                "tools": [
-                    {
-                        "type": "function",
-                        "function": {
-                            "name": "weather",
-                            "description": "lookup weather",
-                            "parameters": {
-                                "type": "object",
-                                "properties": {
-                                    "city": {
-                                        "type": "string"
-                                    }
-                                },
-                                "required": ["city"]
-                            }
+        let converter = super::OpenAICompatibleConverter::new_with_profile_metadata(
+            provider,
+            capabilities,
+            rules,
+            non_stream_profile,
+            model_mapper,
+        );
+        let request: CreateChatCompletionRequest = serde_json::from_value(json!({
+            "model": "custom-openai/gpt-4o-mini",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": "hello"
+                }
+            ],
+            "tools": [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "weather",
+                        "description": "lookup weather",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "city": {
+                                    "type": "string"
+                                }
+                            },
+                            "required": ["city"]
                         }
                     }
-                ],
-                "tool_choice": "auto",
-                "parallel_tool_calls": true
-            }))
-            .expect("request should deserialize");
+                }
+            ],
+            "tool_choice": "auto",
+            "parallel_tool_calls": true
+        }))
+        .expect("request should deserialize");
 
-        let converted = crate::middleware::mapper::TryConvert::try_convert(
-            &converter, request,
-        )
-        .expect("conversion should succeed");
+        let converted = crate::middleware::mapper::TryConvert::try_convert(&converter, request)
+            .expect("conversion should succeed");
 
         assert!(converted.inner.tools.is_some());
         assert_eq!(
@@ -1058,8 +977,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn openai_compatible_converter_does_not_reapply_non_stream_profile_to_reasoning_effort()
-     {
+    async fn openai_compatible_converter_does_not_reapply_non_stream_profile_to_reasoning_effort() {
         let mut config = crate::config::Config::default();
         let provider = InferenceProvider::Named("custom-openai".into());
         config
@@ -1069,29 +987,25 @@ mod tests {
         let model_mapper = ModelMapper::new(app.state.clone());
         let capabilities = ProviderCapabilities::for_provider(&provider);
         let mut rules = default_provider_rules(&provider);
-        rules.request.reasoning_mode =
-            crate::middleware::mapper::rules::ReasoningMode::Passthrough;
-        let mut non_stream_profile = crate::middleware::mapper::non_stream_profile_data::default_non_stream_profile(
-            &provider,
-        );
+        rules.request.reasoning_mode = crate::middleware::mapper::rules::ReasoningMode::Passthrough;
+        let mut non_stream_profile =
+            crate::middleware::mapper::non_stream_profile_data::default_non_stream_profile(
+                &provider,
+            );
         non_stream_profile.request.reasoning_mode =
             crate::middleware::mapper::rules::ReasoningMode::Unsupported;
-        let converter =
-            super::OpenAICompatibleConverter::new_with_profile_metadata(
-                provider,
-                capabilities,
-                rules,
-                non_stream_profile,
-                model_mapper,
-            );
+        let converter = super::OpenAICompatibleConverter::new_with_profile_metadata(
+            provider,
+            capabilities,
+            rules,
+            non_stream_profile,
+            model_mapper,
+        );
         let mut request = sample_request();
-        request.reasoning_effort =
-            Some(async_openai::types::ReasoningEffort::High);
+        request.reasoning_effort = Some(async_openai::types::ReasoningEffort::High);
 
-        let converted = crate::middleware::mapper::TryConvert::try_convert(
-            &converter, request,
-        )
-        .expect("conversion should succeed");
+        let converted = crate::middleware::mapper::TryConvert::try_convert(&converter, request)
+            .expect("conversion should succeed");
 
         assert_eq!(
             converted.inner.reasoning_effort,
@@ -1100,8 +1014,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn openai_compatible_converter_does_not_reject_multimodal_for_non_stream_profile()
-     {
+    async fn openai_compatible_converter_does_not_reject_multimodal_for_non_stream_profile() {
         let mut config = crate::config::Config::default();
         let provider = InferenceProvider::Named("custom-openai".into());
         config
@@ -1113,19 +1026,19 @@ mod tests {
         let mut rules = default_provider_rules(&provider);
         rules.request.multimodal_mode =
             crate::middleware::mapper::rules::MultimodalMode::OpenAiStyle;
-        let mut non_stream_profile = crate::middleware::mapper::non_stream_profile_data::default_non_stream_profile(
-            &provider,
-        );
+        let mut non_stream_profile =
+            crate::middleware::mapper::non_stream_profile_data::default_non_stream_profile(
+                &provider,
+            );
         non_stream_profile.request.multimodal_mode =
             crate::middleware::mapper::rules::MultimodalMode::Unsupported;
-        let converter =
-            super::OpenAICompatibleConverter::new_with_profile_metadata(
-                provider,
-                capabilities,
-                rules,
-                non_stream_profile,
-                model_mapper,
-            );
+        let converter = super::OpenAICompatibleConverter::new_with_profile_metadata(
+            provider,
+            capabilities,
+            rules,
+            non_stream_profile,
+            model_mapper,
+        );
 
         let converted = crate::middleware::mapper::TryConvert::try_convert(
             &converter,
@@ -1137,8 +1050,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn openai_compatible_converter_responses_request_catalog_mapping_rewrites_model()
-     {
+    async fn openai_compatible_converter_responses_request_catalog_mapping_rewrites_model() {
         let mut config = crate::config::Config::default();
         let named_provider = InferenceProvider::Named("custom-openai".into());
         config
@@ -1165,8 +1077,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn openai_compatible_converter_responses_request_skips_catalog_preserves_raw_model()
-     {
+    async fn openai_compatible_converter_responses_request_skips_catalog_preserves_raw_model() {
         let config = crate::config::Config::default();
         let app = crate::app::build_test_app(config).await.expect("build app");
         let mut flags = FxHashMap::default();
@@ -1185,23 +1096,18 @@ mod tests {
         );
         let request = async_openai::types::responses::CreateResponse {
             model: "openrouter/anthropic/claude-3-haiku".to_string(),
-            input: async_openai::types::responses::Input::Text(
-                "hello".to_string(),
-            ),
+            input: async_openai::types::responses::Input::Text("hello".to_string()),
             ..Default::default()
         };
 
-        let converted = crate::middleware::mapper::TryConvert::try_convert(
-            &converter, request,
-        )
-        .expect("conversion should succeed");
+        let converted = crate::middleware::mapper::TryConvert::try_convert(&converter, request)
+            .expect("conversion should succeed");
 
         assert_eq!(converted.model, "openrouter/anthropic/claude-3-haiku");
     }
 
     #[tokio::test]
-    async fn openai_compatible_converter_embeddings_request_catalog_mapping_rewrites_model()
-     {
+    async fn openai_compatible_converter_embeddings_request_catalog_mapping_rewrites_model() {
         let mut config = crate::config::Config::default();
         let named_provider = InferenceProvider::Named("custom-openai".into());
         config
@@ -1228,8 +1134,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn openai_compatible_converter_embeddings_request_skips_catalog_preserves_raw_model()
-     {
+    async fn openai_compatible_converter_embeddings_request_skips_catalog_preserves_raw_model() {
         let config = crate::config::Config::default();
         let app = crate::app::build_test_app(config).await.expect("build app");
         let mut flags = FxHashMap::default();
@@ -1252,10 +1157,8 @@ mod tests {
         }))
         .expect("embedding request should deserialize");
 
-        let converted = crate::middleware::mapper::TryConvert::try_convert(
-            &converter, request,
-        )
-        .expect("conversion should succeed");
+        let converted = crate::middleware::mapper::TryConvert::try_convert(&converter, request)
+            .expect("conversion should succeed");
 
         assert_eq!(converted.model, "openrouter/openai/text-embedding-3-small");
     }
@@ -1284,10 +1187,8 @@ mod tests {
             }))
             .expect("request should deserialize");
 
-        let converted = crate::middleware::mapper::TryConvert::try_convert(
-            &converter, request,
-        )
-        .expect("conversion should succeed");
+        let converted = crate::middleware::mapper::TryConvert::try_convert(&converter, request)
+            .expect("conversion should succeed");
 
         assert_eq!(converted.model, "gpt-5.4");
     }
@@ -1312,10 +1213,8 @@ mod tests {
         let mut request = sample_request();
         request.stream = Some(true);
 
-        let converted = crate::middleware::mapper::TryConvert::try_convert(
-            &converter, request,
-        )
-        .expect("conversion should succeed");
+        let converted = crate::middleware::mapper::TryConvert::try_convert(&converter, request)
+            .expect("conversion should succeed");
 
         let stream_options = converted
             .inner
@@ -1343,15 +1242,12 @@ mod tests {
         );
         let mut request = sample_request();
         request.stream = Some(true);
-        request.stream_options =
-            Some(async_openai::types::ChatCompletionStreamOptions {
-                include_usage: false,
-            });
+        request.stream_options = Some(async_openai::types::ChatCompletionStreamOptions {
+            include_usage: false,
+        });
 
-        let converted = crate::middleware::mapper::TryConvert::try_convert(
-            &converter, request,
-        )
-        .expect("conversion should succeed");
+        let converted = crate::middleware::mapper::TryConvert::try_convert(&converter, request)
+            .expect("conversion should succeed");
 
         let stream_options = converted
             .inner
@@ -1382,10 +1278,8 @@ mod tests {
         );
         let request = sample_request();
 
-        let converted = crate::middleware::mapper::TryConvert::try_convert(
-            &converter, request,
-        )
-        .expect("conversion should succeed");
+        let converted = crate::middleware::mapper::TryConvert::try_convert(&converter, request)
+            .expect("conversion should succeed");
 
         assert!(
             converted.inner.stream_options.is_none(),

@@ -8,21 +8,12 @@ use tokio::sync::RwLock;
 
 use super::secret::Secret;
 use crate::{
-    config::Config, endpoints::ApiEndpoint, error::provider::ProviderError,
-    metrics::Metrics, types::org::OrgId,
+    config::Config, endpoints::ApiEndpoint, error::provider::ProviderError, metrics::Metrics,
+    types::org::OrgId,
 };
 
 #[derive(
-    Debug,
-    Clone,
-    Default,
-    Copy,
-    Eq,
-    Hash,
-    PartialEq,
-    EnumIter,
-    strum::Display,
-    strum::EnumString,
+    Debug, Clone, Default, Copy, Eq, Hash, PartialEq, EnumIter, strum::Display, strum::EnumString,
 )]
 #[strum(serialize_all = "kebab-case")]
 pub enum ModelProvider {
@@ -54,15 +45,7 @@ impl Serialize for ModelProvider {
 }
 
 #[derive(
-    Debug,
-    Clone,
-    Default,
-    Eq,
-    Hash,
-    PartialEq,
-    EnumIter,
-    serde::Serialize,
-    serde::Deserialize,
+    Debug, Clone, Default, Eq, Hash, PartialEq, EnumIter, serde::Serialize, serde::Deserialize,
 )]
 #[serde(rename_all = "kebab-case")]
 pub enum InferenceProvider {
@@ -84,47 +67,33 @@ impl InferenceProvider {
     #[must_use]
     pub fn endpoints(&self) -> Vec<ApiEndpoint> {
         match self {
-            InferenceProvider::OpenAI => {
-                crate::endpoints::openai::OpenAI::iter()
-                    .map(ApiEndpoint::OpenAI)
-                    .collect()
-            }
-            InferenceProvider::Anthropic => {
-                crate::endpoints::anthropic::Anthropic::iter()
-                    .map(ApiEndpoint::Anthropic)
-                    .collect()
-            }
-            InferenceProvider::Ollama => {
-                crate::endpoints::ollama::Ollama::iter()
-                    .map(ApiEndpoint::Ollama)
-                    .collect()
-            }
-            InferenceProvider::Bedrock => {
-                crate::endpoints::bedrock::Bedrock::iter()
-                    .map(ApiEndpoint::Bedrock)
-                    .collect()
-            }
-            InferenceProvider::GoogleGemini => {
-                crate::endpoints::google::Google::iter()
-                    .map(ApiEndpoint::Google)
-                    .collect()
-            }
-            InferenceProvider::Custom => {
-                crate::endpoints::openai::OpenAI::iter()
-                    .map(|endpoint| ApiEndpoint::OpenAICompatible {
-                        provider: self.clone(),
-                        openai_endpoint: endpoint,
-                    })
-                    .collect()
-            }
-            InferenceProvider::Named(_) => {
-                crate::endpoints::openai::OpenAI::iter()
-                    .map(|endpoint| ApiEndpoint::OpenAICompatible {
-                        provider: self.clone(),
-                        openai_endpoint: endpoint,
-                    })
-                    .collect()
-            }
+            InferenceProvider::OpenAI => crate::endpoints::openai::OpenAI::iter()
+                .map(ApiEndpoint::OpenAI)
+                .collect(),
+            InferenceProvider::Anthropic => crate::endpoints::anthropic::Anthropic::iter()
+                .map(ApiEndpoint::Anthropic)
+                .collect(),
+            InferenceProvider::Ollama => crate::endpoints::ollama::Ollama::iter()
+                .map(ApiEndpoint::Ollama)
+                .collect(),
+            InferenceProvider::Bedrock => crate::endpoints::bedrock::Bedrock::iter()
+                .map(ApiEndpoint::Bedrock)
+                .collect(),
+            InferenceProvider::GoogleGemini => crate::endpoints::google::Google::iter()
+                .map(ApiEndpoint::Google)
+                .collect(),
+            InferenceProvider::Custom => crate::endpoints::openai::OpenAI::iter()
+                .map(|endpoint| ApiEndpoint::OpenAICompatible {
+                    provider: self.clone(),
+                    openai_endpoint: endpoint,
+                })
+                .collect(),
+            InferenceProvider::Named(_) => crate::endpoints::openai::OpenAI::iter()
+                .map(|endpoint| ApiEndpoint::OpenAICompatible {
+                    provider: self.clone(),
+                    openai_endpoint: endpoint,
+                })
+                .collect(),
         }
     }
 
@@ -141,18 +110,14 @@ impl InferenceProvider {
         }
     }
 
-    pub fn from_provider_code(
-        provider_name: &str,
-    ) -> Result<Self, ProviderError> {
+    pub fn from_provider_code(provider_name: &str) -> Result<Self, ProviderError> {
         let normalized = provider_name.trim().to_ascii_lowercase();
         let provider = match normalized.as_str() {
             "openai" => InferenceProvider::OpenAI,
             "anthropic" => InferenceProvider::Anthropic,
             "aws bedrock" | "bedrock" | "amazon" => InferenceProvider::Bedrock,
             "ollama" => InferenceProvider::Ollama,
-            "google" | "google ai (gemini)" | "gemini" => {
-                InferenceProvider::GoogleGemini
-            }
+            "google" | "google ai (gemini)" | "gemini" => InferenceProvider::GoogleGemini,
             "custom" => InferenceProvider::Custom,
 
             // Legacy aliases.
@@ -164,9 +129,7 @@ impl InferenceProvider {
                 InferenceProvider::Named(normalized.into())
             }
             _ => {
-                return Err(ProviderError::InvalidProviderName(
-                    provider_name.into(),
-                ));
+                return Err(ProviderError::InvalidProviderName(provider_name.into()));
             }
         };
         Ok(provider)
@@ -199,9 +162,7 @@ fn is_valid_named_provider_code(code: &str) -> bool {
 impl FromStr for InferenceProvider {
     type Err = std::convert::Infallible;
 
-    fn from_str(
-        s: &str,
-    ) -> ::core::result::Result<InferenceProvider, Self::Err> {
+    fn from_str(s: &str) -> ::core::result::Result<InferenceProvider, Self::Err> {
         let normalized = s.trim();
         Ok(InferenceProvider::from_provider_code(normalized)
             .unwrap_or_else(|_| InferenceProvider::Named(normalized.into())))
@@ -251,9 +212,7 @@ impl ProviderKey {
     }
 
     #[must_use]
-    pub fn as_aws_credentials(
-        &self,
-    ) -> (Option<&Secret<String>>, Option<&Secret<String>>) {
+    pub fn as_aws_credentials(&self) -> (Option<&Secret<String>>, Option<&Secret<String>>) {
         match self {
             ProviderKey::AwsCredentials {
                 access_key,
@@ -273,19 +232,12 @@ impl ProviderKeys {
         Self(RwLock::new(HashMap::default()))
     }
 
-    pub async fn set_all_provider_keys(
-        &self,
-        provider_keys: HashMap<OrgId, ProviderKeyMap>,
-    ) {
+    pub async fn set_all_provider_keys(&self, provider_keys: HashMap<OrgId, ProviderKeyMap>) {
         let mut keys = self.0.write().await;
         *keys = provider_keys;
     }
 
-    pub async fn set_org_provider_keys(
-        &self,
-        org_id: OrgId,
-        provider_keys: ProviderKeyMap,
-    ) {
+    pub async fn set_org_provider_keys(&self, org_id: OrgId, provider_keys: ProviderKeyMap) {
         let mut keys = self.0.write().await;
         keys.insert(org_id, provider_keys);
     }
@@ -316,9 +268,7 @@ impl std::ops::Deref for ProviderKeyMap {
 
 impl ProviderKeyMap {
     #[must_use]
-    pub fn from_db(
-        provider_keys: HashMap<InferenceProvider, ProviderKey>,
-    ) -> Self {
+    pub fn from_db(provider_keys: HashMap<InferenceProvider, ProviderKey>) -> Self {
         Self(Arc::new(provider_keys))
     }
 }
@@ -344,15 +294,9 @@ mod tests {
     #[test]
     fn inference_provider_as_provider_code_uses_db_code_mapping() {
         assert_eq!(InferenceProvider::OpenAI.as_provider_code(), "openai");
-        assert_eq!(
-            InferenceProvider::Anthropic.as_provider_code(),
-            "anthropic"
-        );
+        assert_eq!(InferenceProvider::Anthropic.as_provider_code(), "anthropic");
         assert_eq!(InferenceProvider::Bedrock.as_provider_code(), "bedrock");
-        assert_eq!(
-            InferenceProvider::GoogleGemini.as_provider_code(),
-            "google"
-        );
+        assert_eq!(InferenceProvider::GoogleGemini.as_provider_code(), "google");
         assert_eq!(
             InferenceProvider::Named("mistral".into()).as_provider_code(),
             "mistral"
@@ -374,8 +318,7 @@ mod tests {
             InferenceProvider::GoogleGemini
         );
         assert_eq!(
-            InferenceProvider::from_provider_code("Google AI (Gemini)")
-                .unwrap(),
+            InferenceProvider::from_provider_code("Google AI (Gemini)").unwrap(),
             InferenceProvider::GoogleGemini
         );
         assert_eq!(

@@ -5,9 +5,7 @@
 
 use base64::{Engine as _, engine::general_purpose::STANDARD as B64};
 
-use crate::{
-    crypto::master_key::MASTER_KEY_ENCRYPTION_KEY_LEN, error::init::InitError,
-};
+use crate::{crypto::master_key::MASTER_KEY_ENCRYPTION_KEY_LEN, error::init::InitError};
 
 /// The environment variable name for the master key encryption key.
 pub const MASTER_KEY_ENCRYPTION_KEY_ENV: &str = "MASTER_KEY_ENCRYPTION_KEY";
@@ -15,8 +13,7 @@ pub const MASTER_KEY_ENCRYPTION_KEY_ENV: &str = "MASTER_KEY_ENCRYPTION_KEY";
 /// Reads `MASTER_KEY_ENCRYPTION_KEY` from the environment, Base64-decodes it
 /// and validates that it is exactly 32 bytes. Returns an
 /// `Arc<[u8; 32]>` suitable for sharing across tasks.
-pub fn load_master_key_encryption_key()
--> Result<std::sync::Arc<[u8; 32]>, InitError> {
+pub fn load_master_key_encryption_key() -> Result<std::sync::Arc<[u8; 32]>, InitError> {
     let raw = std::env::var(MASTER_KEY_ENCRYPTION_KEY_ENV).map_err(|_| {
         InitError::InvalidMasterKeyEncryptionKey(format!(
             "environment variable `{MASTER_KEY_ENCRYPTION_KEY_ENV}` is not set"
@@ -28,9 +25,7 @@ pub fn load_master_key_encryption_key()
         )));
     }
     let bytes = B64.decode(raw.trim()).map_err(|e| {
-        InitError::InvalidMasterKeyEncryptionKey(format!(
-            "Base64 decode failed: {e}"
-        ))
+        InitError::InvalidMasterKeyEncryptionKey(format!("Base64 decode failed: {e}"))
     })?;
     if bytes.len() != MASTER_KEY_ENCRYPTION_KEY_LEN {
         return Err(InitError::InvalidMasterKeyEncryptionKey(format!(
@@ -88,17 +83,13 @@ mod tests {
 
     #[test]
     fn rejects_missing_key() {
-        let err = with_master_key_env(None, || {
-            load_master_key_encryption_key().unwrap_err()
-        });
+        let err = with_master_key_env(None, || load_master_key_encryption_key().unwrap_err());
         assert!(err.to_string().contains("not set"));
     }
 
     #[test]
     fn rejects_empty_key() {
-        let err = with_master_key_env(Some("  "), || {
-            load_master_key_encryption_key().unwrap_err()
-        });
+        let err = with_master_key_env(Some("  "), || load_master_key_encryption_key().unwrap_err());
         assert!(err.to_string().contains("empty"));
     }
 
@@ -133,9 +124,7 @@ mod tests {
     fn accepts_valid_32_byte_key() {
         let key_bytes = [42u8; 32];
         let encoded = B64.encode(key_bytes);
-        let key = with_master_key_env(Some(&encoded), || {
-            load_master_key_encryption_key().unwrap()
-        });
+        let key = with_master_key_env(Some(&encoded), || load_master_key_encryption_key().unwrap());
         assert_eq!(key.as_slice(), &key_bytes);
     }
 
@@ -144,9 +133,7 @@ mod tests {
         let key_bytes = [7u8; 32];
         let encoded = B64.encode(key_bytes);
         let wrapped = format!("  \n{encoded}\t ");
-        let key = with_master_key_env(Some(&wrapped), || {
-            load_master_key_encryption_key().unwrap()
-        });
+        let key = with_master_key_env(Some(&wrapped), || load_master_key_encryption_key().unwrap());
         assert_eq!(key.as_slice(), &key_bytes);
     }
 }

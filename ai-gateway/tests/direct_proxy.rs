@@ -11,8 +11,7 @@ use serde_json::json;
 use tower::Service;
 
 const MASTER_KEY_ENCRYPTION_KEY_ENV: &str = "MASTER_KEY_ENCRYPTION_KEY";
-const TEST_MASTER_KEY_ENCRYPTION_KEY_B64: &str =
-    "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=";
+const TEST_MASTER_KEY_ENCRYPTION_KEY_B64: &str = "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=";
 
 struct MasterKeyGuard {
     previous: Option<String>,

@@ -9,8 +9,8 @@ use ai_gateway::{
     config::{
         Config,
         fallback_bridge::{
-            DeprecatedRetryLocation, deprecated_per_path_retries,
-            resolved_global_retry, warn_deprecated_per_path_retries,
+            DeprecatedRetryLocation, deprecated_per_path_retries, resolved_global_retry,
+            warn_deprecated_per_path_retries,
         },
         retry::RetryConfig,
         router::{RouterConfig, RouterConfigs},
@@ -132,8 +132,7 @@ fn router_retries_reported_as_deprecated() {
         ..RouterConfig::default()
     };
 
-    config.routers =
-        RouterConfigs::new(HashMap::from([(router_id.clone(), router_cfg)]));
+    config.routers = RouterConfigs::new(HashMap::from([(router_id.clone(), router_cfg)]));
 
     let locs = deprecated_per_path_retries(&config);
     assert!(
@@ -153,8 +152,7 @@ fn both_deprecated_locations_reported() {
         retries: Some(const_retry(1)),
         ..RouterConfig::default()
     };
-    config.routers =
-        RouterConfigs::new(HashMap::from([(router_id.clone(), router_cfg)]));
+    config.routers = RouterConfigs::new(HashMap::from([(router_id.clone(), router_cfg)]));
 
     let locs = deprecated_per_path_retries(&config);
     assert_eq!(locs.len(), 2);
@@ -174,8 +172,7 @@ fn deprecated_per_path_retries_are_ignored_by_bridge() {
         retries: Some(const_retry(2)), // deprecated
         ..RouterConfig::default()
     };
-    config.routers =
-        RouterConfigs::new(HashMap::from([(router_id, router_cfg)]));
+    config.routers = RouterConfigs::new(HashMap::from([(router_id, router_cfg)]));
 
     let result = resolved_global_retry(&config).unwrap();
     assert_eq!(
@@ -195,8 +192,7 @@ fn warn_deprecated_per_path_retries_is_non_fatal() {
         retries: Some(const_retry(2)),
         ..RouterConfig::default()
     };
-    config.routers =
-        RouterConfigs::new(HashMap::from([(router_id, router_cfg)]));
+    config.routers = RouterConfigs::new(HashMap::from([(router_id, router_cfg)]));
 
     warn_deprecated_per_path_retries(&config);
 }

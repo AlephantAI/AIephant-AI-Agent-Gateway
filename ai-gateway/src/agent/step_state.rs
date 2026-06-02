@@ -3,8 +3,7 @@ use std::borrow::Cow;
 use uuid::Uuid;
 
 use crate::{
-    agent::context::AgentStepKind, app_redis::AppRedis,
-    config::agent::AgentConflictAction,
+    agent::context::AgentStepKind, app_redis::AppRedis, config::agent::AgentConflictAction,
 };
 
 #[derive(Debug, Clone)]
@@ -118,9 +117,7 @@ mod tests {
     use uuid::Uuid;
 
     use super::*;
-    use crate::{
-        agent::context::AgentStepKind, config::agent::AgentConflictAction,
-    };
+    use crate::{agent::context::AgentStepKind, config::agent::AgentConflictAction};
 
     #[test]
     fn fingerprint_is_stable_and_distinguishes_attempts() {
@@ -146,8 +143,7 @@ mod tests {
 
     #[test]
     fn step_state_key_namespaces_by_workspace_agent_run_and_step() {
-        let workspace_id =
-            Uuid::parse_str("018fdc6b-b65f-7c20-8000-000000000001").unwrap();
+        let workspace_id = Uuid::parse_str("018fdc6b-b65f-7c20-8000-000000000001").unwrap();
 
         assert_eq!(
             step_state_key(workspace_id, "agent-a", "run-1", "step-1"),
@@ -177,8 +173,7 @@ mod tests {
 
     #[test]
     fn step_state_key_components_with_delimiters_do_not_collide() {
-        let workspace_id =
-            Uuid::parse_str("018fdc6b-b65f-7c20-8000-000000000001").unwrap();
+        let workspace_id = Uuid::parse_str("018fdc6b-b65f-7c20-8000-000000000001").unwrap();
 
         assert_ne!(
             step_state_key(workspace_id, "agent:a", "run", "step%1"),
@@ -203,15 +198,10 @@ mod tests {
 
     #[tokio::test]
     async fn conflict_detection_treats_missing_redis_as_no_conflict() {
-        let decision = detect_step_conflict(
-            None,
-            "key",
-            "fingerprint",
-            60,
-            AgentConflictAction::Strict,
-        )
-        .await
-        .unwrap();
+        let decision =
+            detect_step_conflict(None, "key", "fingerprint", 60, AgentConflictAction::Strict)
+                .await
+                .unwrap();
 
         assert_eq!(decision, StepConflictDecision::NoConflict);
     }

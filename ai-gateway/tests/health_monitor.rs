@@ -92,9 +92,7 @@ async fn errors_remove_provider_from_lb_pool() {
             .method(Method::POST)
             .header("authorization", "Bearer sk-alephant-test-key")
             // default router
-            .uri(
-                "http://router.alephant.test/router/my-router/chat/completions",
-            )
+            .uri("http://router.alephant.test/router/my-router/chat/completions")
             .body(request_body)
             .unwrap();
         let response = harness.call(request).await.unwrap();

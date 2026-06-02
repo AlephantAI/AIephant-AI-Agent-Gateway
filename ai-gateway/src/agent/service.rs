@@ -14,25 +14,24 @@ use crate::{
     agent::{
         adapter::adapt_agent_event,
         context::{
-            AgentConfidence, AgentContext, AgentEventPhase, AgentPolicyMode,
-            AgentPolicyStage, AgentStepSource, AgentTrustLevel,
+            AgentConfidence, AgentContext, AgentEventPhase, AgentPolicyMode, AgentPolicyStage,
+            AgentStepSource, AgentTrustLevel,
         },
         event::{
-            AgentEventEnvelope, AgentEventInput, AgentEventSource,
-            AgentEventsRequest, AgentEventsResponse, AgentPolicyDecision,
+            AgentEventEnvelope, AgentEventInput, AgentEventSource, AgentEventsRequest,
+            AgentEventsResponse, AgentPolicyDecision,
         },
         headers::parse_agent_context_from_headers,
         name::resolve_agent_name,
         policy::{
-            AgentPolicyError, attach_policy_decision_to_metadata,
-            compact_policy_decision_metadata, skipped_audit_decision,
-            validate_agent_policy,
+            AgentPolicyError, attach_policy_decision_to_metadata, compact_policy_decision_metadata,
+            skipped_audit_decision, validate_agent_policy,
         },
         redaction::redact_metadata,
         sink::emit_agent_event,
         step_state::{
-            StepConflictDecision, StepFingerprintInput, detect_step_conflict,
-            step_fingerprint, step_state_key,
+            StepConflictDecision, StepFingerprintInput, detect_step_conflict, step_fingerprint,
+            step_state_key,
         },
     },
     app_state::AppState,
@@ -60,15 +59,9 @@ impl AgentEventsService {
 impl Service<Request> for AgentEventsService {
     type Response = Response;
     type Error = Infallible;
-    type Future = futures::future::BoxFuture<
-        'static,
-        Result<Self::Response, Self::Error>,
-    >;
+    type Future = futures::future::BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
-    fn poll_ready(
-        &mut self,
-        _cx: &mut Context<'_>,
-    ) -> Poll<Result<(), Self::Error>> {
+    fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         Poll::Ready(Ok(()))
     }
 
@@ -251,25 +244,22 @@ async fn handle_agent_events(
         return Err(AgentServiceError::MethodNotAllowed);
     }
     let header_agent_context = if cfg.allow_header_context {
-        parse_agent_context_from_headers(
-            req.headers(),
-            cfg.max_header_value_bytes,
-        )
+        parse_agent_context_from_headers(req.headers(), cfg.max_header_value_bytes)
     } else {
         None
     };
 
     let (parts, body) = req.into_parts();
-    let auth_ctx = auth_context_from_extensions(&parts.extensions)
-        .ok_or(AgentServiceError::MissingAuth)?;
+    let auth_ctx =
+        auth_context_from_extensions(&parts.extensions).ok_or(AgentServiceError::MissingAuth)?;
 
     let body = Limited::new(body, cfg.max_event_bytes)
         .collect()
         .await
         .map_err(|_| AgentServiceError::PayloadTooLarge)?
         .to_bytes();
-    let request: AgentEventsRequest = serde_json::from_slice(&body)
-        .map_err(|_| AgentServiceError::InvalidJson)?;
+    let request: AgentEventsRequest =
+        serde_json::from_slice(&body).map_err(|_| AgentServiceError::InvalidJson)?;
     let events = request.into_sourced_events();
     validate_event_limits(
         events.len(),
@@ -281,8 +271,7 @@ async fn handle_agent_events(
     let mut accepted = 0;
     let mut decisions = Vec::with_capacity(events.len());
     for sourced_event in events {
-        let event =
-            adapt_agent_event(sourced_event.source, sourced_event.event);
+        let event = adapt_agent_event(sourced_event.source, sourced_event.event);
         validate_metadata_limit(&event.metadata, cfg.max_metadata_bytes)?;
         let context_conflict = check_context_conflict(
             header_agent_context.as_ref(),
@@ -297,12 +286,10 @@ async fn handle_agent_events(
             cfg.policy_mode,
         );
         envelope.context_conflict = context_conflict;
-        let step_conflict =
-            check_step_conflict(&app_state, auth_ctx, &envelope).await?;
+        let step_conflict = check_step_conflict(&app_state, auth_ctx, &envelope).await?;
         envelope.step_id_conflict = matches!(
             step_conflict,
-            StepConflictDecision::ConflictWarn
-                | StepConflictDecision::ConflictStrict
+            StepConflictDecision::ConflictWarn | StepConflictDecision::ConflictStrict
         );
         if matches!(step_conflict, StepConflictDecision::ConflictStrict) {
             return Err(AgentServiceError::StepConflict);
@@ -313,25 +300,12 @@ async fn handle_agent_events(
                 Ok(decision) => decision,
                 Err(AgentPolicyError::Unavailable) => {
                     attach_policy_unavailable_audit(&mut envelope);
-                    attach_sink_status_to_metadata(
-                        &mut envelope.metadata,
-                        "sent",
-                    );
-                    if validate_metadata_limit(
-                        &envelope.metadata,
-                        cfg.max_metadata_bytes,
-                    )
-                    .is_err()
+                    attach_sink_status_to_metadata(&mut envelope.metadata, "sent");
+                    if validate_metadata_limit(&envelope.metadata, cfg.max_metadata_bytes).is_err()
                     {
                         envelope.metadata = compact_policy_unavailable_audit();
-                        attach_sink_status_to_metadata(
-                            &mut envelope.metadata,
-                            "sent",
-                        );
-                        validate_metadata_limit(
-                            &envelope.metadata,
-                            cfg.max_metadata_bytes,
-                        )?;
+                        attach_sink_status_to_metadata(&mut envelope.metadata, "sent");
+                        validate_metadata_limit(&envelope.metadata, cfg.max_metadata_bytes)?;
                     }
                     emit_agent_event(&app_state, auth_ctx, &envelope)
                         .await
@@ -353,25 +327,14 @@ async fn handle_agent_events(
         };
         let decision = with_sink_status(decision, "sent");
         attach_policy_decision_to_metadata(&mut envelope.metadata, &decision);
-        attach_sink_status_to_metadata(
-            &mut envelope.metadata,
-            &decision.sink_status,
-        );
-        if let Err(err) =
-            validate_metadata_limit(&envelope.metadata, cfg.max_metadata_bytes)
-        {
+        attach_sink_status_to_metadata(&mut envelope.metadata, &decision.sink_status);
+        if let Err(err) = validate_metadata_limit(&envelope.metadata, cfg.max_metadata_bytes) {
             if decision.allowed {
                 return Err(err);
             }
             envelope.metadata = compact_policy_decision_metadata(&decision);
-            attach_sink_status_to_metadata(
-                &mut envelope.metadata,
-                &decision.sink_status,
-            );
-            validate_metadata_limit(
-                &envelope.metadata,
-                cfg.max_metadata_bytes,
-            )?;
+            attach_sink_status_to_metadata(&mut envelope.metadata, &decision.sink_status);
+            validate_metadata_limit(&envelope.metadata, cfg.max_metadata_bytes)?;
         }
 
         emit_agent_event(&app_state, auth_ctx, &envelope)
@@ -410,10 +373,7 @@ fn with_sink_status(
     decision
 }
 
-fn attach_sink_status_to_metadata(
-    metadata: &mut serde_json::Value,
-    sink_status: &str,
-) {
+fn attach_sink_status_to_metadata(metadata: &mut serde_json::Value, sink_status: &str) {
     if !metadata.is_object() {
         let original = std::mem::take(metadata);
         *metadata = serde_json::json!({ "value": original });
@@ -424,9 +384,7 @@ fn attach_sink_status_to_metadata(
     obj.insert("sinkStatus".to_string(), serde_json::json!(sink_status));
 }
 
-fn auth_context_from_extensions(
-    extensions: &http::Extensions,
-) -> Option<&AuthContext> {
+fn auth_context_from_extensions(extensions: &http::Extensions) -> Option<&AuthContext> {
     extensions.get::<AuthContext>().or_else(|| {
         extensions
             .get::<std::sync::Arc<RequestContext>>()
@@ -472,9 +430,7 @@ fn normalize_event(
         timestamp: event.timestamp,
         name: event.name.clone(),
         alephant_agent_name: resolved_agent_name.name,
-        alephant_agent_name_source: resolved_agent_name
-            .source
-            .map(str::to_string),
+        alephant_agent_name_source: resolved_agent_name.source.map(str::to_string),
         alephant_agent_trust_level: resolved_agent_name
             .trust_level
             .map(|trust_level| trust_level.as_str().to_string()),
@@ -494,10 +450,7 @@ fn normalize_event(
         } else {
             event.step_source
         },
-        step_confidence: if matches!(
-            event.step_confidence,
-            AgentConfidence::Unknown
-        ) {
+        step_confidence: if matches!(event.step_confidence, AgentConfidence::Unknown) {
             AgentConfidence::Low
         } else {
             event.step_confidence
@@ -558,32 +511,29 @@ fn check_context_conflict(
     Ok(conflict)
 }
 
-fn context_fields_conflict(
-    header_context: &AgentContext,
-    event: &AgentEventInput,
-) -> bool {
+fn context_fields_conflict(header_context: &AgentContext, event: &AgentEventInput) -> bool {
     optional_str_conflicts(
         header_context.agent_id_external.as_deref(),
         event.agent_id_external.as_deref(),
-    ) || optional_str_conflicts(
-        header_context.run_id.as_deref(),
-        event.run_id.as_deref(),
-    ) || optional_str_conflicts(
-        header_context.step_id.as_deref(),
-        event.step_id.as_deref(),
-    ) || optional_str_conflicts(
-        header_context.parent_step_id.as_deref(),
-        event.parent_step_id.as_deref(),
-    ) || optional_str_conflicts(
-        header_context.tool_call_id.as_deref(),
-        event.tool_call_id.as_deref(),
-    ) || optional_str_conflicts(
-        header_context.handoff_id.as_deref(),
-        event.handoff_id.as_deref(),
-    ) || optional_str_conflicts(
-        header_context.graph_node.as_deref(),
-        event.graph_node.as_deref(),
-    ) || optional_value_conflicts(header_context.step_kind, event.step_kind)
+    ) || optional_str_conflicts(header_context.run_id.as_deref(), event.run_id.as_deref())
+        || optional_str_conflicts(header_context.step_id.as_deref(), event.step_id.as_deref())
+        || optional_str_conflicts(
+            header_context.parent_step_id.as_deref(),
+            event.parent_step_id.as_deref(),
+        )
+        || optional_str_conflicts(
+            header_context.tool_call_id.as_deref(),
+            event.tool_call_id.as_deref(),
+        )
+        || optional_str_conflicts(
+            header_context.handoff_id.as_deref(),
+            event.handoff_id.as_deref(),
+        )
+        || optional_str_conflicts(
+            header_context.graph_node.as_deref(),
+            event.graph_node.as_deref(),
+        )
+        || optional_value_conflicts(header_context.step_kind, event.step_kind)
         || (header_context.step_source != AgentStepSource::Unknown
             && event.step_source != AgentStepSource::Unknown
             && header_context.step_source != event.step_source)
@@ -593,10 +543,7 @@ fn optional_str_conflicts(left: Option<&str>, right: Option<&str>) -> bool {
     matches!((left, right), (Some(left), Some(right)) if left != right)
 }
 
-fn optional_value_conflicts<T: PartialEq>(
-    left: Option<T>,
-    right: Option<T>,
-) -> bool {
+fn optional_value_conflicts<T: PartialEq>(left: Option<T>, right: Option<T>) -> bool {
     matches!((left, right), (Some(left), Some(right)) if left != right)
 }
 
@@ -605,8 +552,7 @@ async fn check_step_conflict(
     auth_ctx: &AuthContext,
     envelope: &AgentEventEnvelope,
 ) -> Result<StepConflictDecision, AgentServiceError> {
-    let (Some(run_id), Some(step_id)) =
-        (envelope.run_id.as_deref(), envelope.step_id.as_deref())
+    let (Some(run_id), Some(step_id)) = (envelope.run_id.as_deref(), envelope.step_id.as_deref())
     else {
         return Ok(StepConflictDecision::NoConflict);
     };
@@ -624,12 +570,7 @@ async fn check_step_conflict(
         attempt: envelope.attempt,
         input_hash: envelope.input_hash.clone(),
     };
-    let key = step_state_key(
-        *auth_ctx.org_id.as_ref(),
-        &agent_identity,
-        run_id,
-        step_id,
-    );
+    let key = step_state_key(*auth_ctx.org_id.as_ref(), &agent_identity, run_id, step_id);
     let fingerprint = step_fingerprint(&input);
     detect_step_conflict(
         app_state.redis().map(std::sync::Arc::as_ref),
@@ -651,10 +592,12 @@ fn error_response(error: AgentServiceError) -> Response {
         | AgentServiceError::MetadataTooLarge => StatusCode::PAYLOAD_TOO_LARGE,
         AgentServiceError::InvalidJson => StatusCode::BAD_REQUEST,
         AgentServiceError::MissingAuth => StatusCode::UNAUTHORIZED,
-        AgentServiceError::SinkFailed
-        | AgentServiceError::PolicyUnavailable => StatusCode::BAD_GATEWAY,
-        AgentServiceError::StepConflict
-        | AgentServiceError::ContextConflict => StatusCode::CONFLICT,
+        AgentServiceError::SinkFailed | AgentServiceError::PolicyUnavailable => {
+            StatusCode::BAD_GATEWAY
+        }
+        AgentServiceError::StepConflict | AgentServiceError::ContextConflict => {
+            StatusCode::CONFLICT
+        }
     };
     let body = serde_json::json!({
         "error": {
@@ -670,8 +613,7 @@ fn json_response<T: serde::Serialize>(
     status: StatusCode,
     value: &T,
 ) -> Result<Response, AgentServiceError> {
-    let body = serde_json::to_vec(value)
-        .map_err(|_| AgentServiceError::InvalidJson)?;
+    let body = serde_json::to_vec(value).map_err(|_| AgentServiceError::InvalidJson)?;
     http::Response::builder()
         .status(status)
         .header(http::header::CONTENT_TYPE, "application/json")
@@ -695,14 +637,13 @@ mod tests {
     use super::*;
     use crate::{
         agent::context::{
-            AgentConfidence, AgentEventPhase, AgentEventSourceTrust,
-            AgentPolicyStage, AgentStepKind, AgentStepSource,
+            AgentConfidence, AgentEventPhase, AgentEventSourceTrust, AgentPolicyStage,
+            AgentStepKind, AgentStepSource,
         },
         config::{Config, agent::AgentConflictAction},
         policy_proto::{
-            AgentPolicyScope, EvaluateRequest, EvaluateResponse,
-            ValidateAgentPolicyRequest, ValidateAgentPolicyResponse,
-            X402InboundEvaluateRequest, X402InboundEvaluateResponse,
+            AgentPolicyScope, EvaluateRequest, EvaluateResponse, ValidateAgentPolicyRequest,
+            ValidateAgentPolicyResponse, X402InboundEvaluateRequest, X402InboundEvaluateResponse,
             policy_service_server::{PolicyService, PolicyServiceServer},
         },
         types::{org::OrgId, secret::Secret, user::UserId},
@@ -836,12 +777,9 @@ mod tests {
         event.agent_id_external = Some("payload-agent".to_string());
         event.run_id = Some("run-1".to_string());
 
-        let conflict = check_context_conflict(
-            Some(&header_context),
-            &event,
-            AgentConflictAction::Warn,
-        )
-        .expect("warn conflict should not reject");
+        let conflict =
+            check_context_conflict(Some(&header_context), &event, AgentConflictAction::Warn)
+                .expect("warn conflict should not reject");
 
         assert!(conflict);
     }
@@ -856,11 +794,7 @@ mod tests {
         event.run_id = Some("run-from-payload".to_string());
 
         assert_eq!(
-            check_context_conflict(
-                Some(&header_context),
-                &event,
-                AgentConflictAction::Strict,
-            ),
+            check_context_conflict(Some(&header_context), &event, AgentConflictAction::Strict,),
             Err(AgentServiceError::ContextConflict)
         );
     }
@@ -875,11 +809,7 @@ mod tests {
         event.step_id = Some("payload-step".to_string());
 
         assert_eq!(
-            check_context_conflict(
-                Some(&header_context),
-                &event,
-                AgentConflictAction::Disabled,
-            ),
+            check_context_conflict(Some(&header_context), &event, AgentConflictAction::Disabled,),
             Ok(false)
         );
     }
@@ -1046,8 +976,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn check_step_conflict_returns_no_conflict_when_run_or_step_missing()
-    {
+    async fn check_step_conflict_returns_no_conflict_when_run_or_step_missing() {
         let app = crate::app::build_test_app(Config::default())
             .await
             .expect("build app");
@@ -1122,8 +1051,7 @@ mod tests {
         let mut config = Config::default();
         config.agent.enabled = true;
         config.policy.enabled = false;
-        config.request_log.log_queue_redis_url =
-            Some(redis.endpoint.parse().expect("redis url"));
+        config.request_log.log_queue_redis_url = Some(redis.endpoint.parse().expect("redis url"));
         let app = crate::app::build_test_app(config).await.expect("build app");
         let mut service = AgentEventsService::new(app.state);
         let response = service
@@ -1141,12 +1069,10 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn agent_events_response_includes_per_event_decision_and_sink_status()
-    {
+    async fn agent_events_response_includes_per_event_decision_and_sink_status() {
         let redis = spawn_redis_fixture().await;
         let mut config = agent_enabled_config();
-        config.request_log.log_queue_redis_url =
-            Some(redis.endpoint.parse().expect("redis url"));
+        config.request_log.log_queue_redis_url = Some(redis.endpoint.parse().expect("redis url"));
         let app = crate::app::build_test_app(config).await.expect("build app");
         let mut event = event_input();
         event.source = Some(AgentEventSource::Unknown);
@@ -1177,10 +1103,8 @@ mod tests {
         config.policy.enabled = false;
         config.request_log.log_queue_redis_url = None;
         config.agent.event_log_http_fallback_enabled = true;
-        config.agent.event_log_http_endpoint =
-            format!("{}/v1/log/agent-event", fixture.url);
-        config.agent.event_log_http_auth_token =
-            Secret::from("agent-token".to_string());
+        config.agent.event_log_http_endpoint = format!("{}/v1/log/agent-event", fixture.url);
+        config.agent.event_log_http_auth_token = Secret::from("agent-token".to_string());
         let app = crate::app::build_test_app(config).await.expect("build app");
         let mut service = AgentEventsService::new(app.state);
         let response = service
@@ -1210,8 +1134,7 @@ mod tests {
         let mut config = Config::default();
         config.agent.enabled = true;
         config.policy.enabled = false;
-        config.request_log.log_queue_redis_url =
-            Some(redis.endpoint.parse().expect("redis url"));
+        config.request_log.log_queue_redis_url = Some(redis.endpoint.parse().expect("redis url"));
         let app = crate::app::build_test_app(config).await.expect("build app");
         let mut auth_ctx = auth_context(Uuid::new_v4());
         let user_id = auth_ctx.user_id.to_string();
@@ -1220,8 +1143,7 @@ mod tests {
         auth_ctx.entity_type = "agent".to_string();
         auth_ctx.entity_id = entity_id;
         auth_ctx.entity_name = "Support Bot".to_string();
-        auth_ctx.registered_agent_name =
-            Some("Registered Support Bot".to_string());
+        auth_ctx.registered_agent_name = Some("Registered Support Bot".to_string());
         let mut event = event_input();
         event.agent_name = Some("Payload Bot".to_string());
         let mut service = AgentEventsService::new(app.state);
@@ -1250,10 +1172,9 @@ mod tests {
         assert_eq!(emitted["alephantAgentNameSource"], "virtual_key_label");
         assert_eq!(emitted["alephantAgentTrustLevel"], "auth_bound");
         assert_eq!(emitted["agentTrustLevel"], "auth_bound");
-        let metadata: serde_json::Value = serde_json::from_str(
-            emitted["metadata"].as_str().expect("metadata"),
-        )
-        .expect("metadata should be JSON");
+        let metadata: serde_json::Value =
+            serde_json::from_str(emitted["metadata"].as_str().expect("metadata"))
+                .expect("metadata should be JSON");
         assert_eq!(metadata["registeredAgentName"], "Registered Support Bot");
         assert_eq!(metadata["selfReportedAgentName"], "Payload Bot");
         assert_eq!(metadata["agentNameConflict"], true);
@@ -1275,16 +1196,14 @@ mod tests {
         config.agent.enabled = true;
         config.policy.enabled = true;
         config.policy.grpc_endpoint = policy.endpoint;
-        config.request_log.log_queue_redis_url =
-            Some(redis.endpoint.parse().expect("redis url"));
+        config.request_log.log_queue_redis_url = Some(redis.endpoint.parse().expect("redis url"));
         let app = crate::app::build_test_app(config).await.expect("build app");
         let client = crate::content_filter::ContentFilterGrpcClient::connect(
             app.state.config().policy.grpc_endpoint.clone(),
         )
         .await
         .expect("policy grpc client");
-        *app.state.0.content_filter.reconnect_lock().write().await =
-            Some(Arc::new(client));
+        *app.state.0.content_filter.reconnect_lock().write().await = Some(Arc::new(client));
         let mut event = policy_validating_event_input();
         event.metadata = json!({
             "model": "gpt-4o",
@@ -1298,8 +1217,7 @@ mod tests {
         });
         let auth_ctx = auth_context(Uuid::new_v4());
         let workspace_id = auth_ctx.org_id.to_string();
-        let virtual_key_id =
-            auth_ctx.virtual_key_id.expect("virtual key id for test");
+        let virtual_key_id = auth_ctx.virtual_key_id.expect("virtual key id for test");
         let mut service = AgentEventsService::new(app.state);
         let response = service
             .call(agent_events_request_with_auth(event, auth_ctx))
@@ -1330,10 +1248,9 @@ mod tests {
         assert_eq!(emitted["policyAllowed"], false);
         assert_eq!(emitted["policyReason"], "agent_tool_denied");
         assert!(emitted.get("event_id").is_none());
-        let metadata: serde_json::Value = serde_json::from_str(
-            emitted["metadata"].as_str().expect("metadata JSON string"),
-        )
-        .expect("metadata should be JSON");
+        let metadata: serde_json::Value =
+            serde_json::from_str(emitted["metadata"].as_str().expect("metadata JSON string"))
+                .expect("metadata should be JSON");
         assert_eq!(metadata["policy"]["allowed"], false);
         assert_eq!(metadata["policy"]["reason"], "agent_tool_denied");
         assert_eq!(metadata["policy"]["blocked_by"], "agent.policy.tool");
@@ -1357,8 +1274,7 @@ mod tests {
         assert_eq!(policy_request.step_id, "step-1");
         assert_eq!(policy_request.tool_name, "search");
         let policy_metadata: serde_json::Value =
-            serde_json::from_slice(&policy_request.metadata)
-                .expect("policy metadata JSON");
+            serde_json::from_slice(&policy_request.metadata).expect("policy metadata JSON");
         assert_eq!(policy_metadata["model"], "gpt-4o");
         assert_eq!(policy_metadata["provider"], "openai");
     }
@@ -1379,16 +1295,14 @@ mod tests {
         config.agent.enabled = true;
         config.policy.enabled = true;
         config.policy.grpc_endpoint = policy.endpoint;
-        config.request_log.log_queue_redis_url =
-            Some(redis.endpoint.parse().expect("redis url"));
+        config.request_log.log_queue_redis_url = Some(redis.endpoint.parse().expect("redis url"));
         let app = crate::app::build_test_app(config).await.expect("build app");
         let client = crate::content_filter::ContentFilterGrpcClient::connect(
             app.state.config().policy.grpc_endpoint.clone(),
         )
         .await
         .expect("policy grpc client");
-        *app.state.0.content_filter.reconnect_lock().write().await =
-            Some(Arc::new(client));
+        *app.state.0.content_filter.reconnect_lock().write().await = Some(Arc::new(client));
         let mut event = event_input();
         event.event_type = "step.completed".to_string();
         let mut service = AgentEventsService::new(app.state);
@@ -1403,10 +1317,7 @@ mod tests {
         assert_eq!(body["rejected"], 0);
         assert_eq!(body["allowed"], true);
         assert_eq!(body["decisions"][0]["allowed"], true);
-        assert_eq!(
-            body["decisions"][0]["reason"],
-            "policy_skipped_audit_event"
-        );
+        assert_eq!(body["decisions"][0]["reason"], "policy_skipped_audit_event");
         assert!(
             policy
                 .requests
@@ -1428,10 +1339,9 @@ mod tests {
         assert_eq!(emitted["eventType"], "step.completed");
         assert_eq!(emitted["policyAllowed"], true);
         assert_eq!(emitted["policyReason"], "policy_skipped_audit_event");
-        let metadata: serde_json::Value = serde_json::from_str(
-            emitted["metadata"].as_str().expect("metadata JSON string"),
-        )
-        .expect("metadata should be JSON");
+        let metadata: serde_json::Value =
+            serde_json::from_str(emitted["metadata"].as_str().expect("metadata JSON string"))
+                .expect("metadata should be JSON");
         assert_eq!(metadata["policy"]["reason"], "policy_skipped_audit_event");
     }
 
@@ -1451,16 +1361,14 @@ mod tests {
         config.agent.enabled = true;
         config.policy.enabled = true;
         config.policy.grpc_endpoint = policy.endpoint;
-        config.request_log.log_queue_redis_url =
-            Some(redis.endpoint.parse().expect("redis url"));
+        config.request_log.log_queue_redis_url = Some(redis.endpoint.parse().expect("redis url"));
         let app = crate::app::build_test_app(config).await.expect("build app");
         let client = crate::content_filter::ContentFilterGrpcClient::connect(
             app.state.config().policy.grpc_endpoint.clone(),
         )
         .await
         .expect("policy grpc client");
-        *app.state.0.content_filter.reconnect_lock().write().await =
-            Some(Arc::new(client));
+        *app.state.0.content_filter.reconnect_lock().write().await = Some(Arc::new(client));
         let mut service = AgentEventsService::new(app.state);
         let response = service
             .call(unknown_low_confidence_agent_events_request())
@@ -1499,24 +1407,21 @@ mod tests {
         assert_eq!(emitted["policyDecision"], "skipped");
         assert_eq!(emitted["policyReason"], "policy_skipped_audit_event");
         assert_eq!(emitted["sinkStatus"], "sent");
-        let metadata: serde_json::Value = serde_json::from_str(
-            emitted["metadata"].as_str().expect("metadata JSON string"),
-        )
-        .expect("metadata should be JSON");
+        let metadata: serde_json::Value =
+            serde_json::from_str(emitted["metadata"].as_str().expect("metadata JSON string"))
+                .expect("metadata should be JSON");
         assert_eq!(metadata["rawEventType"], "custom.event");
         assert_eq!(metadata["policy"]["policyDecision"], "skipped");
         assert_eq!(metadata["sinkStatus"], "sent");
     }
 
     #[tokio::test]
-    async fn agent_events_emits_policy_unavailable_audit_before_returning_error()
-     {
+    async fn agent_events_emits_policy_unavailable_audit_before_returning_error() {
         let redis = spawn_redis_fixture().await;
         let mut config = Config::default();
         config.agent.enabled = true;
         config.policy.enabled = true;
-        config.request_log.log_queue_redis_url =
-            Some(redis.endpoint.parse().expect("redis url"));
+        config.request_log.log_queue_redis_url = Some(redis.endpoint.parse().expect("redis url"));
         let app = crate::app::build_test_app(config).await.expect("build app");
         let mut service = AgentEventsService::new(app.state);
         let response = service
@@ -1540,16 +1445,12 @@ mod tests {
         assert_eq!(emitted["policyScope"], "AGENT_POLICY_SCOPE_NONE");
         assert_eq!(emitted["policySnapshotRevision"], 0);
         assert_eq!(emitted["sinkStatus"], "sent");
-        let metadata: serde_json::Value = serde_json::from_str(
-            emitted["metadata"].as_str().expect("metadata JSON string"),
-        )
-        .expect("metadata should be JSON");
+        let metadata: serde_json::Value =
+            serde_json::from_str(emitted["metadata"].as_str().expect("metadata JSON string"))
+                .expect("metadata should be JSON");
         assert_eq!(metadata["policy"]["policyDecision"], "unavailable");
         assert_eq!(metadata["policy"]["reason"], "policy_unavailable");
-        assert_eq!(
-            metadata["policy"]["blocked_by"],
-            "agent.policy.unavailable"
-        );
+        assert_eq!(metadata["policy"]["blocked_by"], "agent.policy.unavailable");
         assert_eq!(
             metadata["policy"]["policy_scope"],
             "AGENT_POLICY_SCOPE_NONE"
@@ -1559,14 +1460,12 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn agent_events_preserves_client_metadata_when_policy_unavailable_audit_is_emitted()
-     {
+    async fn agent_events_preserves_client_metadata_when_policy_unavailable_audit_is_emitted() {
         let redis = spawn_redis_fixture().await;
         let mut config = Config::default();
         config.agent.enabled = true;
         config.policy.enabled = true;
-        config.request_log.log_queue_redis_url =
-            Some(redis.endpoint.parse().expect("redis url"));
+        config.request_log.log_queue_redis_url = Some(redis.endpoint.parse().expect("redis url"));
         let app = crate::app::build_test_app(config).await.expect("build app");
         let mut event = policy_validating_event_input();
         event.metadata = json!({
@@ -1593,10 +1492,9 @@ mod tests {
             .expect("agent event should be emitted to redis");
         let emitted: serde_json::Value =
             serde_json::from_str(&payload).expect("emitted event JSON");
-        let metadata: serde_json::Value = serde_json::from_str(
-            emitted["metadata"].as_str().expect("metadata JSON string"),
-        )
-        .expect("metadata should be JSON");
+        let metadata: serde_json::Value =
+            serde_json::from_str(emitted["metadata"].as_str().expect("metadata JSON string"))
+                .expect("metadata should be JSON");
         assert_eq!(metadata["policy"]["reason"], "policy_unavailable");
         assert_eq!(metadata["policy_original"]["reason"], "client-forged");
         assert_eq!(metadata["status_original"], "client-status");
@@ -1611,8 +1509,7 @@ mod tests {
         config.agent.enabled = true;
         config.agent.max_metadata_bytes = 2;
         config.policy.enabled = true;
-        config.request_log.log_queue_redis_url =
-            Some(redis.endpoint.parse().expect("redis url"));
+        config.request_log.log_queue_redis_url = Some(redis.endpoint.parse().expect("redis url"));
         let app = crate::app::build_test_app(config).await.expect("build app");
         let mut service = AgentEventsService::new(app.state);
         let response = service
@@ -1628,16 +1525,14 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn agent_events_returns_sink_failed_when_policy_unavailable_audit_cannot_be_sent()
-     {
+    async fn agent_events_returns_sink_failed_when_policy_unavailable_audit_cannot_be_sent() {
         let fixture = spawn_agent_log_http_fixture(500).await;
         let mut config = Config::default();
         config.agent.enabled = true;
         config.policy.enabled = true;
         config.request_log.log_queue_redis_url = None;
         config.agent.event_log_http_fallback_enabled = true;
-        config.agent.event_log_http_endpoint =
-            format!("{}/v1/log/agent-event", fixture.url);
+        config.agent.event_log_http_endpoint = format!("{}/v1/log/agent-event", fixture.url);
         let app = crate::app::build_test_app(config).await.expect("build app");
         let mut service = AgentEventsService::new(app.state);
         let response = service
@@ -1681,8 +1576,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn agent_events_emits_compact_deny_audit_when_policy_metadata_exceeds_limit()
-     {
+    async fn agent_events_emits_compact_deny_audit_when_policy_metadata_exceeds_limit() {
         let redis = spawn_redis_fixture().await;
         let policy = spawn_policy_service(ValidateAgentPolicyResponse {
             allowed: false,
@@ -1698,16 +1592,14 @@ mod tests {
         config.agent.max_metadata_bytes = 900;
         config.policy.enabled = true;
         config.policy.grpc_endpoint = policy.endpoint;
-        config.request_log.log_queue_redis_url =
-            Some(redis.endpoint.parse().expect("redis url"));
+        config.request_log.log_queue_redis_url = Some(redis.endpoint.parse().expect("redis url"));
         let app = crate::app::build_test_app(config).await.expect("build app");
         let client = crate::content_filter::ContentFilterGrpcClient::connect(
             app.state.config().policy.grpc_endpoint.clone(),
         )
         .await
         .expect("policy grpc client");
-        *app.state.0.content_filter.reconnect_lock().write().await =
-            Some(Arc::new(client));
+        *app.state.0.content_filter.reconnect_lock().write().await = Some(Arc::new(client));
         let mut event = policy_validating_event_input();
         event.metadata = json!({
             "tool_name": "search",
@@ -1742,10 +1634,9 @@ mod tests {
         assert_eq!(emitted["policyBlockedBy"], "agent.policy.tool");
         assert_eq!(emitted["policyId"], "policy-compact");
         assert!(emitted.get("event_id").is_none());
-        let metadata: serde_json::Value = serde_json::from_str(
-            emitted["metadata"].as_str().expect("metadata JSON string"),
-        )
-        .expect("metadata should be JSON");
+        let metadata: serde_json::Value =
+            serde_json::from_str(emitted["metadata"].as_str().expect("metadata JSON string"))
+                .expect("metadata should be JSON");
         assert_eq!(metadata["metadata_truncated"], true);
         assert_eq!(
             metadata["metadata_truncation_reason"],
@@ -1758,8 +1649,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn agent_events_truncates_verbose_policy_fields_in_compact_deny_audit()
-     {
+    async fn agent_events_truncates_verbose_policy_fields_in_compact_deny_audit() {
         let redis = spawn_redis_fixture().await;
         let policy = spawn_policy_service(ValidateAgentPolicyResponse {
             allowed: false,
@@ -1775,16 +1665,14 @@ mod tests {
         config.agent.max_metadata_bytes = 900;
         config.policy.enabled = true;
         config.policy.grpc_endpoint = policy.endpoint;
-        config.request_log.log_queue_redis_url =
-            Some(redis.endpoint.parse().expect("redis url"));
+        config.request_log.log_queue_redis_url = Some(redis.endpoint.parse().expect("redis url"));
         let app = crate::app::build_test_app(config).await.expect("build app");
         let client = crate::content_filter::ContentFilterGrpcClient::connect(
             app.state.config().policy.grpc_endpoint.clone(),
         )
         .await
         .expect("policy grpc client");
-        *app.state.0.content_filter.reconnect_lock().write().await =
-            Some(Arc::new(client));
+        *app.state.0.content_filter.reconnect_lock().write().await = Some(Arc::new(client));
         let mut event = policy_validating_event_input();
         event.metadata = json!({
             "tool_name": "search",
@@ -1841,12 +1729,10 @@ mod tests {
         );
         assert_eq!(emitted["policyId"].as_str().expect("policyId").len(), 128);
         assert!(emitted.get("event_id").is_none());
-        let metadata: serde_json::Value = serde_json::from_str(
-            emitted["metadata"].as_str().expect("metadata JSON string"),
-        )
-        .expect("metadata should be JSON");
-        let metadata_len =
-            serde_json::to_vec(&metadata).expect("metadata JSON").len();
+        let metadata: serde_json::Value =
+            serde_json::from_str(emitted["metadata"].as_str().expect("metadata JSON string"))
+                .expect("metadata should be JSON");
+        let metadata_len = serde_json::to_vec(&metadata).expect("metadata JSON").len();
         assert!(metadata_len <= 900);
         assert_eq!(
             metadata["policy"]["reason"].as_str().expect("reason").len(),
@@ -2031,11 +1917,8 @@ mod tests {
         requests: Arc<Mutex<Vec<ValidateAgentPolicyRequest>>>,
     }
 
-    async fn spawn_policy_service(
-        response: ValidateAgentPolicyResponse,
-    ) -> GrpcFixture {
-        let listener =
-            TcpListener::bind("127.0.0.1:0").await.expect("bind policy");
+    async fn spawn_policy_service(response: ValidateAgentPolicyResponse) -> GrpcFixture {
+        let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind policy");
         let addr = listener.local_addr().expect("policy addr");
         let incoming = tokio_stream::wrappers::TcpListenerStream::new(listener);
         let requests = Arc::new(Mutex::new(Vec::new()));
@@ -2052,11 +1935,9 @@ mod tests {
         });
         let endpoint = format!("http://{addr}");
         for _ in 0..50 {
-            if crate::content_filter::ContentFilterGrpcClient::connect(
-                endpoint.clone(),
-            )
-            .await
-            .is_ok()
+            if crate::content_filter::ContentFilterGrpcClient::connect(endpoint.clone())
+                .await
+                .is_ok()
             {
                 break;
             }
@@ -2136,9 +2017,7 @@ mod tests {
         }
     }
 
-    async fn spawn_agent_log_http_fixture(
-        status_code: u16,
-    ) -> AgentLogHttpFixture {
+    async fn spawn_agent_log_http_fixture(status_code: u16) -> AgentLogHttpFixture {
         let listener = TcpListener::bind("127.0.0.1:0")
             .await
             .expect("bind agent log HTTP");
@@ -2195,17 +2074,13 @@ mod tests {
             } else {
                 "Internal Server Error"
             };
-            let response = format!(
-                "HTTP/1.1 {status_code} {reason}\r\nContent-Length: 0\r\n\r\n"
-            );
+            let response = format!("HTTP/1.1 {status_code} {reason}\r\nContent-Length: 0\r\n\r\n");
             let _ = stream.write_all(response.as_bytes()).await;
             return;
         }
     }
 
-    fn parse_agent_log_http_request(
-        buffer: &[u8],
-    ) -> Option<AgentLogHttpRequest> {
+    fn parse_agent_log_http_request(buffer: &[u8]) -> Option<AgentLogHttpRequest> {
         let text = std::str::from_utf8(buffer).ok()?;
         let header_end = text.find("\r\n\r\n")?;
         let (head, body_with_separator) = text.split_at(header_end);
@@ -2242,8 +2117,7 @@ mod tests {
     }
 
     async fn spawn_redis_fixture() -> RedisFixture {
-        let listener =
-            TcpListener::bind("127.0.0.1:0").await.expect("bind redis");
+        let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind redis");
         let addr = listener.local_addr().expect("redis addr");
         let xadd_payloads = Arc::new(Mutex::new(Vec::new()));
         let (shutdown_tx, mut shutdown_rx) = oneshot::channel();
@@ -2268,10 +2142,7 @@ mod tests {
         }
     }
 
-    async fn handle_redis_connection(
-        mut stream: TcpStream,
-        payloads: Arc<Mutex<Vec<String>>>,
-    ) {
+    async fn handle_redis_connection(mut stream: TcpStream, payloads: Arc<Mutex<Vec<String>>>) {
         let mut buffer = Vec::new();
         loop {
             let mut chunk = [0_u8; 1024];
@@ -2310,9 +2181,7 @@ mod tests {
             Some("GET") => "$-1\r\n".to_string(),
             Some("PING") => "+PONG\r\n".to_string(),
             Some("XADD") => "$3\r\n0-1\r\n".to_string(),
-            Some("CLIENT" | "HELLO" | "SET" | "EXPIRE") => {
-                "+OK\r\n".to_string()
-            }
+            Some("CLIENT" | "HELLO" | "SET" | "EXPIRE") => "+OK\r\n".to_string(),
             _ => "+OK\r\n".to_string(),
         }
     }
@@ -2334,8 +2203,7 @@ mod tests {
             }
             let (len_line, next_index) = read_line(buffer, index + 1)?;
             index = next_index;
-            let len =
-                std::str::from_utf8(len_line).ok()?.parse::<usize>().ok()?;
+            let len = std::str::from_utf8(len_line).ok()?.parse::<usize>().ok()?;
             if buffer.len() < index + len + 2 {
                 return None;
             }

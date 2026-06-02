@@ -95,17 +95,13 @@ where
     S: Service<Target>,
     S::Response: Discover,
     <S::Response as Discover>::Key: Hash + Send + Sync + Display,
-    <S::Response as Discover>::Service:
-        Service<Request<ReqBody>, Error = Infallible>,
+    <S::Response as Discover>::Service: Service<Request<ReqBody>, Error = Infallible>,
 {
     type Response = DynamicRouter<S::Response, ReqBody>;
     type Error = S::Error;
     type Future = MakeFuture<S::Future, ReqBody>;
 
-    fn poll_ready(
-        &mut self,
-        cx: &mut Context<'_>,
-    ) -> Poll<Result<(), Self::Error>> {
+    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         self.inner.poll_ready(cx)
     }
 

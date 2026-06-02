@@ -24,9 +24,7 @@ async fn main() {
     tracing_subscriber::registry()
         .with(
             tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| {
-                    format!("{}=trace", env!("CARGO_CRATE_NAME")).into()
-                }),
+                .unwrap_or_else(|_| format!("{}=trace", env!("CARGO_CRATE_NAME")).into()),
         )
         .with(tracing_subscriber::fmt::layer())
         .init();
@@ -46,12 +44,10 @@ async fn main() {
     let app = router(app_state.clone());
 
     // run it
-    let listener = tokio::net::TcpListener::bind(format!(
-        "{}:{}",
-        app_state.address, app_state.port
-    ))
-    .await
-    .unwrap();
+    let listener =
+        tokio::net::TcpListener::bind(format!("{}:{}", app_state.address, app_state.port))
+            .await
+            .unwrap();
     tracing::info!("listening on {}", listener.local_addr().unwrap());
     axum::serve(listener, app).await.unwrap();
 }

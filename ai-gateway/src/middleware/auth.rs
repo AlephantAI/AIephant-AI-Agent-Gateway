@@ -9,13 +9,11 @@ use crate::{
     agent::name::parse_agent_name_from_vk_label,
     app_state::AppState,
     error::{
-        api::ApiError, auth::AuthError, internal::InternalError,
-        invalid_req::InvalidRequestError,
+        api::ApiError, auth::AuthError, internal::InternalError, invalid_req::InvalidRequestError,
     },
     store::{
         enrichment_redis::{
-            CachedDepartmentEnrichment, ENRICHMENT_CACHE_TTL_SECS,
-            enrichment_cache_key,
+            CachedDepartmentEnrichment, ENRICHMENT_CACHE_TTL_SECS, enrichment_cache_key,
         },
         router::DbVirtualKey,
     },
@@ -53,8 +51,7 @@ async fn resolve_request_log_enrichment_after_vk_auth(
     if let Some(redis) = app_state.redis() {
         match redis.get_string(&cache_key).await {
             Ok(Some(raw)) => {
-                if let Ok(cached) =
-                    serde_json::from_str::<CachedDepartmentEnrichment>(&raw)
+                if let Ok(cached) = serde_json::from_str::<CachedDepartmentEnrichment>(&raw)
                     && let Some(workspace_type) = cached.workspace_type
                 {
                     return RequestLogEnrichment {
@@ -91,11 +88,7 @@ async fn resolve_request_log_enrichment_after_vk_auth(
                 match serde_json::to_string(&payload) {
                     Ok(json) => {
                         if let Err(e) = redis
-                            .set_ex(
-                                &cache_key,
-                                &json,
-                                ENRICHMENT_CACHE_TTL_SECS,
-                            )
+                            .set_ex(&cache_key, &json, ENRICHMENT_CACHE_TTL_SECS)
                             .await
                         {
                             tracing::warn!(
@@ -148,9 +141,7 @@ impl AuthService {
         };
 
         // Look up the virtual key by hash (memory, then optional PG fallback).
-        let Some(vk) =
-            app_state.resolve_virtual_key_for_auth(&computed_hash).await
-        else {
+        let Some(vk) = app_state.resolve_virtual_key_for_auth(&computed_hash).await else {
             return Err(AuthError::InvalidCredentials.into());
         };
 
@@ -163,34 +154,29 @@ impl AuthService {
 
         // Resolve master_key base_url from the LRU cache (usually a fast
         // in-process lookup; `None` on cache miss or no custom URL).
-        let (
-            master_key_base_url,
-            is_custom_provider,
-            master_key_allowed_providers,
-        ) = if let Some(cache) = app_state.0.master_key_cache.as_ref() {
-            match cache.get(vk.master_key_id).await {
-                Ok(dk) => (
-                    dk.base_url,
-                    matches!(dk.provider, InferenceProvider::Custom),
-                    Some(vec![dk.provider.clone()]),
-                ),
-                Err(e) => {
-                    tracing::warn!(
-                        error = %e,
-                        master_key_id = %vk.master_key_id,
-                        "auth: could not resolve master_key"
-                    );
-                    (None, false, None)
+        let (master_key_base_url, is_custom_provider, master_key_allowed_providers) =
+            if let Some(cache) = app_state.0.master_key_cache.as_ref() {
+                match cache.get(vk.master_key_id).await {
+                    Ok(dk) => (
+                        dk.base_url,
+                        matches!(dk.provider, InferenceProvider::Custom),
+                        Some(vec![dk.provider.clone()]),
+                    ),
+                    Err(e) => {
+                        tracing::warn!(
+                            error = %e,
+                            master_key_id = %vk.master_key_id,
+                            "auth: could not resolve master_key"
+                        );
+                        (None, false, None)
+                    }
                 }
-            }
-        } else {
-            (None, false, None)
-        };
+            } else {
+                (None, false, None)
+            };
 
         if is_custom_provider && master_key_base_url.is_none() {
-            return Err(
-                InvalidRequestError::CustomProviderMissingBaseUrl.into()
-            );
+            return Err(InvalidRequestError::CustomProviderMissingBaseUrl.into());
         }
 
         let vk_policy = VkPolicy {
@@ -199,31 +185,24 @@ impl AuthService {
             blocked_models: vk.blocked_models.clone(),
         };
 
-        let (entity_type, entity_id, entity_name) =
-            auth_entity_scope_from_vk(&vk);
+        let (entity_type, entity_id, entity_name) = auth_entity_scope_from_vk(&vk);
         let registered_agent_name = parse_agent_name_from_vk_label(&vk.label);
         let request_log_enrichment =
-            resolve_request_log_enrichment_after_vk_auth(&app_state, vk.id)
-                .await;
-        let body_ttl_days = body_ttl_days_from_subscription_log_limit(
-            vk.subscription_log_limit,
-        );
+            resolve_request_log_enrichment_after_vk_auth(&app_state, vk.id).await;
+        let body_ttl_days = body_ttl_days_from_subscription_log_limit(vk.subscription_log_limit);
 
         match request_kind {
             RequestKind::Router => {
                 let Some(router_id) = router_id else {
-                    return Err(
-                        InternalError::ExtensionNotFound("RouterId").into()
-                    );
+                    return Err(InternalError::ExtensionNotFound("RouterId").into());
                 };
 
                 let Some(router_organization_id) =
                     app_state.get_router_organization(router_id).await
                 else {
-                    return Err(InvalidRequestError::NotFound(
-                        "router not found".to_string(),
-                    )
-                    .into());
+                    return Err(
+                        InvalidRequestError::NotFound("router not found".to_string()).into(),
+                    );
                 };
 
                 if router_organization_id == org_id {
@@ -232,9 +211,7 @@ impl AuthService {
                             api_key: Secret::from(api_key_without_bearer),
                             user_id: owner_id,
                             org_id,
-                            workspace_type: request_log_enrichment
-                                .workspace_type
-                                .clone(),
+                            workspace_type: request_log_enrichment.workspace_type.clone(),
                             virtual_key_id: Some(vk.id),
                             virtual_key_prefix: vk.key_prefix.clone(),
                             master_key_id: Some(vk.master_key_id),
@@ -243,8 +220,7 @@ impl AuthService {
                             entity_type,
                             entity_id,
                             entity_name,
-                            registered_agent_name: registered_agent_name
-                                .clone(),
+                            registered_agent_name: registered_agent_name.clone(),
                             body_ttl_days,
                             is_custom_provider,
                             master_key_allowed_providers,
@@ -291,9 +267,7 @@ fn strip_bearer_prefix(api_key: &str) -> &str {
 /// Maps `subscriptions.log_limit` into RMT `body_ttl_days` (1–730); otherwise
 /// default **90** (also used when the value is outside the allowed range).
 #[must_use]
-pub(crate) fn body_ttl_days_from_subscription_log_limit(
-    subscription_log_limit: i32,
-) -> u16 {
+pub(crate) fn body_ttl_days_from_subscription_log_limit(subscription_log_limit: i32) -> u16 {
     if (1..=730).contains(&subscription_log_limit) {
         u16::try_from(subscription_log_limit).unwrap_or(90)
     } else {
@@ -317,10 +291,7 @@ fn auth_entity_scope_from_vk(vk: &DbVirtualKey) -> (String, Uuid, String) {
     )
 }
 
-fn virtual_key_is_expired(
-    vk: &DbVirtualKey,
-    now: chrono::DateTime<Utc>,
-) -> bool {
+fn virtual_key_is_expired(vk: &DbVirtualKey, now: chrono::DateTime<Utc>) -> bool {
     vk.expires_at.is_some_and(|expires_at| now >= expires_at)
 }
 
@@ -330,10 +301,7 @@ where
 {
     type RequestBody = B;
     type ResponseBody = axum_core::body::Body;
-    type Future = BoxFuture<
-        'static,
-        Result<Request<B>, http::Response<Self::ResponseBody>>,
-    >;
+    type Future = BoxFuture<'static, Result<Request<B>, http::Response<Self::ResponseBody>>>;
 
     #[tracing::instrument(skip_all)]
     fn authorize(&mut self, mut request: Request<B>) -> Self::Future {
@@ -347,9 +315,7 @@ where
                 request.extensions().get::<RequestKind>(),
                 Some(RequestKind::X402Agent)
             ) {
-                tracing::trace!(
-                    "auth middleware: bypassing auth for x402 agent route"
-                );
+                tracing::trace!("auth middleware: bypassing auth for x402 agent route");
                 return Ok(request);
             }
             tracing::trace!("auth middleware");
@@ -358,9 +324,7 @@ where
                 .get("authorization")
                 .and_then(|h| h.to_str().ok())
             else {
-                return Err(
-                    AuthError::MissingAuthorizationHeader.into_response()
-                );
+                return Err(AuthError::MissingAuthorizationHeader.into_response());
             };
             app_state.0.metrics.auth_attempts.add(1, &[]);
 
@@ -384,9 +348,7 @@ where
                         "auth: authenticated, master_key info"
                     );
                     if auth_ctx.is_custom_provider {
-                        request
-                            .extensions_mut()
-                            .insert(RequestKind::CustomProvider);
+                        request.extensions_mut().insert(RequestKind::CustomProvider);
                     }
                     request.extensions_mut().insert(auth_ctx);
                     if let Some(policy) = vk_policy {
@@ -454,8 +416,7 @@ mod tests {
     fn auth_entity_scope_maps_virtual_key_row() {
         let entity = Uuid::new_v4();
         let vk = sample_vk(Some(entity), None);
-        let (entity_type, entity_id, entity_name) =
-            super::auth_entity_scope_from_vk(&vk);
+        let (entity_type, entity_id, entity_name) = super::auth_entity_scope_from_vk(&vk);
         assert_eq!(entity_type, "user");
         assert_eq!(entity_id, entity);
         assert_eq!(entity_name, "member:test");
@@ -557,8 +518,7 @@ mod tests {
     #[tokio::test]
     async fn authenticate_inner_does_not_register_non_agent_labels() {
         for label in ["member:Alice", "agent:", "plain label"] {
-            let app =
-                build_test_app(Config::default()).await.expect("build app");
+            let app = build_test_app(Config::default()).await.expect("build app");
             let raw_key = format!("sk-auth-unit-test-{label}");
             let key_hash = hash_key(&raw_key);
             let mut vk = sample_vk(Some(Uuid::new_v4()), None);

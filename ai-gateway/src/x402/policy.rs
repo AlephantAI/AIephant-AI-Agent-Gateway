@@ -76,9 +76,9 @@ fn unavailable_result(
             tracing::warn!(%message, "x402 policy unavailable; allowing per policy");
             Ok(unavailable_response())
         }
-        OnUnavailable::Deny => Err(ApiError::Internal(
-            InternalError::ContentFilterUnavailable(message),
-        )),
+        OnUnavailable::Deny => Err(ApiError::Internal(InternalError::ContentFilterUnavailable(
+            message,
+        ))),
     }
 }
 
@@ -100,9 +100,7 @@ pub async fn evaluate_x402_inbound(
 
     match result {
         Ok(Ok(resp)) => Ok(resp.into_inner()),
-        Ok(Err(status)) => {
-            unavailable_result(cfg.on_unavailable, status.to_string())
-        }
+        Ok(Err(status)) => unavailable_result(cfg.on_unavailable, status.to_string()),
         Err(_elapsed) => unavailable_result(
             cfg.on_unavailable,
             "x402 policy evaluate timed out".to_string(),
@@ -118,20 +116,13 @@ mod tests {
 
     use super::{body_for_policy, build_policy_request};
     use crate::x402::types::{
-        X402EndpointSnapshot, X402OriginAuthSnapshot, X402PolicySnapshot,
-        X402TargetSnapshot,
+        X402EndpointSnapshot, X402OriginAuthSnapshot, X402PolicySnapshot, X402TargetSnapshot,
     };
 
     fn test_snapshot() -> X402EndpointSnapshot {
         X402EndpointSnapshot {
-            endpoint_id: Uuid::parse_str(
-                "11111111-1111-1111-1111-111111111111",
-            )
-            .unwrap(),
-            workspace_id: Uuid::parse_str(
-                "22222222-2222-2222-2222-222222222222",
-            )
-            .unwrap(),
+            endpoint_id: Uuid::parse_str("11111111-1111-1111-1111-111111111111").unwrap(),
+            workspace_id: Uuid::parse_str("22222222-2222-2222-2222-222222222222").unwrap(),
             agent_id: None,
             status: "active".to_string(),
             name: "Weather API".to_string(),
@@ -158,10 +149,7 @@ mod tests {
                 active_secret_version: 1,
             },
             policy: X402PolicySnapshot {
-                policy_id: Uuid::parse_str(
-                    "33333333-3333-3333-3333-333333333333",
-                )
-                .unwrap(),
+                policy_id: Uuid::parse_str("33333333-3333-3333-3333-333333333333").unwrap(),
                 buyer_access: "public".to_string(),
                 rate_limit_rpm: 60,
                 max_request_size: 1024,
@@ -179,8 +167,7 @@ mod tests {
     }
 
     #[test]
-    fn build_policy_request_fills_snapshot_fields_headers_body_amount_and_network()
-     {
+    fn build_policy_request_fills_snapshot_fields_headers_body_amount_and_network() {
         let snapshot = test_snapshot();
         let mut headers = HeaderMap::new();
         headers.insert("X-Buyer-Wallet", HeaderValue::from_static("0xbuyer"));

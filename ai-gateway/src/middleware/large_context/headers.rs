@@ -2,8 +2,7 @@ use http::HeaderMap;
 
 use crate::error::invalid_req::InvalidRequestError;
 
-pub const ALEPHANT_HANDLER_HEADER: &str =
-    "Alephant-Token-Limit-Exception-Handler";
+pub const ALEPHANT_HANDLER_HEADER: &str = "Alephant-Token-Limit-Exception-Handler";
 pub const ALEPHANT_MODEL_OVERRIDE_HEADER: &str = "Alephant-Model-Override";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -42,9 +41,7 @@ fn parse_header_string(
         .map(|value| value.filter(|value| !value.is_empty()))
 }
 
-fn parse_handler_value(
-    value: &str,
-) -> Result<TokenLimitExceptionHandler, InvalidRequestError> {
+fn parse_handler_value(value: &str) -> Result<TokenLimitExceptionHandler, InvalidRequestError> {
     match value.trim().to_ascii_lowercase().as_str() {
         "truncate" => Ok(TokenLimitExceptionHandler::Truncate),
         "middle-out" => Ok(TokenLimitExceptionHandler::MiddleOut),
@@ -61,8 +58,7 @@ pub fn parse_large_context_headers(
     let handler = parse_header_string(headers, ALEPHANT_HANDLER_HEADER)?
         .map(|value| parse_handler_value(&value))
         .transpose()?;
-    let model_override =
-        parse_header_string(headers, ALEPHANT_MODEL_OVERRIDE_HEADER)?;
+    let model_override = parse_header_string(headers, ALEPHANT_MODEL_OVERRIDE_HEADER)?;
 
     Ok(LargeContextHeaders {
         handler,
@@ -75,9 +71,8 @@ mod tests {
     use http::{HeaderMap, HeaderValue};
 
     use super::{
-        ALEPHANT_HANDLER_HEADER, ALEPHANT_MODEL_OVERRIDE_HEADER,
-        LargeContextHeaders, TokenLimitExceptionHandler,
-        parse_large_context_headers,
+        ALEPHANT_HANDLER_HEADER, ALEPHANT_MODEL_OVERRIDE_HEADER, LargeContextHeaders,
+        TokenLimitExceptionHandler, parse_large_context_headers,
     };
     use crate::error::invalid_req::InvalidRequestError;
 
@@ -108,10 +103,7 @@ mod tests {
         );
 
         let parsed = parse_large_context_headers(&headers).unwrap();
-        assert_eq!(
-            parsed.model_override.as_deref(),
-            Some("openai/gpt-4o-mini")
-        );
+        assert_eq!(parsed.model_override.as_deref(), Some("openai/gpt-4o-mini"));
     }
 
     #[test]
@@ -146,10 +138,7 @@ mod tests {
     #[test]
     fn rejects_invalid_handler() {
         let mut headers = HeaderMap::new();
-        headers.insert(
-            ALEPHANT_HANDLER_HEADER,
-            HeaderValue::from_static("explode"),
-        );
+        headers.insert(ALEPHANT_HANDLER_HEADER, HeaderValue::from_static("explode"));
 
         let error = parse_large_context_headers(&headers).unwrap_err();
         assert!(matches!(

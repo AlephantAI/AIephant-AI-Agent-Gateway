@@ -45,10 +45,7 @@ impl<'a> UpstreamAuthApplier<'a> {
         Self::sanitize_headers_inner(headers, true);
     }
 
-    fn sanitize_headers_inner(
-        headers: &mut HeaderMap,
-        forward_agent_headers_upstream: bool,
-    ) {
+    fn sanitize_headers_inner(headers: &mut HeaderMap, forward_agent_headers_upstream: bool) {
         headers.remove(http::header::HOST);
         headers.remove(http::header::AUTHORIZATION);
         headers.remove(http::header::CONTENT_LENGTH);
@@ -138,13 +135,9 @@ mod tests {
             http::header::AUTHORIZATION,
             HeaderValue::from_static("Bearer user-key"),
         );
-        headers.insert(
-            http::header::CONTENT_LENGTH,
-            HeaderValue::from_static("9"),
-        );
+        headers.insert(http::header::CONTENT_LENGTH, HeaderValue::from_static("9"));
         headers.insert("alephant-api-key", HeaderValue::from_static("new"));
-        headers
-            .insert("alephant-debug-headers", HeaderValue::from_static("true"));
+        headers.insert("alephant-debug-headers", HeaderValue::from_static("true"));
         headers.insert("alephant-debug-body", HeaderValue::from_static("true"));
 
         UpstreamAuthApplier::sanitize_headers(&mut headers);
@@ -163,10 +156,7 @@ mod tests {
         headers.insert("Alephant-Agent-Id", HeaderValue::from_static("agent"));
         headers.insert("Alephant-Run-Id", HeaderValue::from_static("run"));
         headers.insert("Alephant-Step-Id", HeaderValue::from_static("step"));
-        headers.insert(
-            "Alephant-Step-Source",
-            HeaderValue::from_static("runtime"),
-        );
+        headers.insert("Alephant-Step-Source", HeaderValue::from_static("runtime"));
         headers.insert("Alephant-Step-Attempt", HeaderValue::from_static("1"));
         headers.insert(
             "Alephant-Step-Input-Hash",
@@ -191,10 +181,7 @@ mod tests {
         headers.insert("Alephant-Agent-Id", HeaderValue::from_static("agent"));
         headers.insert("Alephant-Run-Id", HeaderValue::from_static("run"));
 
-        UpstreamAuthApplier::sanitize_headers_with_agent_forwarding(
-            &mut headers,
-            true,
-        );
+        UpstreamAuthApplier::sanitize_headers_with_agent_forwarding(&mut headers, true);
 
         assert!(headers.contains_key("Alephant-Agent-Id"));
         assert!(headers.contains_key("Alephant-Run-Id"));
@@ -232,14 +219,9 @@ mod tests {
             HeaderValue::from_static("0.8"),
         );
         headers.insert("Alephant-Cache-Ttl", HeaderValue::from_static("3600"));
-        headers
-            .insert("alephant-session-id", HeaderValue::from_static("session"));
-        headers
-            .insert("alephant-session-path", HeaderValue::from_static("/repo"));
-        headers.insert(
-            "alephant-session-name",
-            HeaderValue::from_static("coding"),
-        );
+        headers.insert("alephant-session-id", HeaderValue::from_static("session"));
+        headers.insert("alephant-session-path", HeaderValue::from_static("/repo"));
+        headers.insert("alephant-session-name", HeaderValue::from_static("coding"));
 
         UpstreamAuthApplier::sanitize_headers(&mut headers);
 

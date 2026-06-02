@@ -133,11 +133,7 @@ fn model_policy_table() {
     ];
 
     for c in cases {
-        let result = model_access_allowed(
-            c.model,
-            c.allowed.as_deref(),
-            c.blocked.as_deref(),
-        );
+        let result = model_access_allowed(c.model, c.allowed.as_deref(), c.blocked.as_deref());
         assert_eq!(
             result, c.want,
             "FAILED: '{}' — model='{}', allowed={:?}, blocked={:?}",

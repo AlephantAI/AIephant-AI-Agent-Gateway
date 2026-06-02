@@ -22,8 +22,7 @@ use tower::Service;
 use url::Url;
 
 const MASTER_KEY_ENCRYPTION_KEY_ENV: &str = "MASTER_KEY_ENCRYPTION_KEY";
-const TEST_MASTER_KEY_ENCRYPTION_KEY_B64: &str =
-    "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=";
+const TEST_MASTER_KEY_ENCRYPTION_KEY_B64: &str = "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=";
 const AWS_ACCESS_KEY_ID_ENV: &str = "AWS_ACCESS_KEY_ID";
 const AWS_SECRET_ACCESS_KEY_ENV: &str = "AWS_SECRET_ACCESS_KEY";
 const TEST_BEDROCK_ACCESS_KEY: &str = "bedrock-access-key-test";
@@ -74,10 +73,7 @@ impl AwsCredsGuard {
         let previous_secret_key = std::env::var(AWS_SECRET_ACCESS_KEY_ENV).ok();
         unsafe {
             std::env::set_var(AWS_ACCESS_KEY_ID_ENV, TEST_BEDROCK_ACCESS_KEY);
-            std::env::set_var(
-                AWS_SECRET_ACCESS_KEY_ENV,
-                TEST_BEDROCK_SECRET_KEY,
-            );
+            std::env::set_var(AWS_SECRET_ACCESS_KEY_ENV, TEST_BEDROCK_SECRET_KEY);
         }
         Self {
             previous_access_key,
@@ -134,9 +130,7 @@ impl Drop for OpenAICompatApiKeyGuard {
     }
 }
 
-async fn response_parts(
-    response: ai_gateway::app::AppResponse,
-) -> (StatusCode, String) {
+async fn response_parts(response: ai_gateway::app::AppResponse) -> (StatusCode, String) {
     let status = response.status();
     let body = response.into_body().collect().await.unwrap().to_bytes();
     (status, String::from_utf8_lossy(&body).into_owned())
@@ -150,8 +144,7 @@ fn reserve_port() -> u16 {
 }
 
 fn assert_openai_chat_completion_shape(body: &str) {
-    let payload: Value =
-        serde_json::from_str(body).expect("response should be valid json");
+    let payload: Value = serde_json::from_str(body).expect("response should be valid json");
     assert_eq!(payload["object"], "chat.completion");
     assert_eq!(payload["choices"][0]["message"]["role"], "assistant");
     assert!(
@@ -499,8 +492,8 @@ async fn deepseek_with_openai_request_style() {
         .providers
         .get_mut(&InferenceProvider::Named("deepseek".into()))
         .expect("deepseek provider config should exist")
-        .base_url = Url::parse(&format!("http://127.0.0.1:{port}/"))
-        .expect("valid deepseek mock base url");
+        .base_url =
+        Url::parse(&format!("http://127.0.0.1:{port}/")).expect("valid deepseek mock base url");
     let router_config = RouterConfigs::new(HashMap::from([(
         RouterId::Named(CompactString::new("my-router")),
         RouterConfig {

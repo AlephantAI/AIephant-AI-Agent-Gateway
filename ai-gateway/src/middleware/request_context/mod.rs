@@ -46,10 +46,7 @@ where
     type Future = S::Future;
 
     #[inline]
-    fn poll_ready(
-        &mut self,
-        cx: &mut Context<'_>,
-    ) -> Poll<Result<(), Self::Error>> {
+    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         self.inner.poll_ready(cx).map_err(Into::into)
     }
 
@@ -57,9 +54,7 @@ where
     fn call(&mut self, mut req: Request) -> Self::Future {
         let router_config = self.router_config.clone();
         let auth_context = req.extensions_mut().remove::<AuthContext>();
-        let agent_context = if self.agent_config.enabled
-            && self.agent_config.allow_header_context
-        {
+        let agent_context = if self.agent_config.enabled && self.agent_config.allow_header_context {
             parse_agent_context_from_headers(
                 req.headers(),
                 self.agent_config.max_header_value_bytes,
@@ -87,10 +82,7 @@ pub struct Layer {
 
 impl Layer {
     #[must_use]
-    pub fn for_router(
-        router_config: Arc<RouterConfig>,
-        agent_config: AgentConfig,
-    ) -> Self {
+    pub fn for_router(router_config: Arc<RouterConfig>, agent_config: AgentConfig) -> Self {
         Self {
             router_config: Some(router_config),
             agent_config,
@@ -110,11 +102,7 @@ impl<S> tower::Layer<S> for Layer {
     type Service = Service<S>;
 
     fn layer(&self, inner: S) -> Self::Service {
-        Service::new(
-            inner,
-            self.router_config.clone(),
-            self.agent_config.clone(),
-        )
+        Service::new(inner, self.router_config.clone(), self.agent_config.clone())
     }
 }
 

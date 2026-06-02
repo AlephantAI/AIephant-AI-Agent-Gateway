@@ -5,8 +5,8 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::agent::context::{
-    AgentConfidence, AgentEventPhase, AgentEventSourceTrust, AgentPolicyMode,
-    AgentPolicyStage, AgentStepKind, AgentStepSource, AgentTrustLevel,
+    AgentConfidence, AgentEventPhase, AgentEventSourceTrust, AgentPolicyMode, AgentPolicyStage,
+    AgentStepKind, AgentStepSource, AgentTrustLevel,
 };
 
 #[derive(Debug, Clone, Deserialize)]
@@ -39,15 +39,11 @@ impl AgentEventsRequest {
                 framework,
                 events,
             } => {
-                let batch_source =
-                    source.or(framework).unwrap_or(AgentEventSource::Unknown);
+                let batch_source = source.or(framework).unwrap_or(AgentEventSource::Unknown);
                 events
                     .into_iter()
                     .map(|event| {
-                        let source = event
-                            .source
-                            .or(event.framework)
-                            .unwrap_or(batch_source);
+                        let source = event.source.or(event.framework).unwrap_or(batch_source);
                         SourcedAgentEventInput { source, event }
                     })
                     .collect()
@@ -110,8 +106,8 @@ impl FromStr for AgentEventSource {
         Ok(match value.trim().to_ascii_lowercase().as_str() {
             "alephant" | "alephant_agent" | "alephant-agent" => Self::Alephant,
             "langgraph" | "lang_graph" | "lang-graph" => Self::LangGraph,
-            "openai_agents" | "openai-agents" | "openaiagents"
-            | "openai_agent_sdk" | "openai-agent-sdk" => Self::OpenAiAgents,
+            "openai_agents" | "openai-agents" | "openaiagents" | "openai_agent_sdk"
+            | "openai-agent-sdk" => Self::OpenAiAgents,
             "n8n" => Self::N8n,
             "crew_ai" | "crew-ai" | "crewai" => Self::CrewAi,
             "mastra" => Self::Mastra,
@@ -168,8 +164,7 @@ impl<'de> Deserialize<'de> for AgentEventInput {
         D: serde::Deserializer<'de>,
     {
         let raw = AgentEventInputWire::deserialize(deserializer)?;
-        let agent_name =
-            raw.agent_name.or_else(|| raw.agent_name_camel.clone());
+        let agent_name = raw.agent_name.or_else(|| raw.agent_name_camel.clone());
         if agent_name.is_some() && raw.agent_name_camel.is_some() {
             tracing::debug!(
                 "agent_name and agentName both present in agent event; using \
@@ -362,8 +357,8 @@ mod tests {
 
     use super::*;
     use crate::agent::context::{
-        AgentConfidence, AgentEventPhase, AgentEventSourceTrust,
-        AgentPolicyStage, AgentStepKind, AgentStepSource,
+        AgentConfidence, AgentEventPhase, AgentEventSourceTrust, AgentPolicyStage, AgentStepKind,
+        AgentStepSource,
     };
 
     #[test]
@@ -395,10 +390,7 @@ mod tests {
         assert_eq!(events[0].event_id.as_deref(), Some("evt_1"));
         assert_eq!(events[0].event_type, "step.started");
         assert_eq!(events[0].agent_name.as_deref(), Some("Support Bot"));
-        assert_eq!(
-            events[0].agent_id_external.as_deref(),
-            Some("coding-agent")
-        );
+        assert_eq!(events[0].agent_id_external.as_deref(), Some("coding-agent"));
         assert_eq!(events[0].run_id.as_deref(), Some("run_1"));
         assert_eq!(events[0].step_id.as_deref(), Some("step_1"));
         assert_eq!(events[0].step_kind, Some(AgentStepKind::Planning));
@@ -424,10 +416,7 @@ mod tests {
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].version, "2026-05-27");
         assert_eq!(events[0].event_type, "run.started");
-        assert_eq!(
-            events[0].agent_id_external.as_deref(),
-            Some("coding-agent")
-        );
+        assert_eq!(events[0].agent_id_external.as_deref(), Some("coding-agent"));
     }
 
     #[test]
@@ -595,9 +584,6 @@ mod tests {
             value["decisions"][0]["policyScope"],
             "AGENT_POLICY_SCOPE_AGENT"
         );
-        assert_eq!(
-            value["decisions"][0]["violations"][0]["field"],
-            "tool_name"
-        );
+        assert_eq!(value["decisions"][0]["violations"][0]["field"], "tool_name");
     }
 }

@@ -11,13 +11,10 @@ use serde_json::Value;
 use self::{
     headers::{TokenLimitExceptionHandler, parse_large_context_headers},
     heuristics::{
-        apply_fallback, apply_middle_out, apply_truncate,
-        compute_input_budget_tokens, estimate_input_tokens,
-        extract_fallback_model_candidates, resolve_primary_model,
+        apply_fallback, apply_middle_out, apply_truncate, compute_input_budget_tokens,
+        estimate_input_tokens, extract_fallback_model_candidates, resolve_primary_model,
     },
-    model_limits::{
-        ModelContextLimitResolver, StaticModelContextLimitResolver,
-    },
+    model_limits::{ModelContextLimitResolver, StaticModelContextLimitResolver},
     parse::{parse_chat_completions_payload, serialize_payload},
 };
 use crate::{
@@ -43,8 +40,7 @@ pub fn maybe_transform_unified_api_chat_request(
     parts: &mut Parts,
     body: Bytes,
 ) -> Result<Bytes, ApiError> {
-    let headers = parse_large_context_headers(&parts.headers)
-        .map_err(ApiError::InvalidRequest)?;
+    let headers = parse_large_context_headers(&parts.headers).map_err(ApiError::InvalidRequest)?;
     let Some(handler) = headers.handler else {
         return Ok(body);
     };
@@ -53,8 +49,7 @@ pub fn maybe_transform_unified_api_chat_request(
         Ok(Some(payload)) => payload,
         Ok(None) | Err(_) => return Ok(body),
     };
-    let model_source =
-        current_body_model(&payload).or(headers.model_override.as_deref());
+    let model_source = current_body_model(&payload).or(headers.model_override.as_deref());
     let Some(primary_model) = resolve_primary_model(
         current_body_model(&payload),
         headers.model_override.as_deref(),
@@ -79,14 +74,11 @@ pub fn maybe_transform_unified_api_chat_request(
 
     let resolver = StaticModelContextLimitResolver;
     let model_context_limit = resolver.resolve(&primary_model);
-    let estimated_input_tokens =
-        estimate_input_tokens(&payload, &primary_model, None);
-    let input_budget_tokens = model_context_limit.map(|limit| {
-        compute_input_budget_tokens(limit, payload.requested_completion_tokens)
-    });
-    let normalized_model_body = (current_body_model(&payload)
-        != Some(primary_model.as_str()))
-    .then(|| with_model(&payload.raw, &primary_model));
+    let estimated_input_tokens = estimate_input_tokens(&payload, &primary_model, None);
+    let input_budget_tokens = model_context_limit
+        .map(|limit| compute_input_budget_tokens(limit, payload.requested_completion_tokens));
+    let normalized_model_body = (current_body_model(&payload) != Some(primary_model.as_str()))
+        .then(|| with_model(&payload.raw, &primary_model));
 
     let (action, transformed_body) = match handler {
         TokenLimitExceptionHandler::Fallback => {
@@ -139,10 +131,11 @@ pub fn maybe_transform_unified_api_chat_request(
                     input_budget_tokens.expect("budget should exist"),
                 );
                 (
-                    transformed.as_ref().map_or(
-                        LargeContextAction::SkippedNoTextMessages,
-                        |_| LargeContextAction::Truncated,
-                    ),
+                    transformed
+                        .as_ref()
+                        .map_or(LargeContextAction::SkippedNoTextMessages, |_| {
+                            LargeContextAction::Truncated
+                        }),
                     transformed.or(normalized_model_body),
                 )
             }
@@ -177,10 +170,11 @@ pub fn maybe_transform_unified_api_chat_request(
                     input_budget_tokens.expect("budget should exist"),
                 );
                 (
-                    transformed.as_ref().map_or(
-                        LargeContextAction::SkippedNoTextMessages,
-                        |_| LargeContextAction::MiddleOutApplied,
-                    ),
+                    transformed
+                        .as_ref()
+                        .map_or(LargeContextAction::SkippedNoTextMessages, |_| {
+                            LargeContextAction::MiddleOutApplied
+                        }),
                     transformed.or(normalized_model_body),
                 )
             }
@@ -215,9 +209,7 @@ pub fn maybe_transform_unified_api_chat_request(
 
     if let Some(transformed_body) = transformed_body {
         serialize_payload(&transformed_body).map_err(|error| {
-            ApiError::InvalidRequest(InvalidRequestError::InvalidRequestBody(
-                error,
-            ))
+            ApiError::InvalidRequest(InvalidRequestError::InvalidRequestBody(error))
         })
     } else {
         Ok(body)

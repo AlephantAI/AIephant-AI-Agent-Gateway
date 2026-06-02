@@ -17,14 +17,9 @@ pub async fn build_llm_kv_backend(
         use alephant_llm_kv_cache::cloudflare::CloudflareKvClient;
 
         let cf = config.cloudflare_kv.as_ref().ok_or_else(|| {
-            InitError::StoreNotConfigured(
-                "cloudflare_kv (required for --features external)",
-            )
+            InitError::StoreNotConfigured("cloudflare_kv (required for --features external)")
         })?;
-        if cf.api_base.trim().is_empty()
-            || cf.account_id.is_empty()
-            || cf.namespace_id.is_empty()
-        {
+        if cf.api_base.trim().is_empty() || cf.account_id.is_empty() || cf.namespace_id.is_empty() {
             return Err(InitError::InvalidBalancer(
                 "cloudflare_kv.api_base, account_id, namespace_id must be \
                  non-empty"

@@ -38,9 +38,9 @@ impl From<dynamic_router::router::Error> for ApiError {
             dynamic_router::router::Error::ExtensionNotFound => {
                 Self::Internal(InternalError::ExtensionNotFound("RouterId"))
             }
-            dynamic_router::router::Error::Discover(error) => Self::Internal(
-                InternalError::DynamicRouterDiscoveryError(error),
-            ),
+            dynamic_router::router::Error::Discover(error) => {
+                Self::Internal(InternalError::DynamicRouterDiscoveryError(error))
+            }
             dynamic_router::router::Error::RouterNotFound(key) => {
                 Self::InvalidRequest(InvalidRequestError::RouterIdNotFound(key))
             }
@@ -108,9 +108,7 @@ impl From<&ApiError> for ApiErrorMetric {
     fn from(error: &ApiError) -> Self {
         match error {
             ApiError::InvalidRequest(invalid_request_error) => {
-                Self::InvalidRequest(InvalidRequestErrorMetric::from(
-                    invalid_request_error,
-                ))
+                Self::InvalidRequest(InvalidRequestErrorMetric::from(invalid_request_error))
             }
             ApiError::Authentication(auth_error) => {
                 Self::Authentication(AuthErrorMetric::from(auth_error))
@@ -120,9 +118,7 @@ impl From<&ApiError> for ApiErrorMetric {
             }
             ApiError::StreamError(error) => match error {
                 StreamError::StreamError(boxed_error) if matches!(**boxed_error, reqwest_eventsource::Error::InvalidStatusCode(status_code, _) if status_code.is_client_error()) => {
-                    Self::InvalidRequest(
-                        InvalidRequestErrorMetric::InvalidRequest,
-                    )
+                    Self::InvalidRequest(InvalidRequestErrorMetric::InvalidRequest)
                 }
                 _ => Self::StreamError(StreamErrorMetric::from(error)),
             },

@@ -86,8 +86,7 @@ pub struct JsonAssertions {
     pub path_exists: Option<Vec<String>>,
     /// Map JSON Pointer → expected JSON value (deep equality).
     #[serde(default)]
-    pub path_equals:
-        Option<std::collections::HashMap<String, serde_json::Value>>,
+    pub path_equals: Option<std::collections::HashMap<String, serde_json::Value>>,
     /// Map JSON Pointer → minimum array length at that path.
     #[serde(default)]
     pub array_min_length: Option<std::collections::HashMap<String, usize>>,

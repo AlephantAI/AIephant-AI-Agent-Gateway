@@ -28,10 +28,7 @@ fn router_policy_check_skips_when_no_vk_policy() {
     let endpoint = ApiEndpoint::OpenAI(OpenAI::chat_completions());
     let body = body_with_model("gpt-4");
     assert!(
-        enforce_vk_model_policy_for_source_endpoint(
-            &app.state, &ext, &endpoint, &body
-        )
-        .is_ok()
+        enforce_vk_model_policy_for_source_endpoint(&app.state, &ext, &endpoint, &body).is_ok()
     );
 }
 
@@ -49,10 +46,8 @@ fn router_policy_check_denies_blocked_model() {
     });
     let endpoint = ApiEndpoint::OpenAI(OpenAI::chat_completions());
     let body = body_with_model("gpt-4");
-    let err = enforce_vk_model_policy_for_source_endpoint(
-        &app.state, &ext, &endpoint, &body,
-    )
-    .expect_err("expected denial");
+    let err = enforce_vk_model_policy_for_source_endpoint(&app.state, &ext, &endpoint, &body)
+        .expect_err("expected denial");
     assert!(matches!(
         err,
         ApiError::InvalidRequest(InvalidRequestError::ModelAccessDenied(_))

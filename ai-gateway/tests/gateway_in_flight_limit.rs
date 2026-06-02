@@ -6,9 +6,7 @@ use ai_gateway::{
     config::{
         Config,
         alephant::AlephantFeatures,
-        gateway_in_flight_limit::{
-            GatewayInFlightBackend, GatewayInFlightLimitConfig,
-        },
+        gateway_in_flight_limit::{GatewayInFlightBackend, GatewayInFlightLimitConfig},
     },
     tests::{TestDefault, harness::Harness, mock::MockArgs},
     types::request::Request,

@@ -35,11 +35,7 @@ fn sanitize_tool_id(id: &str) -> Option<String> {
     }
 }
 
-fn generate_tool_call_id(
-    msg_index: usize,
-    tc_index: usize,
-    tool_name: &str,
-) -> String {
+fn generate_tool_call_id(msg_index: usize, tc_index: usize, tool_name: &str) -> String {
     let suffix: String = if tool_name.is_empty() {
         String::new()
     } else {
@@ -53,9 +49,7 @@ fn generate_tool_call_id(
 }
 
 /// Pull plain text from extended / provider-specific assistant content blocks.
-fn extract_foldable_text_from_block(
-    map: &Map<String, Value>,
-) -> Option<String> {
+fn extract_foldable_text_from_block(map: &Map<String, Value>) -> Option<String> {
     const KEYS: &[&str] = &[
         "text",
         "thinking",
@@ -107,9 +101,7 @@ fn tool_use_block_to_openai_tool_call(block: &Value) -> Option<Value> {
     let arguments = match args_val {
         None => "{}".to_string(),
         Some(Value::String(s)) => s.clone(),
-        Some(v) => {
-            serde_json::to_string(v).unwrap_or_else(|_| "{}".to_string())
-        }
+        Some(v) => serde_json::to_string(v).unwrap_or_else(|_| "{}".to_string()),
     };
     Some(json!({
         "id": id,
@@ -189,11 +181,7 @@ fn block_to_user_openai_content_parts(block: &Value) -> Vec<Value> {
             }
         }
         Some(
-            "reasoning"
-            | "thinking"
-            | "redacted_thinking"
-            | "encrypted_reasoning"
-            | "refusal",
+            "reasoning" | "thinking" | "redacted_thinking" | "encrypted_reasoning" | "refusal",
         ) => extract_foldable_text_from_block(map)
             .map(|t| vec![json!({ "type": "text", "text": t })])
             .unwrap_or_default(),
@@ -290,10 +278,7 @@ fn sanitize_user_system_tool_developer_messages_for_openai_chat_schema(
                 for b in &blocks {
                     let mut from_b = block_to_user_openai_content_parts(b);
                     if matches!(role, "system" | "developer" | "tool") {
-                        from_b.retain(|p| {
-                            p.get("type").and_then(|t| t.as_str())
-                                == Some("text")
-                        });
+                        from_b.retain(|p| p.get("type").and_then(|t| t.as_str()) == Some("text"));
                     }
                     parts.extend(from_b);
                 }
@@ -305,8 +290,7 @@ fn sanitize_user_system_tool_developer_messages_for_openai_chat_schema(
                 Some(out)
             }
             Value::Object(ref map) => {
-                let out = if let Some(t) = extract_foldable_text_from_block(map)
-                {
+                let out = if let Some(t) = extract_foldable_text_from_block(map) {
                     Value::String(t)
                 } else if let Some(Value::String(s)) = map.get("text") {
                     Value::String(s.clone())
@@ -366,9 +350,7 @@ fn sanitize_assistant_messages_for_openai_chat_schema(
             .and_then(|v| v.as_array())
             .into_iter()
             .flatten()
-            .filter_map(|tc| {
-                tc.get("id").and_then(|id| id.as_str()).map(str::to_string)
-            })
+            .filter_map(|tc| tc.get("id").and_then(|id| id.as_str()).map(str::to_string))
             .collect();
 
         let mut promoted_tool_calls: Vec<Value> = Vec::new();
@@ -380,9 +362,7 @@ fn sanitize_assistant_messages_for_openai_chat_schema(
                 let mut new_parts: Vec<Value> = Vec::new();
                 for block in &blocks {
                     if let Some(s) = block.as_str() {
-                        new_parts.push(
-                            json!({ "type": "text", "text": s.to_string() }),
-                        );
+                        new_parts.push(json!({ "type": "text", "text": s.to_string() }));
                         changed = true;
                         continue;
                     }
@@ -405,8 +385,7 @@ fn sanitize_assistant_messages_for_openai_chat_schema(
                                 }
                                 None => String::new(),
                             };
-                            new_parts
-                                .push(json!({ "type": "text", "text": text }));
+                            new_parts.push(json!({ "type": "text", "text": text }));
                         }
                         Some("refusal") => {
                             let refusal = map
@@ -421,53 +400,36 @@ fn sanitize_assistant_messages_for_openai_chat_schema(
                         }
                         Some("tool_use") => {
                             changed = true;
-                            if let Some(tc) =
-                                tool_use_block_to_openai_tool_call(block)
-                            {
+                            if let Some(tc) = tool_use_block_to_openai_tool_call(block) {
                                 let id = tc
                                     .get("id")
                                     .and_then(|v| v.as_str())
                                     .unwrap_or("")
                                     .to_string();
-                                if !id.is_empty() && !existing_ids.contains(&id)
-                                {
+                                if !id.is_empty() && !existing_ids.contains(&id) {
                                     promoted_tool_calls.push(tc);
                                 }
                             }
                         }
                         Some(
-                            "thinking"
-                            | "reasoning"
-                            | "redacted_thinking"
-                            | "encrypted_reasoning",
+                            "thinking" | "reasoning" | "redacted_thinking" | "encrypted_reasoning",
                         )
                         | None => {
-                            if let Some(t) =
-                                extract_foldable_text_from_block(map)
-                            {
-                                new_parts
-                                    .push(json!({ "type": "text", "text": t }));
+                            if let Some(t) = extract_foldable_text_from_block(map) {
+                                new_parts.push(json!({ "type": "text", "text": t }));
                                 changed = true;
                             } else {
                                 changed = true;
                             }
                         }
                         Some(other) => {
-                            if matches!(
-                                other,
-                                "image_url"
-                                    | "input_audio"
-                                    | "input_file"
-                                    | "file"
-                            ) {
+                            if matches!(other, "image_url" | "input_audio" | "input_file" | "file")
+                            {
                                 changed = true;
                                 continue;
                             }
-                            if let Some(t) =
-                                extract_foldable_text_from_block(map)
-                            {
-                                new_parts
-                                    .push(json!({ "type": "text", "text": t }));
+                            if let Some(t) = extract_foldable_text_from_block(map) {
+                                new_parts.push(json!({ "type": "text", "text": t }));
                                 changed = true;
                             } else {
                                 changed = true;
@@ -476,9 +438,7 @@ fn sanitize_assistant_messages_for_openai_chat_schema(
                     }
                 }
 
-                if blocks.len() != new_parts.len()
-                    || !promoted_tool_calls.is_empty()
-                {
+                if blocks.len() != new_parts.len() || !promoted_tool_calls.is_empty() {
                     changed = true;
                 }
 
@@ -497,8 +457,7 @@ fn sanitize_assistant_messages_for_openai_chat_schema(
                         .as_array_mut()
                         .ok_or_else(|| {
                             ApiError::InvalidRequest(InvalidRequestError::from(
-                                serde_json::from_slice::<i32>(b"[]")
-                                    .unwrap_err(),
+                                serde_json::from_slice::<i32>(b"[]").unwrap_err(),
                             ))
                         })?;
                     for tc in promoted_tool_calls {
@@ -509,8 +468,7 @@ fn sanitize_assistant_messages_for_openai_chat_schema(
                             .to_string();
                         if !id.is_empty()
                             && !tc_arr.iter().any(|existing| {
-                                existing.get("id").and_then(|v| v.as_str())
-                                    == Some(&id)
+                                existing.get("id").and_then(|v| v.as_str()) == Some(&id)
                             })
                         {
                             tc_arr.push(tc);
@@ -525,8 +483,7 @@ fn sanitize_assistant_messages_for_openai_chat_schema(
                         Value::String(String::new())
                     }
                 } else if new_parts.len() == 1
-                    && new_parts[0].get("type").and_then(|t| t.as_str())
-                        == Some("text")
+                    && new_parts[0].get("type").and_then(|t| t.as_str()) == Some("text")
                 {
                     let only = new_parts.into_iter().next().expect("len 1");
                     let text = only["text"].as_str().unwrap_or("").to_string();
@@ -541,8 +498,7 @@ fn sanitize_assistant_messages_for_openai_chat_schema(
                 Some(out)
             }
             Value::Object(ref map) => {
-                let out = if let Some(t) = extract_foldable_text_from_block(map)
-                {
+                let out = if let Some(t) = extract_foldable_text_from_block(map) {
                     Value::String(t)
                 } else if let Some(Value::String(s)) = map.get("text") {
                     Value::String(s.clone())
@@ -583,9 +539,7 @@ fn strip_tool_call_index_fields(messages: &mut [Value]) -> bool {
         if obj.get("role").and_then(|r| r.as_str()) != Some("assistant") {
             continue;
         }
-        let Some(tool_calls) =
-            obj.get_mut("tool_calls").and_then(|v| v.as_array_mut())
-        else {
+        let Some(tool_calls) = obj.get_mut("tool_calls").and_then(|v| v.as_array_mut()) else {
             continue;
         };
         for tc in tool_calls.iter_mut() {
@@ -600,11 +554,8 @@ fn strip_tool_call_index_fields(messages: &mut [Value]) -> bool {
     changed
 }
 
-fn stringify_tool_arguments(
-    tc_obj: &mut serde_json::Map<String, Value>,
-) -> bool {
-    let Some(func) = tc_obj.get_mut("function").and_then(|f| f.as_object_mut())
-    else {
+fn stringify_tool_arguments(tc_obj: &mut serde_json::Map<String, Value>) -> bool {
+    let Some(func) = tc_obj.get_mut("function").and_then(|f| f.as_object_mut()) else {
         return false;
     };
     let Some(args) = func.get("arguments") else {
@@ -613,8 +564,7 @@ fn stringify_tool_arguments(
     if args.is_string() {
         return false;
     }
-    let serialized =
-        serde_json::to_string(args).unwrap_or_else(|_| "{}".to_string());
+    let serialized = serde_json::to_string(args).unwrap_or_else(|_| "{}".to_string());
     func.insert("arguments".to_string(), Value::String(serialized));
     true
 }
@@ -629,9 +579,7 @@ fn ensure_tool_call_ids(messages: &mut [Value]) -> Result<bool, ApiError> {
         };
         let role = obj.get("role").and_then(|r| r.as_str()).map(str::to_string);
         if role.as_deref() == Some("assistant") {
-            if let Some(tool_calls) =
-                obj.get_mut("tool_calls").and_then(|v| v.as_array_mut())
-            {
+            if let Some(tool_calls) = obj.get_mut("tool_calls").and_then(|v| v.as_array_mut()) {
                 for (j, tc) in tool_calls.iter_mut().enumerate() {
                     let Some(tc_obj) = tc.as_object_mut() else {
                         continue;
@@ -642,22 +590,16 @@ fn ensure_tool_call_ids(messages: &mut [Value]) -> Result<bool, ApiError> {
                         .and_then(|n| n.as_str())
                         .unwrap_or("")
                         .to_string();
-                    let id_val =
-                        tc_obj.get("id").and_then(|v| v.as_str()).unwrap_or("");
+                    let id_val = tc_obj.get("id").and_then(|v| v.as_str()).unwrap_or("");
                     let needs_new_id = !tool_id_is_valid(id_val);
                     if needs_new_id {
-                        let new_id =
-                            sanitize_tool_id(id_val).unwrap_or_else(|| {
-                                generate_tool_call_id(i, j, &name)
-                            });
+                        let new_id = sanitize_tool_id(id_val)
+                            .unwrap_or_else(|| generate_tool_call_id(i, j, &name));
                         tc_obj.insert("id".to_string(), Value::String(new_id));
                         changed = true;
                     }
                     if tc_obj.get("type").is_none() {
-                        tc_obj.insert(
-                            "type".to_string(),
-                            Value::String("function".to_string()),
-                        );
+                        tc_obj.insert("type".to_string(), Value::String("function".to_string()));
                         changed = true;
                     }
                     if stringify_tool_arguments(tc_obj) {
@@ -668,25 +610,18 @@ fn ensure_tool_call_ids(messages: &mut [Value]) -> Result<bool, ApiError> {
         }
 
         if role.as_deref() == Some("tool") {
-            if let Some(id_val) =
-                obj.get_mut("tool_call_id").and_then(|v| v.as_str())
-            {
+            if let Some(id_val) = obj.get_mut("tool_call_id").and_then(|v| v.as_str()) {
                 let id_owned = id_val.to_string();
                 if !tool_id_is_valid(&id_owned) {
                     let new_id = sanitize_tool_id(&id_owned)
                         .unwrap_or_else(|| generate_tool_call_id(i, 0, ""));
-                    obj.insert(
-                        "tool_call_id".to_string(),
-                        Value::String(new_id),
-                    );
+                    obj.insert("tool_call_id".to_string(), Value::String(new_id));
                     changed = true;
                 }
             }
         }
 
-        if let Some(content) =
-            obj.get_mut("content").and_then(|c| c.as_array_mut())
-        {
+        if let Some(content) = obj.get_mut("content").and_then(|c| c.as_array_mut()) {
             for (k, block) in content.iter_mut().enumerate() {
                 let Some(block_obj) = block.as_object_mut() else {
                     continue;
@@ -696,9 +631,7 @@ fn ensure_tool_call_ids(messages: &mut [Value]) -> Result<bool, ApiError> {
                     .and_then(|t| t.as_str())
                     .map(str::to_string);
                 if ty.as_deref() == Some("tool_use") {
-                    if let Some(id_val) =
-                        block_obj.get("id").and_then(|v| v.as_str())
-                    {
+                    if let Some(id_val) = block_obj.get("id").and_then(|v| v.as_str()) {
                         let id_owned = id_val.to_string();
                         if !tool_id_is_valid(&id_owned) {
                             let name = block_obj
@@ -707,31 +640,19 @@ fn ensure_tool_call_ids(messages: &mut [Value]) -> Result<bool, ApiError> {
                                 .unwrap_or("")
                                 .to_string();
                             let new_id = sanitize_tool_id(&id_owned)
-                                .unwrap_or_else(|| {
-                                    generate_tool_call_id(i, k, &name)
-                                });
-                            block_obj.insert(
-                                "id".to_string(),
-                                Value::String(new_id),
-                            );
+                                .unwrap_or_else(|| generate_tool_call_id(i, k, &name));
+                            block_obj.insert("id".to_string(), Value::String(new_id));
                             changed = true;
                         }
                     }
                 }
                 if ty.as_deref() == Some("tool_result") {
-                    if let Some(id_val) =
-                        block_obj.get("tool_use_id").and_then(|v| v.as_str())
-                    {
+                    if let Some(id_val) = block_obj.get("tool_use_id").and_then(|v| v.as_str()) {
                         let id_owned = id_val.to_string();
                         if !tool_id_is_valid(&id_owned) {
                             let new_id = sanitize_tool_id(&id_owned)
-                                .unwrap_or_else(|| {
-                                    generate_tool_call_id(i, k, "")
-                                });
-                            block_obj.insert(
-                                "tool_use_id".to_string(),
-                                Value::String(new_id),
-                            );
+                                .unwrap_or_else(|| generate_tool_call_id(i, k, ""));
+                            block_obj.insert("tool_use_id".to_string(), Value::String(new_id));
                             changed = true;
                         }
                     }
@@ -791,8 +712,7 @@ fn has_tool_results(msg: &Value, tool_call_ids: &[String]) -> bool {
     {
         for block in content {
             if block.get("type").and_then(|t| t.as_str()) == Some("tool_result")
-                && let Some(id) =
-                    block.get("tool_use_id").and_then(|v| v.as_str())
+                && let Some(id) = block.get("tool_use_id").and_then(|v| v.as_str())
             {
                 if tool_call_ids.iter().any(|t| t == id) {
                     return true;
@@ -815,8 +735,7 @@ fn fix_missing_tool_responses(messages: &mut Vec<Value>) -> bool {
             continue;
         }
         let next_msg = messages.get(i + 1);
-        let need_fill =
-            next_msg.is_some_and(|n| !has_tool_results(n, &tool_call_ids));
+        let need_fill = next_msg.is_some_and(|n| !has_tool_results(n, &tool_call_ids));
         if need_fill {
             for id in &tool_call_ids {
                 new_messages.push(json!({
@@ -928,8 +847,7 @@ fn normalize_single_tool_definition(tool: &Value) -> Value {
         return tool.clone();
     };
     let ty_str = m.get("type").and_then(|v| v.as_str());
-    let looks_openai = ty_str
-        .is_some_and(|t| t.eq_ignore_ascii_case("function"))
+    let looks_openai = ty_str.is_some_and(|t| t.eq_ignore_ascii_case("function"))
         && m.get("function").and_then(|v| v.as_object()).is_some();
 
     if looks_openai {
@@ -966,9 +884,7 @@ fn normalize_single_tool_definition(tool: &Value) -> Value {
                 .get("input_schema")
                 .or_else(|| m.get("parameters"))
                 .cloned()
-                .unwrap_or_else(
-                    || json!({ "type": "object", "properties": {} }),
-                );
+                .unwrap_or_else(|| json!({ "type": "object", "properties": {} }));
             inner.insert("parameters".into(), params);
             return json!({
                 "type": "function",
@@ -1020,9 +936,7 @@ fn normalize_tools_array_for_openai(body: &mut Value) -> bool {
 
 /// Applies Cursor-targeted OpenAI ingress normalizations to `body` (top-level
 /// chat completion JSON object). Returns whether any mutation occurred.
-pub fn normalize_cursor_openai_request_value(
-    body: &mut Value,
-) -> Result<bool, ApiError> {
+pub fn normalize_cursor_openai_request_value(body: &mut Value) -> Result<bool, ApiError> {
     let mut mutated = normalize_top_level_tool_choice(body);
     mutated |= normalize_tools_array_for_openai(body);
     let Some(messages) = body.get_mut("messages") else {
@@ -1034,10 +948,7 @@ pub fn normalize_cursor_openai_request_value(
         )));
     };
     mutated |= strip_tool_call_index_fields(arr);
-    mutated |=
-        sanitize_user_system_tool_developer_messages_for_openai_chat_schema(
-            arr,
-        )?;
+    mutated |= sanitize_user_system_tool_developer_messages_for_openai_chat_schema(arr)?;
     mutated |= sanitize_assistant_messages_for_openai_chat_schema(arr)?;
     mutated |= ensure_tool_call_ids(arr)?;
     mutated |= fix_missing_tool_responses(arr);
@@ -1061,8 +972,7 @@ mod tests {
         assert!(normalize_cursor_openai_request_value(&mut body).unwrap());
         assert_eq!(body["tool_choice"], "required");
         let _: CreateChatCompletionRequest =
-            serde_json::from_slice(&serde_json::to_vec(&body).unwrap())
-                .unwrap();
+            serde_json::from_slice(&serde_json::to_vec(&body).unwrap()).unwrap();
     }
 
     #[test]
@@ -1075,8 +985,7 @@ mod tests {
         assert!(normalize_cursor_openai_request_value(&mut body).unwrap());
         assert_eq!(body["tool_choice"], "required");
         let _: CreateChatCompletionRequest =
-            serde_json::from_slice(&serde_json::to_vec(&body).unwrap())
-                .unwrap();
+            serde_json::from_slice(&serde_json::to_vec(&body).unwrap()).unwrap();
     }
 
     #[test]
@@ -1089,8 +998,7 @@ mod tests {
         assert!(normalize_cursor_openai_request_value(&mut body).unwrap());
         assert_eq!(body["tool_choice"], "auto");
         let _: CreateChatCompletionRequest =
-            serde_json::from_slice(&serde_json::to_vec(&body).unwrap())
-                .unwrap();
+            serde_json::from_slice(&serde_json::to_vec(&body).unwrap()).unwrap();
     }
 
     #[test]
@@ -1104,8 +1012,7 @@ mod tests {
         assert_eq!(body["tool_choice"]["type"], "function");
         assert_eq!(body["tool_choice"]["function"]["name"], "read_file");
         let _: CreateChatCompletionRequest =
-            serde_json::from_slice(&serde_json::to_vec(&body).unwrap())
-                .unwrap();
+            serde_json::from_slice(&serde_json::to_vec(&body).unwrap()).unwrap();
     }
 
     #[test]
@@ -1125,8 +1032,7 @@ mod tests {
         assert_eq!(body["tools"][0]["function"]["description"], "runs shell");
         assert!(body["tools"][0]["function"].get("parameters").is_some());
         let _: CreateChatCompletionRequest =
-            serde_json::from_slice(&serde_json::to_vec(&body).unwrap())
-                .unwrap();
+            serde_json::from_slice(&serde_json::to_vec(&body).unwrap()).unwrap();
     }
 
     #[test]
@@ -1146,8 +1052,7 @@ mod tests {
         assert!(body["tools"][0]["function"].get("input_schema").is_none());
         assert!(body["tools"][0]["function"].get("parameters").is_some());
         let _: CreateChatCompletionRequest =
-            serde_json::from_slice(&serde_json::to_vec(&body).unwrap())
-                .unwrap();
+            serde_json::from_slice(&serde_json::to_vec(&body).unwrap()).unwrap();
     }
 
     #[test]
@@ -1164,8 +1069,7 @@ mod tests {
         });
         assert!(normalize_cursor_openai_request_value(&mut body).unwrap());
         let _: CreateChatCompletionRequest =
-            serde_json::from_slice(&serde_json::to_vec(&body).unwrap())
-                .unwrap();
+            serde_json::from_slice(&serde_json::to_vec(&body).unwrap()).unwrap();
     }
 
     #[test]
@@ -1306,7 +1210,6 @@ mod tests {
         });
         assert!(normalize_cursor_openai_request_value(&mut body).unwrap());
         let _: CreateChatCompletionRequest =
-            serde_json::from_slice(&serde_json::to_vec(&body).unwrap())
-                .unwrap();
+            serde_json::from_slice(&serde_json::to_vec(&body).unwrap()).unwrap();
     }
 }

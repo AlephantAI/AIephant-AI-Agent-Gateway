@@ -21,8 +21,8 @@ use tracing::{error, info};
 
 use super::provider_db_config::build_from_db;
 use crate::{
-    app_state::AppState, discover::ServiceMap, error::init::InitError,
-    router::service::Router, types::router::RouterId,
+    app_state::AppState, discover::ServiceMap, error::init::InitError, router::service::Router,
+    types::router::RouterId,
 };
 
 pin_project! {
@@ -40,9 +40,7 @@ pin_project! {
     }
 }
 
-pub async fn bootstrap_provider_catalog(
-    app_state: &AppState,
-) -> Result<(), InitError> {
+pub async fn bootstrap_provider_catalog(app_state: &AppState) -> Result<(), InitError> {
     let router_store = app_state
         .0
         .router_store
@@ -52,31 +50,22 @@ pub async fn bootstrap_provider_catalog(
         .provider_gateway_fingerprint()
         .await
         .map_err(|e| {
-            InitError::InitRouters(format!(
-                "failed to fingerprint providers from DB: {e}"
-            ))
+            InitError::InitRouters(format!("failed to fingerprint providers from DB: {e}"))
         })?;
 
     let db_providers = router_store
         .get_all_providers_for_gateway()
         .await
-        .map_err(|e| {
-            InitError::InitRouters(format!(
-                "failed to load providers from DB: {e}"
-            ))
-        })?;
+        .map_err(|e| InitError::InitRouters(format!("failed to load providers from DB: {e}")))?;
 
     let db_models = router_store
         .get_all_provider_models_for_gateway()
         .await
         .map_err(|e| {
-            InitError::InitRouters(format!(
-                "failed to load provider_models from DB: {e}"
-            ))
+            InitError::InitRouters(format!("failed to load provider_models from DB: {e}"))
         })?;
 
-    let (providers_config, bare_model_expand) =
-        build_from_db(&db_providers, &db_models);
+    let (providers_config, bare_model_expand) = build_from_db(&db_providers, &db_models);
 
     info!(
         providers = providers_config.len(),
@@ -182,13 +171,9 @@ impl ProviderDbDiscovery {
 impl Stream for ProviderDbDiscovery {
     type Item = Change<RouterId, Router>;
 
-    fn poll_next(
-        self: Pin<&mut Self>,
-        ctx: &mut Context<'_>,
-    ) -> Poll<Option<Self::Item>> {
+    fn poll_next(self: Pin<&mut Self>, ctx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let mut this = self.project();
-        if let Poll::Ready(Some(change)) = this.initial.as_mut().poll_next(ctx)
-        {
+        if let Poll::Ready(Some(change)) = this.initial.as_mut().poll_next(ctx) {
             return handle_change(change);
         }
         match this.events.as_mut().poll_next(ctx) {
@@ -199,9 +184,7 @@ impl Stream for ProviderDbDiscovery {
     }
 }
 
-fn handle_change(
-    change: Change<RouterId, Router>,
-) -> Poll<Option<Change<RouterId, Router>>> {
+fn handle_change(change: Change<RouterId, Router>) -> Poll<Option<Change<RouterId, Router>>> {
     match change {
         Change::Insert(key, service) => {
             tracing::debug!(%key, "ProviderDbDiscovery: router inserted");

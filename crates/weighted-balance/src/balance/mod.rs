@@ -195,22 +195,15 @@ where
             1 => Ok(Some(0)),
             len => {
                 let sample_fn = |idx| {
-                    let (key, _service) = self
-                        .services
-                        .get_ready_index(idx)
-                        .expect("invalid index");
+                    let (key, _service) =
+                        self.services.get_ready_index(idx).expect("invalid index");
 
                     key.weight()
                 };
                 // NOTE: This is O(n) over number of services, but it can
                 // be made to O(1) using precomputed probability tables as
                 // described here: https://www.keithschwarz.com/darts-dice-coins/
-                let sample = rand::seq::index::sample_weighted(
-                    &mut self.rng,
-                    len,
-                    sample_fn,
-                    1,
-                )?;
+                let sample = rand::seq::index::sample_weighted(&mut self.rng, len, sample_fn, 1)?;
                 let chosen = sample.index(0);
 
                 trace!(chosen = chosen, "p2c");
@@ -235,10 +228,7 @@ where
         fn(<D::Service as Service<Req>>::Error) -> tower::BoxError,
     >;
 
-    fn poll_ready(
-        &mut self,
-        cx: &mut Context<'_>,
-    ) -> Poll<Result<(), Self::Error>> {
+    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         tracing::trace!("WeightedBalance::poll_ready");
         // `ready_index` may have already been set by a prior invocation. These
         // updates cannot disturb the order of existing ready services.

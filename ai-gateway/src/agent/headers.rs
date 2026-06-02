@@ -1,8 +1,7 @@
 use http::HeaderMap;
 
 use crate::agent::context::{
-    AgentConfidence, AgentContext, AgentStepKind, AgentStepSource,
-    AgentTrustLevel,
+    AgentConfidence, AgentContext, AgentStepKind, AgentStepSource, AgentTrustLevel,
 };
 
 pub const AGENT_ID: &str = "alephant-agent-id";
@@ -85,11 +84,7 @@ pub fn parse_agent_context_from_headers(
     Some(ctx)
 }
 
-fn header_string(
-    headers: &HeaderMap,
-    name: &str,
-    max_value_bytes: usize,
-) -> Option<String> {
+fn header_string(headers: &HeaderMap, name: &str, max_value_bytes: usize) -> Option<String> {
     let value = headers.get(name)?;
     let text = value.to_str().ok()?.trim();
     if text.is_empty() || text.len() > max_value_bytes {
@@ -103,9 +98,7 @@ mod tests {
     use http::{HeaderMap, HeaderValue};
 
     use super::*;
-    use crate::agent::context::{
-        AgentStepKind, AgentStepSource, AgentTrustLevel,
-    };
+    use crate::agent::context::{AgentStepKind, AgentStepSource, AgentTrustLevel};
 
     #[test]
     fn parses_full_agent_context_from_headers() {
@@ -206,8 +199,7 @@ mod tests {
     #[test]
     fn only_unknown_agent_header_returns_none() {
         let mut headers = HeaderMap::new();
-        headers
-            .insert("alephant-agent-foo", HeaderValue::from_static("ignored"));
+        headers.insert("alephant-agent-foo", HeaderValue::from_static("ignored"));
 
         assert!(parse_agent_context_from_headers(&headers, 256).is_none());
     }

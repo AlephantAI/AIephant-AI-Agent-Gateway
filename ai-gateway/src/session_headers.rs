@@ -43,18 +43,13 @@ fn normalize_session_path(path: Option<String>) -> Option<String> {
 pub fn parse_session_headers(
     headers: &HeaderMap,
 ) -> Result<Option<SessionHeaders>, InvalidRequestError> {
-    let Some(session_id) =
-        parse_header_string(headers, ALEPHANT_SESSION_ID_HEADER)?
-    else {
+    let Some(session_id) = parse_header_string(headers, ALEPHANT_SESSION_ID_HEADER)? else {
         return Ok(None);
     };
 
-    let session_path = normalize_session_path(parse_header_string(
-        headers,
-        ALEPHANT_SESSION_PATH_HEADER,
-    )?);
-    let session_name =
-        parse_header_string(headers, ALEPHANT_SESSION_NAME_HEADER)?;
+    let session_path =
+        normalize_session_path(parse_header_string(headers, ALEPHANT_SESSION_PATH_HEADER)?);
+    let session_name = parse_header_string(headers, ALEPHANT_SESSION_NAME_HEADER)?;
 
     Ok(Some(SessionHeaders {
         session_id,

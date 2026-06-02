@@ -90,8 +90,7 @@ mod tests {
     #[test]
     fn parses_registered_agent_name_from_vk_label() {
         assert_eq!(
-            parse_agent_name_from_vk_label("agent:Test Agent Free VK 3")
-                .as_deref(),
+            parse_agent_name_from_vk_label("agent:Test Agent Free VK 3").as_deref(),
             Some("Test Agent Free VK 3")
         );
         assert_eq!(
@@ -99,8 +98,7 @@ mod tests {
             Some("Team:A Bot")
         );
         assert_eq!(
-            parse_agent_name_from_vk_label(" agent :  Support Bot  ")
-                .as_deref(),
+            parse_agent_name_from_vk_label(" agent :  Support Bot  ").as_deref(),
             Some("Support Bot")
         );
         assert_eq!(
@@ -120,11 +118,8 @@ mod tests {
 
     #[test]
     fn resolves_registered_name_before_self_reported_names() {
-        let resolved = resolve_agent_name(
-            Some("Support Bot"),
-            Some("Payload Bot"),
-            Some("Header Bot"),
-        );
+        let resolved =
+            resolve_agent_name(Some("Support Bot"), Some("Payload Bot"), Some("Header Bot"));
 
         assert_eq!(resolved.name.as_deref(), Some("Support Bot"));
         assert_eq!(resolved.source, Some(SOURCE_VIRTUAL_KEY_LABEL));
@@ -141,8 +136,7 @@ mod tests {
 
     #[test]
     fn resolves_event_name_before_header_name_without_registered_name() {
-        let resolved =
-            resolve_agent_name(None, Some("Payload Bot"), Some("Header Bot"));
+        let resolved = resolve_agent_name(None, Some("Payload Bot"), Some("Header Bot"));
 
         assert_eq!(resolved.name.as_deref(), Some("Payload Bot"));
         assert_eq!(resolved.source, Some(SOURCE_SELF_REPORTED_EVENT));

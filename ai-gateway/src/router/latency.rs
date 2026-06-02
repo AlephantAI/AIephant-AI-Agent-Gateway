@@ -20,8 +20,7 @@ use crate::{
         model,
     },
     error::{
-        api::ApiError, init::InitError, internal::InternalError,
-        invalid_req::InvalidRequestError,
+        api::ApiError, init::InitError, internal::InternalError, invalid_req::InvalidRequestError,
     },
     types::{
         model_id::{ModelId, ModelName},
@@ -39,8 +38,7 @@ type ConcreteLatencyRouter = latency_router::router::LatencyRouter<
     axum_core::body::Body,
 >;
 
-type InnerService =
-    Buffer<Request, <ConcreteLatencyRouter as Service<Request>>::Future>;
+type InnerService = Buffer<Request, <ConcreteLatencyRouter as Service<Request>>::Future>;
 
 #[derive(Clone)]
 pub struct LatencyRouter {
@@ -86,8 +84,7 @@ impl LatencyRouter {
                 change_tx,
             )
             .await;
-        let mut factory =
-            latency_router::router::MakeRouter::new(discover_factory);
+        let mut factory = latency_router::router::MakeRouter::new(discover_factory);
         let inner = factory.call(change_rx).await?;
         let inner = Buffer::new(inner, CHANNEL_CAPACITY);
         Ok(Self { inner })
@@ -175,19 +172,14 @@ impl Future for ResponseFuture {
                     parts,
                     inner,
                 } => {
-                    let collected = match ready!(pin!(collect_future).poll(cx))
-                    {
+                    let collected = match ready!(pin!(collect_future).poll(cx)) {
                         Ok(collected) => collected,
                         Err(e) => {
-                            return Poll::Ready(Err(
-                                InternalError::CollectBodyError(e).into(),
-                            ));
+                            return Poll::Ready(Err(InternalError::CollectBodyError(e).into()));
                         }
                     };
-                    let parts =
-                        parts.take().expect("future polled after completion");
-                    let inner =
-                        inner.take().expect("future polled after completion");
+                    let parts = parts.take().expect("future polled after completion");
+                    let inner = inner.take().expect("future polled after completion");
 
                     this.state.set(State::DetermineModelName {
                         collected_body: Some(collected.to_bytes()),
@@ -216,15 +208,10 @@ impl Future for ResponseFuture {
                         InvalidRequestError::InvalidModelId
                     })?;
                     let model_name = model_id.as_model_name_owned();
-                    let mut parts =
-                        parts.take().expect("future polled after completion");
+                    let mut parts = parts.take().expect("future polled after completion");
                     parts.extensions.insert(model_name);
-                    let request = Request::from_parts(
-                        parts,
-                        axum_core::body::Body::from(body),
-                    );
-                    let mut inner =
-                        inner.take().expect("future polled after completion");
+                    let request = Request::from_parts(parts, axum_core::body::Body::from(body));
+                    let mut inner = inner.take().expect("future polled after completion");
                     this.state.set(State::CallRouter {
                         response_future: inner.call(request),
                     });

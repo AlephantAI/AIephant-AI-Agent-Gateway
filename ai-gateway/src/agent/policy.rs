@@ -7,16 +7,14 @@ use crate::{
     },
     app_state::AppState,
     policy_proto::{
-        AgentPolicyIssue, AgentPolicyPhase, AgentPolicyRuntimeContext,
-        AgentPolicyScope, ValidateAgentPolicyRequest,
-        ValidateAgentPolicyResponse,
+        AgentPolicyIssue, AgentPolicyPhase, AgentPolicyRuntimeContext, AgentPolicyScope,
+        ValidateAgentPolicyRequest, ValidateAgentPolicyResponse,
     },
     types::extensions::AuthContext,
 };
 
 pub const POLICY_DISABLED_ALLOWED_REASON: &str = "policy_disabled_allowed";
-pub const POLICY_SKIPPED_AUDIT_EVENT_REASON: &str =
-    "policy_skipped_audit_event";
+pub const POLICY_SKIPPED_AUDIT_EVENT_REASON: &str = "policy_skipped_audit_event";
 const COMPACT_POLICY_FIELD_CHARS: usize = 128;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
@@ -40,35 +38,24 @@ pub async fn validate_agent_policy(
     }
 
     let Some(client) = app_state.content_filter_client().await else {
-        return unavailable_result(
-            app_state,
-            envelope,
-            "agent policy client not initialised",
-        );
+        return unavailable_result(app_state, envelope, "agent policy client not initialised");
     };
 
     let mut inner = client.inner();
     let req = build_validate_agent_policy_request(auth, envelope);
     let call = inner.validate_agent_policy(req);
-    let result = tokio::time::timeout(
-        agent_policy_timeout(cfg.agent.policy_timeout_ms),
-        call,
-    )
-    .await;
+    let result =
+        tokio::time::timeout(agent_policy_timeout(cfg.agent.policy_timeout_ms), call).await;
 
     match result {
         Ok(Ok(response)) => Ok(decision_from_policy_response(
             envelope,
             response.into_inner(),
         )),
-        Ok(Err(status)) => {
-            unavailable_status_result(app_state, envelope, status)
+        Ok(Err(status)) => unavailable_status_result(app_state, envelope, status),
+        Err(_elapsed) => {
+            unavailable_result(app_state, envelope, "agent policy validation timed out")
         }
-        Err(_elapsed) => unavailable_result(
-            app_state,
-            envelope,
-            "agent policy validation timed out",
-        ),
     }
 }
 
@@ -97,11 +84,9 @@ fn unavailable_result(
 #[must_use]
 pub fn phase_for_step_kind(kind: Option<AgentStepKind>) -> AgentPolicyPhase {
     match kind {
-        Some(
-            AgentStepKind::Planning
-            | AgentStepKind::Reasoning
-            | AgentStepKind::LlmCall,
-        ) => AgentPolicyPhase::ModelRequest,
+        Some(AgentStepKind::Planning | AgentStepKind::Reasoning | AgentStepKind::LlmCall) => {
+            AgentPolicyPhase::ModelRequest
+        }
         Some(AgentStepKind::ToolCall) => AgentPolicyPhase::ToolCall,
         Some(
             AgentStepKind::ToolResult
@@ -146,10 +131,7 @@ pub fn build_validate_agent_policy_request(
         model: metadata_string(&envelope.metadata, "model"),
         provider: metadata_string(&envelope.metadata, "provider"),
         tool_name,
-        estimated_cost_cents: metadata_i64(
-            &envelope.metadata,
-            "estimated_cost_cents",
-        ),
+        estimated_cost_cents: metadata_i64(&envelope.metadata, "estimated_cost_cents"),
         runtime,
         locale: String::new(),
         user_id: auth.user_id.to_string(),
@@ -168,13 +150,8 @@ pub fn build_validate_agent_policy_request(
     }
 }
 
-fn policy_agent_id(
-    auth: &AuthContext,
-    envelope: &AgentEventEnvelope,
-) -> String {
-    if auth.entity_type.eq_ignore_ascii_case("agent")
-        && !auth.entity_id.is_nil()
-    {
+fn policy_agent_id(auth: &AuthContext, envelope: &AgentEventEnvelope) -> String {
+    if auth.entity_type.eq_ignore_ascii_case("agent") && !auth.entity_id.is_nil() {
         return auth.entity_id.to_string();
     }
     envelope
@@ -220,9 +197,7 @@ pub fn decision_from_policy_response(
 }
 
 #[must_use]
-pub fn disabled_allowed_decision(
-    envelope: &AgentEventEnvelope,
-) -> AgentPolicyDecision {
+pub fn disabled_allowed_decision(envelope: &AgentEventEnvelope) -> AgentPolicyDecision {
     AgentPolicyDecision {
         event_id: envelope.event_id.clone(),
         event_type: envelope.event_type.clone(),
@@ -245,9 +220,7 @@ pub fn disabled_allowed_decision(
 }
 
 #[must_use]
-pub fn skipped_audit_decision(
-    envelope: &AgentEventEnvelope,
-) -> AgentPolicyDecision {
+pub fn skipped_audit_decision(envelope: &AgentEventEnvelope) -> AgentPolicyDecision {
     AgentPolicyDecision {
         event_id: envelope.event_id.clone(),
         event_type: envelope.event_type.clone(),
@@ -301,9 +274,7 @@ pub fn attach_policy_decision_to_metadata(
 }
 
 #[must_use]
-pub fn compact_policy_decision_metadata(
-    decision: &AgentPolicyDecision,
-) -> serde_json::Value {
+pub fn compact_policy_decision_metadata(decision: &AgentPolicyDecision) -> serde_json::Value {
     serde_json::json!({
         "metadata_truncated": true,
         "metadata_truncation_reason": "agent_policy_metadata_limit",
@@ -324,9 +295,7 @@ fn truncate_policy_field(value: &str) -> String {
     value.chars().take(COMPACT_POLICY_FIELD_CHARS).collect()
 }
 
-fn available_policy_original_key(
-    obj: &serde_json::Map<String, serde_json::Value>,
-) -> String {
+fn available_policy_original_key(obj: &serde_json::Map<String, serde_json::Value>) -> String {
     for key in ["policy_original", "policy_client_original"] {
         if !obj.contains_key(key) {
             return key.to_string();
@@ -405,9 +374,8 @@ mod tests {
     use crate::{
         agent::{
             context::{
-                AgentConfidence, AgentEventPhase, AgentEventSourceTrust,
-                AgentPolicyMode, AgentPolicyStage, AgentStepKind,
-                AgentStepSource, AgentTrustLevel,
+                AgentConfidence, AgentEventPhase, AgentEventSourceTrust, AgentPolicyMode,
+                AgentPolicyStage, AgentStepKind, AgentStepSource, AgentTrustLevel,
             },
             event::AgentEventSource,
         },
@@ -446,12 +414,9 @@ mod tests {
 
     #[test]
     fn builds_validate_agent_policy_request_from_auth_and_envelope() {
-        let workspace_id =
-            Uuid::parse_str("11111111-1111-1111-1111-111111111111").unwrap();
-        let virtual_key_id =
-            Uuid::parse_str("22222222-2222-2222-2222-222222222222").unwrap();
-        let department_id =
-            Uuid::parse_str("33333333-3333-3333-3333-333333333333").unwrap();
+        let workspace_id = Uuid::parse_str("11111111-1111-1111-1111-111111111111").unwrap();
+        let virtual_key_id = Uuid::parse_str("22222222-2222-2222-2222-222222222222").unwrap();
+        let department_id = Uuid::parse_str("33333333-3333-3333-3333-333333333333").unwrap();
         let auth = auth_context(workspace_id, virtual_key_id, department_id);
         let envelope = envelope(json!({
             "model": "gpt-4o",
@@ -491,16 +456,11 @@ mod tests {
 
     #[test]
     fn auth_bound_agent_identity_wins_over_self_reported_agent_id() {
-        let workspace_id =
-            Uuid::parse_str("11111111-1111-1111-1111-111111111111").unwrap();
-        let virtual_key_id =
-            Uuid::parse_str("22222222-2222-2222-2222-222222222222").unwrap();
-        let department_id =
-            Uuid::parse_str("33333333-3333-3333-3333-333333333333").unwrap();
-        let agent_entity_id =
-            Uuid::parse_str("44444444-4444-4444-4444-444444444444").unwrap();
-        let mut auth =
-            auth_context(workspace_id, virtual_key_id, department_id);
+        let workspace_id = Uuid::parse_str("11111111-1111-1111-1111-111111111111").unwrap();
+        let virtual_key_id = Uuid::parse_str("22222222-2222-2222-2222-222222222222").unwrap();
+        let department_id = Uuid::parse_str("33333333-3333-3333-3333-333333333333").unwrap();
+        let agent_entity_id = Uuid::parse_str("44444444-4444-4444-4444-444444444444").unwrap();
+        let mut auth = auth_context(workspace_id, virtual_key_id, department_id);
         auth.entity_type = "agent".to_string();
         auth.entity_id = agent_entity_id;
         let mut envelope = envelope(json!({}));
@@ -515,12 +475,9 @@ mod tests {
 
     #[test]
     fn falls_back_to_envelope_name_for_tool_name() {
-        let workspace_id =
-            Uuid::parse_str("11111111-1111-1111-1111-111111111111").unwrap();
-        let virtual_key_id =
-            Uuid::parse_str("22222222-2222-2222-2222-222222222222").unwrap();
-        let department_id =
-            Uuid::parse_str("33333333-3333-3333-3333-333333333333").unwrap();
+        let workspace_id = Uuid::parse_str("11111111-1111-1111-1111-111111111111").unwrap();
+        let virtual_key_id = Uuid::parse_str("22222222-2222-2222-2222-222222222222").unwrap();
+        let department_id = Uuid::parse_str("33333333-3333-3333-3333-333333333333").unwrap();
         let auth = auth_context(workspace_id, virtual_key_id, department_id);
         let mut envelope = envelope(json!({
             "model": "gpt-4o",
@@ -683,10 +640,7 @@ mod tests {
 
         assert_eq!(metadata["safe"], "value");
         assert_eq!(metadata["policy_original"]["reason"], "already-present");
-        assert_eq!(
-            metadata["policy_client_original"]["reason"],
-            "also-present"
-        );
+        assert_eq!(metadata["policy_client_original"]["reason"], "also-present");
         assert_eq!(
             metadata["policy_client_original_1"]["reason"],
             "client-forged"
@@ -753,8 +707,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn validate_agent_policy_denies_missing_client_even_when_policy_unavailable_allows()
-     {
+    async fn validate_agent_policy_denies_missing_client_even_when_policy_unavailable_allows() {
         let mut config = Config::default();
         config.policy.enabled = true;
         config.policy.on_unavailable = OnUnavailable::Allow;
@@ -808,20 +761,13 @@ mod tests {
     }
 
     fn default_auth_context() -> AuthContext {
-        let workspace_id =
-            Uuid::parse_str("11111111-1111-1111-1111-111111111111").unwrap();
-        let virtual_key_id =
-            Uuid::parse_str("22222222-2222-2222-2222-222222222222").unwrap();
-        let department_id =
-            Uuid::parse_str("33333333-3333-3333-3333-333333333333").unwrap();
+        let workspace_id = Uuid::parse_str("11111111-1111-1111-1111-111111111111").unwrap();
+        let virtual_key_id = Uuid::parse_str("22222222-2222-2222-2222-222222222222").unwrap();
+        let department_id = Uuid::parse_str("33333333-3333-3333-3333-333333333333").unwrap();
         auth_context(workspace_id, virtual_key_id, department_id)
     }
 
-    fn auth_context(
-        workspace_id: Uuid,
-        virtual_key_id: Uuid,
-        department_id: Uuid,
-    ) -> AuthContext {
+    fn auth_context(workspace_id: Uuid, virtual_key_id: Uuid, department_id: Uuid) -> AuthContext {
         AuthContext {
             api_key: Secret::from("sk-test".to_string()),
             user_id: UserId::new(Uuid::new_v4()),

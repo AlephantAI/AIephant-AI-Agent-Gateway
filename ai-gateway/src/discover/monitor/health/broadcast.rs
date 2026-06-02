@@ -43,10 +43,7 @@ pub struct HealthEventPublisher {
 
 impl HealthEventPublisher {
     #[must_use]
-    pub fn new(
-        redis_url: url::Url,
-        config: &HealthEventBroadcastConfig,
-    ) -> Self {
+    pub fn new(redis_url: url::Url, config: &HealthEventBroadcastConfig) -> Self {
         Self {
             redis_url,
             channel: config.channel.clone(),
@@ -56,12 +53,7 @@ impl HealthEventPublisher {
     }
 
     /// Publish a health event if not within the dedup window.
-    pub async fn publish(
-        &self,
-        provider_key: &str,
-        router_id: &str,
-        status: HealthStatus,
-    ) {
+    pub async fn publish(&self, provider_key: &str, router_id: &str, status: HealthStatus) {
         let dedup_key = (router_id.to_string(), provider_key.to_string());
         let now = Instant::now();
 
@@ -82,9 +74,7 @@ impl HealthEventPublisher {
             status,
             ts: std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
-                .map_or(0, |d| {
-                    u64::try_from(d.as_millis()).unwrap_or(u64::MAX)
-                }),
+                .map_or(0, |d| u64::try_from(d.as_millis()).unwrap_or(u64::MAX)),
         };
 
         let payload = match serde_json::to_string(&event) {
@@ -134,10 +124,7 @@ pub async fn run_subscriber(redis_url: url::Url, channel: String) {
     }
 }
 
-async fn subscribe_loop(
-    redis_url: &url::Url,
-    channel: &str,
-) -> Result<(), redis::RedisError> {
+async fn subscribe_loop(redis_url: &url::Url, channel: &str) -> Result<(), redis::RedisError> {
     let client = redis::Client::open(redis_url.as_str())?;
     let mut pubsub = client.get_async_pubsub().await?;
     pubsub.subscribe(channel).await?;

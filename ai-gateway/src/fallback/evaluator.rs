@@ -52,19 +52,14 @@ pub enum FailoverSource {
 /// difference is the source of the `RetryConfig` parameters (Task 3/4
 /// wires the global `FallbackPolicyConfig` in `compat` mode too).
 #[must_use]
-pub fn should_retry(
-    policy: &FallbackPolicyConfig,
-    error_class: ErrorClass,
-) -> bool {
+pub fn should_retry(policy: &FallbackPolicyConfig, error_class: ErrorClass) -> bool {
     if !policy.enabled {
         return false;
     }
     match policy.mode {
         FallbackMode::Compat | FallbackMode::Unified => matches!(
             error_class,
-            ErrorClass::Upstream5xx
-                | ErrorClass::ConnectionError
-                | ErrorClass::StreamRetryable
+            ErrorClass::Upstream5xx | ErrorClass::ConnectionError | ErrorClass::StreamRetryable
         ),
     }
 }
@@ -72,18 +67,13 @@ pub fn should_retry(
 /// Return `true` when a provider should be removed from the Balancer pool
 /// given a failover event.
 #[must_use]
-pub fn should_remove(
-    policy: &FallbackPolicyConfig,
-    source: FailoverSource,
-) -> bool {
+pub fn should_remove(policy: &FallbackPolicyConfig, source: FailoverSource) -> bool {
     if !policy.enabled {
         return false;
     }
     match source {
         FailoverSource::Health => policy.provider_failover.health.enabled,
-        FailoverSource::RateLimit => {
-            policy.provider_failover.rate_limit.enabled
-        }
+        FailoverSource::RateLimit => policy.provider_failover.rate_limit.enabled,
     }
 }
 

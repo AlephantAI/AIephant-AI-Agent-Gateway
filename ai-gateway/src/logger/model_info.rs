@@ -13,10 +13,7 @@ use serde::Deserialize;
 use crate::{
     app_state::AppState,
     middleware::model_support::catalog_redis_key,
-    types::{
-        model_id::ModelId, provider::InferenceProvider,
-        usage_tokens::UsageTokenCounts,
-    },
+    types::{model_id::ModelId, provider::InferenceProvider, usage_tokens::UsageTokenCounts},
 };
 
 /// Catalog pricing from Redis / DB `info` JSON.
@@ -60,10 +57,7 @@ fn candidate_provider_codes(provider: &InferenceProvider) -> Vec<&str> {
     }
 }
 
-pub(crate) fn candidate_redis_keys(
-    provider: &InferenceProvider,
-    model: &ModelId,
-) -> Vec<String> {
+pub(crate) fn candidate_redis_keys(provider: &InferenceProvider, model: &ModelId) -> Vec<String> {
     let model_name = model.as_model_name().to_string();
     candidate_provider_codes(provider)
         .into_iter()
@@ -75,9 +69,7 @@ pub(crate) fn parse_model_info_str(raw: &str) -> Option<ModelInfo> {
     serde_json::from_str(raw).ok()
 }
 
-pub(crate) fn parse_model_info_value(
-    value: serde_json::Value,
-) -> Option<ModelInfo> {
+pub(crate) fn parse_model_info_value(value: serde_json::Value) -> Option<ModelInfo> {
     serde_json::from_value(value).ok()
 }
 
@@ -91,14 +83,11 @@ pub(crate) fn policy_estimated_input_micro_usd(
     f64::from(estimated_input_tokens) * info.prompt * 1_000_000.0
 }
 
-pub(crate) fn calculate_cost(
-    info: &ModelInfo,
-    usage: &UsageTokenCounts,
-) -> CostBreakdown {
+pub(crate) fn calculate_cost(info: &ModelInfo, usage: &UsageTokenCounts) -> CostBreakdown {
     let prompt_cost = usage.prompt_tokens as f64 * info.prompt;
     let completion_cost = usage.completion_tokens as f64 * info.completion;
-    let input_cache_read_cost = usage.prompt_cache_read_tokens as f64
-        * info.input_cache_read.unwrap_or(0.0);
+    let input_cache_read_cost =
+        usage.prompt_cache_read_tokens as f64 * info.input_cache_read.unwrap_or(0.0);
     let total_cost = prompt_cost + completion_cost + input_cache_read_cost;
 
     CostBreakdown {
@@ -131,8 +120,7 @@ where
 
     let model_name = model.as_model_name().to_string();
     for provider_code in candidate_provider_codes(provider) {
-        if let Some(value) =
-            load_db(provider_code.to_string(), model_name.clone()).await
+        if let Some(value) = load_db(provider_code.to_string(), model_name.clone()).await
             && let Some(info) = parse_model_info_value(value)
         {
             return Some(info);
@@ -189,10 +177,7 @@ pub(crate) async fn lookup_model_info(
                         return None;
                     };
                     match store
-                        .get_model_info_for_gateway_model(
-                            &provider_code,
-                            &model_id,
-                        )
+                        .get_model_info_for_gateway_model(&provider_code, &model_id)
                         .await
                     {
                         Ok(value) => value,
@@ -216,18 +201,14 @@ pub(crate) async fn lookup_model_info(
 #[cfg(test)]
 mod tests {
     use crate::types::{
-        model_id::ModelId, provider::InferenceProvider,
-        usage_tokens::UsageTokenCounts,
+        model_id::ModelId, provider::InferenceProvider, usage_tokens::UsageTokenCounts,
     };
 
     #[test]
     fn candidate_redis_keys_try_request_alias_before_canonical_provider() {
         let model = ModelId::Unknown("gemini-1.5-flash".to_string());
 
-        let keys = super::candidate_redis_keys(
-            &InferenceProvider::GoogleGemini,
-            &model,
-        );
+        let keys = super::candidate_redis_keys(&InferenceProvider::GoogleGemini, &model);
 
         assert_eq!(
             keys,
@@ -242,8 +223,7 @@ mod tests {
     fn candidate_redis_keys_dedup_when_alias_matches_canonical() {
         let model = ModelId::Unknown("gpt-4o".to_string());
 
-        let keys =
-            super::candidate_redis_keys(&InferenceProvider::OpenAI, &model);
+        let keys = super::candidate_redis_keys(&InferenceProvider::OpenAI, &model);
 
         assert_eq!(keys, vec!["openai::gpt-4o".to_string()]);
     }

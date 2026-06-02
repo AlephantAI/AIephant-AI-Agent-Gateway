@@ -33,8 +33,7 @@ pub async fn emit_agent_event(
         cfg.event_log_http_auth_token.expose().to_string(),
         reqwest::Client::new(),
     );
-    let payload =
-        AgentEventLogPayload::from_envelope_with_auth(event, auth_ctx);
+    let payload = AgentEventLogPayload::from_envelope_with_auth(event, auth_ctx);
     transport.send(&payload).await?;
     Ok(())
 }

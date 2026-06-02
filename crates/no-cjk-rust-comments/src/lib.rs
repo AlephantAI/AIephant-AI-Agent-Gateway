@@ -5,8 +5,7 @@ use std::{ops::Range, sync::LazyLock};
 use regex::Regex;
 use rustc_lexer::{FrontmatterAllowed, TokenKind, tokenize};
 
-static HAN: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"\p{Han}").expect("Han regex"));
+static HAN: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\p{Han}").expect("Han regex"));
 
 /// Byte ranges in `src` that belong to comment tokens (including doc comments).
 pub fn comment_byte_ranges(src: &str) -> Vec<Range<usize>> {
@@ -43,10 +42,7 @@ pub fn line_for_byte(src: &str, byte: usize) -> usize {
 }
 
 /// Diagnostics: (1-based line, excerpt of comment token, truncated).
-pub fn diagnostics_for_comments_with_han(
-    src: &str,
-    max: usize,
-) -> Vec<(usize, String)> {
+pub fn diagnostics_for_comments_with_han(src: &str, max: usize) -> Vec<(usize, String)> {
     let mut v = Vec::new();
     for r in comment_byte_ranges(src) {
         let slice = &src[r.clone()];

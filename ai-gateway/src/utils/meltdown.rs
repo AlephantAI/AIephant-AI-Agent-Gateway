@@ -79,13 +79,9 @@ where
     }
 }
 
-pub async fn wait_for_shutdown_signals(
-    mut token: Token,
-) -> Result<(), RuntimeError> {
-    let mut sigint = signal(SignalKind::interrupt())
-        .expect("failed to register SIGINT signal");
-    let mut sigterm = signal(SignalKind::terminate())
-        .expect("failed to register SIGTERM signal");
+pub async fn wait_for_shutdown_signals(mut token: Token) -> Result<(), RuntimeError> {
+    let mut sigint = signal(SignalKind::interrupt()).expect("failed to register SIGINT signal");
+    let mut sigterm = signal(SignalKind::terminate()).expect("failed to register SIGTERM signal");
 
     tokio::select! {
         () = &mut token => {

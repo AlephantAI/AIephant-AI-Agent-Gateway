@@ -2,9 +2,7 @@
 
 mod client;
 pub mod evaluate;
-pub use evaluate::{
-    ContentFilterForwardBody, ContentFilterResult, PolicyModelOverride,
-};
+pub use evaluate::{ContentFilterForwardBody, ContentFilterResult, PolicyModelOverride};
 pub(crate) mod estimate;
 pub mod piicache;
 pub mod prompt_cache;

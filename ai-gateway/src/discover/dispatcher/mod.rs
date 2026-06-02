@@ -46,16 +46,12 @@ where
 {
     type Item = Result<Change<K, DispatcherService>, Infallible>;
 
-    fn poll_next(
-        self: Pin<&mut Self>,
-        ctx: &mut Context<'_>,
-    ) -> Poll<Option<Self::Item>> {
+    fn poll_next(self: Pin<&mut Self>, ctx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let mut this = self.project();
 
         // 1) one‑time inserts, once the ServiceMap returns `Poll::Ready(None)`,
         //    then the service map is empty
-        if let Poll::Ready(Some(change)) = this.initial.as_mut().poll_next(ctx)
-        {
+        if let Poll::Ready(Some(change)) = this.initial.as_mut().poll_next(ctx) {
             return handle_change(change);
         }
 

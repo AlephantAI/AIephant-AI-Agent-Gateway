@@ -139,10 +139,7 @@ impl AgentEventLogPayload {
                 .map(|id| id.to_string())
                 .or_else(|| envelope.agent_id_external.clone())
                 .unwrap_or_default(),
-            alephant_agent_name: envelope
-                .alephant_agent_name
-                .clone()
-                .unwrap_or_default(),
+            alephant_agent_name: envelope.alephant_agent_name.clone().unwrap_or_default(),
             alephant_agent_name_source: envelope
                 .alephant_agent_name_source
                 .clone()
@@ -153,14 +150,8 @@ impl AgentEventLogPayload {
                 .unwrap_or_default(),
             alephant_run_id: envelope.run_id.clone().unwrap_or_default(),
             alephant_step_id: envelope.step_id.clone().unwrap_or_default(),
-            alephant_parent_step_id: envelope
-                .parent_step_id
-                .clone()
-                .unwrap_or_default(),
-            alephant_graph_node: envelope
-                .graph_node
-                .clone()
-                .unwrap_or_default(),
+            alephant_parent_step_id: envelope.parent_step_id.clone().unwrap_or_default(),
+            alephant_graph_node: envelope.graph_node.clone().unwrap_or_default(),
             tool_call_id: envelope.tool_call_id.clone().unwrap_or_default(),
             handoff_id: envelope.handoff_id.clone().unwrap_or_default(),
             tool_name: metadata_string(metadata, "tool_name")
@@ -171,10 +162,7 @@ impl AgentEventLogPayload {
             event_phase: envelope.event_phase.as_str().to_string(),
             policy_stage: envelope.policy_stage.as_str().to_string(),
             policy_mode: envelope.policy_mode.as_str().to_string(),
-            event_source_trust: envelope
-                .event_source_trust
-                .as_str()
-                .to_string(),
+            event_source_trust: envelope.event_source_trust.as_str().to_string(),
             observed_at: envelope.observed_at,
             event_time: envelope.timestamp,
             sequence: envelope.sequence,
@@ -210,19 +198,14 @@ impl AgentEventLogPayload {
                 .and_then(|value| value.get("snapshot_revision"))
                 .and_then(|value| value.as_i64()),
             sink_status: metadata_string(metadata, "sinkStatus"),
-            metadata: serde_json::to_string(metadata)
-                .unwrap_or_else(|_| "{}".to_string()),
+            metadata: serde_json::to_string(metadata).unwrap_or_else(|_| "{}".to_string()),
         }
     }
 
     #[must_use]
-    pub fn from_envelope_with_auth(
-        envelope: &AgentEventEnvelope,
-        auth_ctx: &AuthContext,
-    ) -> Self {
+    pub fn from_envelope_with_auth(envelope: &AgentEventEnvelope, auth_ctx: &AuthContext) -> Self {
         let mut payload = Self::from_envelope(envelope);
-        payload.workspace_type =
-            auth_ctx.workspace_type.clone().unwrap_or_default();
+        payload.workspace_type = auth_ctx.workspace_type.clone().unwrap_or_default();
         payload.user_id = auth_ctx.user_id.to_string();
         payload.entity_type = auth_ctx.entity_type.clone();
         payload.entity_id = if auth_ctx.entity_id.is_nil() {
@@ -231,12 +214,9 @@ impl AgentEventLogPayload {
             auth_ctx.entity_id.to_string()
         };
         payload.entity_name = auth_ctx.entity_name.clone();
-        if auth_ctx.entity_type.eq_ignore_ascii_case("agent")
-            && !auth_ctx.entity_id.is_nil()
-        {
+        if auth_ctx.entity_type.eq_ignore_ascii_case("agent") && !auth_ctx.entity_id.is_nil() {
             payload.alephant_agent_id = auth_ctx.entity_id.to_string();
-            payload.agent_trust_level =
-                AgentTrustLevel::AuthBound.as_str().to_string();
+            payload.agent_trust_level = AgentTrustLevel::AuthBound.as_str().to_string();
         }
         payload
     }
@@ -260,10 +240,7 @@ fn metadata_string(metadata: &serde_json::Value, key: &str) -> String {
         .to_string()
 }
 
-fn nested_metadata_string(
-    metadata: Option<&serde_json::Value>,
-    key: &str,
-) -> String {
+fn nested_metadata_string(metadata: Option<&serde_json::Value>, key: &str) -> String {
     metadata
         .and_then(|value| value.get(key))
         .and_then(|value| value.as_str())
@@ -277,9 +254,7 @@ fn policy_decision_string(
 ) -> String {
     nested_metadata_string(policy, "decision")
         .or_non_empty()
-        .or_else(|| {
-            nested_metadata_string(policy, "policyDecision").or_non_empty()
-        })
+        .or_else(|| nested_metadata_string(policy, "policyDecision").or_non_empty())
         .or_else(|| metadata_string(metadata, "policyDecision").or_non_empty())
         .unwrap_or_default()
 }
@@ -301,9 +276,8 @@ mod tests {
     use super::*;
     use crate::agent::{
         context::{
-            AgentConfidence, AgentEventPhase, AgentEventSourceTrust,
-            AgentPolicyMode, AgentPolicyStage, AgentStepKind, AgentStepSource,
-            AgentTrustLevel,
+            AgentConfidence, AgentEventPhase, AgentEventSourceTrust, AgentPolicyMode,
+            AgentPolicyStage, AgentStepKind, AgentStepSource, AgentTrustLevel,
         },
         event::{AgentEventEnvelope, AgentEventSource},
     };
@@ -469,8 +443,7 @@ mod tests {
             metadata: json!({}),
         };
 
-        let value = serde_json::to_value(AgentEventLogPayload::from(&envelope))
-            .unwrap();
+        let value = serde_json::to_value(AgentEventLogPayload::from(&envelope)).unwrap();
 
         for key in [
             "virtualKeyId",
@@ -540,8 +513,7 @@ mod tests {
             metadata: json!({}),
         };
 
-        let value = serde_json::to_value(AgentEventLogPayload::from(&envelope))
-            .unwrap();
+        let value = serde_json::to_value(AgentEventLogPayload::from(&envelope)).unwrap();
 
         assert_eq!(value["toolName"], "fallback-tool");
         assert_eq!(value["alephantAgentId"], "external-agent");
@@ -593,8 +565,7 @@ mod tests {
             }),
         };
 
-        let value = serde_json::to_value(AgentEventLogPayload::from(&envelope))
-            .unwrap();
+        let value = serde_json::to_value(AgentEventLogPayload::from(&envelope)).unwrap();
 
         assert_eq!(value["eventSource"], "crewai");
         assert_eq!(value["eventSourceTrust"], "self_reported");
@@ -648,8 +619,7 @@ mod tests {
             }),
         };
 
-        let value = serde_json::to_value(AgentEventLogPayload::from(&envelope))
-            .unwrap();
+        let value = serde_json::to_value(AgentEventLogPayload::from(&envelope)).unwrap();
 
         assert_eq!(value["policyDecision"], "unavailable");
     }
@@ -699,8 +669,7 @@ mod tests {
             }),
         };
 
-        let value = serde_json::to_value(AgentEventLogPayload::from(&envelope))
-            .unwrap();
+        let value = serde_json::to_value(AgentEventLogPayload::from(&envelope)).unwrap();
 
         assert_eq!(value["policyDecision"], "allowed");
     }

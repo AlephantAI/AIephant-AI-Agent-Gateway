@@ -3,10 +3,7 @@
 //! All logging is gated on `fallback-policy.observability.emit-decision-log`.
 //! Calls that return before emitting are zero-cost (no allocation, no lock).
 
-use crate::{
-    config::fallback_policy::FallbackPolicyConfig,
-    fallback::evaluator::FailoverSource,
-};
+use crate::{config::fallback_policy::FallbackPolicyConfig, fallback::evaluator::FailoverSource};
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Decision kind

@@ -1,8 +1,6 @@
 use std::sync::Arc;
 
-use crate::{
-    app_state::AppState, config::router::RouterConfig, types::router::RouterId,
-};
+use crate::{app_state::AppState, config::router::RouterConfig, types::router::RouterId};
 
 #[derive(Debug)]
 pub struct DispatcherDiscoverFactory {
@@ -13,11 +11,7 @@ pub struct DispatcherDiscoverFactory {
 
 impl DispatcherDiscoverFactory {
     #[must_use]
-    pub fn new(
-        app_state: AppState,
-        router_id: RouterId,
-        router_config: Arc<RouterConfig>,
-    ) -> Self {
+    pub fn new(app_state: AppState, router_id: RouterId, router_config: Arc<RouterConfig>) -> Self {
         Self {
             app_state,
             router_id,

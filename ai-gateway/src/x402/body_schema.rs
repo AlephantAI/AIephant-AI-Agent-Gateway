@@ -15,8 +15,7 @@ pub enum BodySchemaValidationError {
 
 #[must_use]
 pub fn schema_is_empty(schema: &Value) -> bool {
-    matches!(schema, Value::Null)
-        || matches!(schema, Value::Object(map) if map.is_empty())
+    matches!(schema, Value::Null) || matches!(schema, Value::Object(map) if map.is_empty())
 }
 
 pub fn validate_body_against_schema(
@@ -27,11 +26,9 @@ pub fn validate_body_against_schema(
         return Ok(());
     }
 
-    let body_json = serde_json::from_slice(body)
-        .map_err(BodySchemaValidationError::InvalidJson)?;
-    let validator = jsonschema::validator_for(schema).map_err(|error| {
-        BodySchemaValidationError::InvalidSchema(error.to_string())
-    })?;
+    let body_json = serde_json::from_slice(body).map_err(BodySchemaValidationError::InvalidJson)?;
+    let validator = jsonschema::validator_for(schema)
+        .map_err(|error| BodySchemaValidationError::InvalidSchema(error.to_string()))?;
 
     validator
         .validate(&body_json)
@@ -81,8 +78,7 @@ mod tests {
     fn null_schema_skips_validation() {
         let body = Bytes::from_static(b"not json");
 
-        let result =
-            validate_body_against_schema(&body, &serde_json::Value::Null);
+        let result = validate_body_against_schema(&body, &serde_json::Value::Null);
 
         assert!(result.is_ok());
     }

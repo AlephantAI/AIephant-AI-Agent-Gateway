@@ -1,6 +1,5 @@
 use crate::endpoints::{
-    anthropic::Anthropic, bedrock::Bedrock, google::Google, ollama::Ollama,
-    openai::OpenAI,
+    anthropic::Anthropic, bedrock::Bedrock, google::Google, ollama::Ollama, openai::OpenAI,
 };
 
 impl From<Anthropic> for OpenAI {
@@ -44,9 +43,7 @@ impl From<OpenAI> for Google {
             | OpenAI::Embeddings(_)
             | OpenAI::ImageGenerations(_)
             | OpenAI::Responses(_) => {
-                unreachable!(
-                    "ApiEndpoint::mapped only maps ChatCompletions to Google"
-                )
+                unreachable!("ApiEndpoint::mapped only maps ChatCompletions to Google")
             }
         }
     }
@@ -60,9 +57,7 @@ impl From<OpenAI> for Ollama {
             | OpenAI::Embeddings(_)
             | OpenAI::ImageGenerations(_)
             | OpenAI::Responses(_) => {
-                unreachable!(
-                    "ApiEndpoint::mapped only maps ChatCompletions to Ollama"
-                )
+                unreachable!("ApiEndpoint::mapped only maps ChatCompletions to Ollama")
             }
         }
     }
@@ -83,9 +78,7 @@ impl From<OpenAI> for Bedrock {
             | OpenAI::Embeddings(_)
             | OpenAI::ImageGenerations(_)
             | OpenAI::Responses(_) => {
-                unreachable!(
-                    "ApiEndpoint::mapped only maps ChatCompletions to Bedrock"
-                )
+                unreachable!("ApiEndpoint::mapped only maps ChatCompletions to Bedrock")
             }
         }
     }

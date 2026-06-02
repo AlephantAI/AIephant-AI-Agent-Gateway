@@ -16,11 +16,9 @@ impl meltdown::Service for SystemMetrics {
             // TODO: is sysinfo blocking? might want to spawn this in a thread
             // pool instead
             let mut handle = tokio::task::spawn(async {
-                opentelemetry_system_metrics::init_process_observer(
-                    system_metrics,
-                )
-                .await
-                .map_err(|_| InitError::InitSystemMetrics)
+                opentelemetry_system_metrics::init_process_observer(system_metrics)
+                    .await
+                    .map_err(|_| InitError::InitSystemMetrics)
             });
 
             tokio::select! {

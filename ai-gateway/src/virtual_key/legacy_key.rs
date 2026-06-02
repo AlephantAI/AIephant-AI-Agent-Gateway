@@ -15,18 +15,15 @@ pub fn hash_key(key: &str) -> String {
     hasher.update(key.as_bytes());
     let result = hasher.finalize();
 
-    result.iter().fold(
-        String::with_capacity(result.len() * 2),
-        |mut acc, &b| {
+    result
+        .iter()
+        .fold(String::with_capacity(result.len() * 2), |mut acc, &b| {
             let _ = write!(acc, "{b:02x}");
             acc
-        },
-    )
+        })
 }
 
-#[derive(
-    Serialize, Deserialize, Debug, Clone, sqlx::FromRow, PartialEq, Eq, Hash,
-)]
+#[derive(Serialize, Deserialize, Debug, Clone, sqlx::FromRow, PartialEq, Eq, Hash)]
 #[serde(rename_all = "camelCase")]
 pub struct Key {
     pub key_hash: String,
@@ -54,8 +51,7 @@ mod tests {
             "Different keys should produce different hashes"
         );
 
-        let expected_hash =
-            "d29586a28b2205de59cdc2e693a67fa4d82ac5fab08d6baca069b7798ecfef1a";
+        let expected_hash = "d29586a28b2205de59cdc2e693a67fa4d82ac5fab08d6baca069b7798ecfef1a";
         assert_eq!(
             hash_key("Bearer sk-alephant-test-key"),
             expected_hash,

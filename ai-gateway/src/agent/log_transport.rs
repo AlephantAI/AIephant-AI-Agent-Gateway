@@ -6,10 +6,7 @@ use reqwest::{
 };
 use url::Url;
 
-use crate::{
-    agent::log_payload::AgentEventLogPayload, app_redis::AppRedis,
-    types::secret::Secret,
-};
+use crate::{agent::log_payload::AgentEventLogPayload, app_redis::AppRedis, types::secret::Secret};
 
 #[derive(Clone, Debug)]
 pub struct AgentEventLogTransport {
@@ -104,9 +101,7 @@ impl AgentEventLogTransport {
                             return self
                                 .send_http(
                                     body,
-                                    Some(AgentEventLogTransportError::RedisTimeout(
-                                        "xadd",
-                                    )),
+                                    Some(AgentEventLogTransportError::RedisTimeout("xadd")),
                                 )
                                 .await;
                         }
@@ -134,20 +129,15 @@ impl AgentEventLogTransport {
                     return self
                         .send_http(
                             body,
-                            Some(AgentEventLogTransportError::RedisTimeout(
-                                "ping",
-                            )),
+                            Some(AgentEventLogTransportError::RedisTimeout("ping")),
                         )
                         .await;
                 }
             }
         }
 
-        self.send_http(
-            body,
-            redis_error.map(AgentEventLogTransportError::Redis),
-        )
-        .await
+        self.send_http(body, redis_error.map(AgentEventLogTransportError::Redis))
+            .await
     }
 
     async fn send_http(
@@ -172,18 +162,14 @@ impl AgentEventLogTransport {
         let http_auth_token = self.http_auth_token.expose().trim();
         if !http_auth_token.is_empty() {
             let header_name =
-                HeaderName::from_bytes(self.http_auth_header.as_bytes())
-                    .map_err(|_| {
-                        AgentEventLogTransportError::InvalidHeaderName(
-                            self.http_auth_header.clone(),
-                        )
-                    })?;
-            let header_value =
-                if header_name.as_str().eq_ignore_ascii_case("authorization") {
-                    format!("Bearer {http_auth_token}")
-                } else {
-                    http_auth_token.to_string()
-                };
+                HeaderName::from_bytes(self.http_auth_header.as_bytes()).map_err(|_| {
+                    AgentEventLogTransportError::InvalidHeaderName(self.http_auth_header.clone())
+                })?;
+            let header_value = if header_name.as_str().eq_ignore_ascii_case("authorization") {
+                format!("Bearer {http_auth_token}")
+            } else {
+                http_auth_token.to_string()
+            };
             request = request.header(header_name, header_value);
         }
 
@@ -211,9 +197,7 @@ mod tests {
     use url::Url;
 
     use super::{AgentEventLogTransport, AgentEventLogTransportError};
-    use crate::{
-        agent::log_payload::AgentEventLogPayload, app_redis::AppRedis,
-    };
+    use crate::{agent::log_payload::AgentEventLogPayload, app_redis::AppRedis};
 
     #[test]
     fn debug_does_not_expose_http_auth_token() {
@@ -295,9 +279,7 @@ mod tests {
 
         assert!(matches!(
             err,
-            AgentEventLogTransportError::HttpStatus(
-                reqwest::StatusCode::INTERNAL_SERVER_ERROR
-            )
+            AgentEventLogTransportError::HttpStatus(reqwest::StatusCode::INTERNAL_SERVER_ERROR)
         ));
     }
 
@@ -337,13 +319,10 @@ mod tests {
             reqwest::Client::new(),
         );
 
-        let err = tokio::time::timeout(
-            Duration::from_secs(2),
-            transport.send(&payload_fixture()),
-        )
-        .await
-        .unwrap()
-        .unwrap_err();
+        let err = tokio::time::timeout(Duration::from_secs(2), transport.send(&payload_fixture()))
+            .await
+            .unwrap()
+            .unwrap_err();
 
         assert!(matches!(err, AgentEventLogTransportError::Redis(_)));
     }
@@ -464,11 +443,7 @@ mod tests {
     impl HttpFixture {
         fn start(status_code: u16) -> Self {
             let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-            let url = Url::parse(&format!(
-                "http://{}",
-                listener.local_addr().unwrap()
-            ))
-            .unwrap();
+            let url = Url::parse(&format!("http://{}", listener.local_addr().unwrap())).unwrap();
             let (tx, rx) = mpsc::channel();
             let handle = thread::spawn(move || {
                 let (mut stream, _) = listener.accept().unwrap();
@@ -533,8 +508,7 @@ mod tests {
             .position(|window| window == b"\r\n\r\n")
             .unwrap()
             + 4;
-        let header_text =
-            String::from_utf8(bytes[..header_end].to_vec()).unwrap();
+        let header_text = String::from_utf8(bytes[..header_end].to_vec()).unwrap();
         let mut lines = header_text.split("\r\n");
         let request_line = lines.next().unwrap();
         let mut request_parts = request_line.split_whitespace();
@@ -581,11 +555,7 @@ mod tests {
     impl RedisFixture {
         fn start(mode: RedisMode) -> Self {
             let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-            let url = Url::parse(&format!(
-                "redis://{}",
-                listener.local_addr().unwrap()
-            ))
-            .unwrap();
+            let url = Url::parse(&format!("redis://{}", listener.local_addr().unwrap())).unwrap();
             let handle = thread::spawn(move || {
                 let (mut stream, _) = listener.accept().unwrap();
                 if matches!(mode, RedisMode::Stall) {
@@ -645,9 +615,7 @@ mod tests {
                 "-ERR xadd failed\r\n".to_string()
             }
             Some("XADD") => "$3\r\n0-1\r\n".to_string(),
-            Some("CLIENT" | "HELLO" | "SET" | "EXPIRE") => {
-                "+OK\r\n".to_string()
-            }
+            Some("CLIENT" | "HELLO" | "SET" | "EXPIRE") => "+OK\r\n".to_string(),
             _ => "+OK\r\n".to_string(),
         }
     }
@@ -669,8 +637,7 @@ mod tests {
             }
             let (len_line, next_index) = read_line(buffer, index + 1)?;
             index = next_index;
-            let len =
-                std::str::from_utf8(len_line).ok()?.parse::<usize>().ok()?;
+            let len = std::str::from_utf8(len_line).ok()?.parse::<usize>().ok()?;
             if buffer.len() < index + len + 2 {
                 return None;
             }

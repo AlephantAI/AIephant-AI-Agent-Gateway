@@ -6,23 +6,17 @@ use regex::Regex;
 use crate::{
     captured::CapturedResponse,
     case::{
-        AssertionsSpec, BodyAssertions, HeadersAssertions, HttpStatusSpec,
-        JsonAssertions, SseAssertions,
+        AssertionsSpec, BodyAssertions, HeadersAssertions, HttpStatusSpec, JsonAssertions,
+        SseAssertions,
     },
 };
 
-pub fn assert_response(
-    spec: &AssertionsSpec,
-    cap: &CapturedResponse,
-) -> Result<(), String> {
+pub fn assert_response(spec: &AssertionsSpec, cap: &CapturedResponse) -> Result<(), String> {
     if let Some(ref hs) = spec.http_status {
         match hs {
             HttpStatusSpec::Exact(code) => {
                 if cap.status != *code {
-                    return Err(format!(
-                        "httpStatus: expected {code}, got {}",
-                        cap.status
-                    ));
+                    return Err(format!("httpStatus: expected {code}, got {}", cap.status));
                 }
             }
             HttpStatusSpec::In { in_list } => {
@@ -55,16 +49,11 @@ pub fn assert_response(
     Ok(())
 }
 
-fn assert_body(
-    spec: &BodyAssertions,
-    cap: &CapturedResponse,
-) -> Result<(), String> {
+fn assert_body(spec: &BodyAssertions, cap: &CapturedResponse) -> Result<(), String> {
     if let Some(ref parts) = spec.contains {
         for needle in parts {
             if !cap.body.contains(needle.as_str()) {
-                return Err(format!(
-                    "body.contains: missing substring {needle:?}"
-                ));
+                return Err(format!("body.contains: missing substring {needle:?}"));
             }
         }
     }
@@ -78,9 +67,8 @@ fn assert_body(
         }
     }
     if let Some(ref pattern) = spec.regex {
-        let re = Regex::new(pattern).map_err(|e| {
-            format!("body.regex: invalid pattern {pattern:?}: {e}")
-        })?;
+        let re = Regex::new(pattern)
+            .map_err(|e| format!("body.regex: invalid pattern {pattern:?}: {e}"))?;
         if !re.is_match(&cap.body) {
             return Err(format!(
                 "body.regex: pattern {pattern:?} did not match body"
@@ -90,10 +78,7 @@ fn assert_body(
     Ok(())
 }
 
-fn assert_json(
-    spec: &JsonAssertions,
-    cap: &CapturedResponse,
-) -> Result<(), String> {
+fn assert_json(spec: &JsonAssertions, cap: &CapturedResponse) -> Result<(), String> {
     let v: serde_json::Value = serde_json::from_str(&cap.body)
         .map_err(|e| format!("json: failed to parse body as JSON: {e}"))?;
 
@@ -109,9 +94,9 @@ fn assert_json(
 
     if let Some(ref m) = spec.path_equals {
         for (p, expected) in m {
-            let got = v.pointer(p).ok_or_else(|| {
-                format!("json.pathEquals: pointer {p:?} missing in response")
-            })?;
+            let got = v
+                .pointer(p)
+                .ok_or_else(|| format!("json.pathEquals: pointer {p:?} missing in response"))?;
             if got != expected {
                 return Err(format!(
                     "json.pathEquals: at {p:?} expected {expected}, got {got}"
@@ -122,14 +107,12 @@ fn assert_json(
 
     if let Some(ref m) = spec.array_min_length {
         for (p, min_len) in m {
-            let got = v.pointer(p).ok_or_else(|| {
-                format!(
-                    "json.arrayMinLength: pointer {p:?} missing in response"
-                )
-            })?;
-            let arr = got.as_array().ok_or_else(|| {
-                format!("json.arrayMinLength: pointer {p:?} is not an array")
-            })?;
+            let got = v
+                .pointer(p)
+                .ok_or_else(|| format!("json.arrayMinLength: pointer {p:?} missing in response"))?;
+            let arr = got
+                .as_array()
+                .ok_or_else(|| format!("json.arrayMinLength: pointer {p:?} is not an array"))?;
             if arr.len() < *min_len {
                 return Err(format!(
                     "json.arrayMinLength: at {p:?} expected len >= {min_len}, \
@@ -143,10 +126,7 @@ fn assert_json(
     Ok(())
 }
 
-fn assert_sse(
-    spec: &SseAssertions,
-    cap: &CapturedResponse,
-) -> Result<(), String> {
+fn assert_sse(spec: &SseAssertions, cap: &CapturedResponse) -> Result<(), String> {
     if let Some(min) = spec.data_frames_min {
         let n = cap.sse_data_line_count();
         if n < min {
@@ -159,17 +139,12 @@ fn assert_sse(
         return Err("sse.hasDone: expected `[DONE]` marker in body".to_string());
     }
     if spec.has_done == Some(false) && cap.sse_has_done_marker() {
-        return Err(
-            "sse.hasDone: expected no `[DONE]` marker in body".to_string()
-        );
+        return Err("sse.hasDone: expected no `[DONE]` marker in body".to_string());
     }
     Ok(())
 }
 
-fn assert_headers(
-    spec: &HeadersAssertions,
-    cap: &CapturedResponse,
-) -> Result<(), String> {
+fn assert_headers(spec: &HeadersAssertions, cap: &CapturedResponse) -> Result<(), String> {
     if let Some(ref contains) = spec.contains {
         for (name, expected) in contains {
             let key = name.to_ascii_lowercase();
@@ -216,9 +191,7 @@ mod tests {
     use std::collections::HashMap;
 
     use super::*;
-    use crate::case::{
-        AssertionsSpec, BodyAssertions, JsonAssertions, SseAssertions,
-    };
+    use crate::case::{AssertionsSpec, BodyAssertions, JsonAssertions, SseAssertions};
 
     fn sample_cap(status: u16) -> CapturedResponse {
         let mut headers = HashMap::new();
@@ -332,8 +305,7 @@ mod tests {
         let cap = CapturedResponse {
             status: 400,
             headers: HashMap::new(),
-            body: r#"{"error":{"message":"bad","type":"invalid_request"}}"#
-                .into(),
+            body: r#"{"error":{"message":"bad","type":"invalid_request"}}"#.into(),
             time_total_sec: 0.01,
         };
         let mut eq = HashMap::new();

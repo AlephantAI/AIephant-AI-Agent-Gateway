@@ -48,9 +48,7 @@ pub fn decrypt_secret(
         .ok_or(X402SecretDecryptError::InvalidPrefix)?;
     let packed = B64.decode(packed)?;
     if packed.len() < MASTER_KEY_NONCE_LEN {
-        return Err(X402SecretDecryptError::InvalidCiphertextLength {
-            got: packed.len(),
-        });
+        return Err(X402SecretDecryptError::InvalidCiphertextLength { got: packed.len() });
     }
 
     let (nonce, ciphertext) = packed.split_at(MASTER_KEY_NONCE_LEN);
@@ -77,8 +75,7 @@ mod tests {
     }
 
     fn pack_secret(plaintext: &[u8], key: &[u8]) -> String {
-        let (ciphertext, nonce) =
-            crate::crypto::master_key::encrypt(plaintext, key).unwrap();
+        let (ciphertext, nonce) = crate::crypto::master_key::encrypt(plaintext, key).unwrap();
         let mut packed = nonce;
         packed.extend_from_slice(&ciphertext);
         format!("v1:{}", B64.encode(packed))
@@ -93,8 +90,7 @@ mod tests {
         let _guard = env_lock()
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let env_name =
-            crate::crypto::master_key_config::MASTER_KEY_ENCRYPTION_KEY_ENV;
+        let env_name = crate::crypto::master_key_config::MASTER_KEY_ENCRYPTION_KEY_ENV;
         let previous = std::env::var(env_name).ok();
         unsafe {
             std::env::set_var(env_name, value);

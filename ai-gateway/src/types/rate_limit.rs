@@ -16,10 +16,8 @@ use crate::{
     types::{model_id::ModelId, router::RouterId},
 };
 
-pub type RateLimitEventSenders =
-    RwLock<HashMap<RouterId, Sender<RateLimitEvent>>>;
-pub type RateLimitEventReceivers =
-    RwLock<HashMap<RouterId, Receiver<RateLimitEvent>>>;
+pub type RateLimitEventSenders = RwLock<HashMap<RouterId, Sender<RateLimitEvent>>>;
+pub type RateLimitEventReceivers = RwLock<HashMap<RouterId, Receiver<RateLimitEvent>>>;
 
 #[derive(Debug, Clone)]
 pub struct RateLimitEvent {
@@ -30,10 +28,7 @@ pub struct RateLimitEvent {
 
 impl RateLimitEvent {
     #[must_use]
-    pub fn new(
-        api_endpoint: ApiEndpoint,
-        retry_after_seconds: Option<u64>,
-    ) -> Self {
+    pub fn new(api_endpoint: ApiEndpoint, retry_after_seconds: Option<u64>) -> Self {
         Self {
             api_endpoint,
             model_id: None,
@@ -67,9 +62,9 @@ impl<K> Future for ProviderRestore<K> {
 
         match this.timer.poll(cx) {
             Poll::Ready(()) => Poll::Ready((
-                this.key.take().expect(
-                    "should never poll future after restore completion",
-                ),
+                this.key
+                    .take()
+                    .expect("should never poll future after restore completion"),
                 this.api_endpoint.clone(),
             )),
             Poll::Pending => Poll::Pending,

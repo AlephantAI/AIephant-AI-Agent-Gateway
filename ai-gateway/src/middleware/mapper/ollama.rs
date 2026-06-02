@@ -1,8 +1,6 @@
 use std::str::FromStr;
 
-use async_openai::types::{
-    CreateChatCompletionResponse, CreateChatCompletionStreamResponse,
-};
+use async_openai::types::{CreateChatCompletionResponse, CreateChatCompletionStreamResponse};
 use http::response::Parts;
 
 use super::{ResponseBodyConverter, TryConvert, TryConvertStreamData};
@@ -24,11 +22,8 @@ impl OllamaConverter {
     }
 }
 
-impl
-    TryConvert<
-        async_openai::types::CreateChatCompletionRequest,
-        CreateChatCompletionRequestOllama,
-    > for OllamaConverter
+impl TryConvert<async_openai::types::CreateChatCompletionRequest, CreateChatCompletionRequestOllama>
+    for OllamaConverter
 {
     type Error = MapperError;
     fn try_convert(
@@ -69,38 +64,27 @@ impl
     }
 }
 
-impl
-    ResponseBodyConverter<
-        CreateChatCompletionResponse,
-        CreateChatCompletionResponse,
-    > for OllamaConverter
+impl ResponseBodyConverter<CreateChatCompletionResponse, CreateChatCompletionResponse>
+    for OllamaConverter
 {
 }
 
-impl
-    TryConvertStreamData<
-        CreateChatCompletionStreamResponse,
-        CreateChatCompletionStreamResponse,
-    > for OllamaConverter
+impl TryConvertStreamData<CreateChatCompletionStreamResponse, CreateChatCompletionStreamResponse>
+    for OllamaConverter
 {
     type Error = MapperError;
 
     fn try_convert_chunk(
         &self,
         value: CreateChatCompletionStreamResponse,
-        _anthropic_openai_usage: Option<
-            &crate::types::extensions::AnthropicOpenAiUsageCell,
-        >,
+        _anthropic_openai_usage: Option<&crate::types::extensions::AnthropicOpenAiUsageCell>,
     ) -> Result<Option<CreateChatCompletionStreamResponse>, Self::Error> {
         Ok(Some(value))
     }
 }
 
-impl
-    TryConvertError<
-        async_openai::error::WrappedError,
-        async_openai::error::WrappedError,
-    > for OllamaConverter
+impl TryConvertError<async_openai::error::WrappedError, async_openai::error::WrappedError>
+    for OllamaConverter
 {
     type Error = MapperError;
 

@@ -57,9 +57,7 @@ impl Default for AgentConfig {
     }
 }
 
-#[derive(
-    Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq, Default,
-)]
+#[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "kebab-case")]
 pub enum AgentConflictAction {
     Disabled,
@@ -68,9 +66,7 @@ pub enum AgentConflictAction {
     Strict,
 }
 
-#[derive(
-    Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq, Default,
-)]
+#[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "kebab-case")]
 pub enum AgentMetadataRedaction {
     Disabled,

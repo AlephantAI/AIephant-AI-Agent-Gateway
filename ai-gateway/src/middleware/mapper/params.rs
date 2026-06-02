@@ -31,18 +31,17 @@ mod tests {
 
     #[test]
     fn request_params_extract_stream_and_model_without_failing_on_unknown() {
-        let request: CreateChatCompletionRequest =
-            serde_json::from_value(json!({
-                "model": "some-model-without-provider",
-                "messages": [
-                    {
-                        "role": "user",
-                        "content": "hello"
-                    }
-                ],
-                "stream": false
-            }))
-            .expect("request should deserialize");
+        let request: CreateChatCompletionRequest = serde_json::from_value(json!({
+            "model": "some-model-without-provider",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": "hello"
+                }
+            ],
+            "stream": false
+        }))
+        .expect("request should deserialize");
 
         let params = OpenAiRequestParams::from_request(&request);
 

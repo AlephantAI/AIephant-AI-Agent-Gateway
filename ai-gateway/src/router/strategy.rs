@@ -33,10 +33,7 @@ pub enum RoutingStrategyService {
     ///    to a model offered by the target provider.
     /// 5. send request
     ProviderLatencyPeakEwmaP2C(
-        Balance<
-            PeakEwmaDiscover<DispatcherDiscovery<provider::key::Key>>,
-            Request,
-        >,
+        Balance<PeakEwmaDiscover<DispatcherDiscovery<provider::key::Key>>, Request>,
     ),
     /// Strategy:
     /// 1. receive request
@@ -47,9 +44,7 @@ pub enum RoutingStrategyService {
     /// 4. send request
     WeightedProvider(
         WeightedBalance<
-            WeightedDiscover<
-                DispatcherDiscovery<provider::weighted_key::WeightedKey>,
-            >,
+            WeightedDiscover<DispatcherDiscovery<provider::weighted_key::WeightedKey>>,
             Request,
         >,
     ),
@@ -60,9 +55,7 @@ pub enum RoutingStrategyService {
     /// 3. send request
     WeightedModel(
         WeightedBalance<
-            WeightedDiscover<
-                DispatcherDiscovery<model::weighted_key::WeightedKey>,
-            >,
+            WeightedDiscover<DispatcherDiscovery<model::weighted_key::WeightedKey>>,
             Request,
         >,
     ),
@@ -83,12 +76,10 @@ impl RoutingStrategyService {
     ) -> Result<RoutingStrategyService, InitError> {
         match balance_config {
             BalanceConfigInner::ProviderWeighted { .. } => {
-                Self::provider_weighted(app_state, router_id, router_config)
-                    .await
+                Self::provider_weighted(app_state, router_id, router_config).await
             }
             BalanceConfigInner::BalancedLatency { .. } => {
-                Self::provider_latency(app_state, router_id, router_config)
-                    .await
+                Self::provider_latency(app_state, router_id, router_config).await
             }
             BalanceConfigInner::ModelWeighted { .. } => {
                 Self::model_weighted(app_state, router_id, router_config).await
@@ -137,8 +128,7 @@ impl RoutingStrategyService {
         let mut balance_factory =
             weighted_balance::balance::make::MakeBalance::new(discover_factory);
         let balance = balance_factory.call(change_rx).await?;
-        let provider_balancer =
-            RoutingStrategyService::WeightedProvider(balance);
+        let provider_balancer = RoutingStrategyService::WeightedProvider(balance);
 
         Ok(provider_balancer)
     }
@@ -217,11 +207,9 @@ impl RoutingStrategyService {
                 change_tx,
             )
             .await;
-        let mut balance_factory =
-            tower::balance::p2c::MakeBalance::new(discover_factory);
+        let mut balance_factory = tower::balance::p2c::MakeBalance::new(discover_factory);
         let balance = balance_factory.call(change_rx).await?;
-        let provider_balancer =
-            RoutingStrategyService::ProviderLatencyPeakEwmaP2C(balance);
+        let provider_balancer = RoutingStrategyService::ProviderLatencyPeakEwmaP2C(balance);
 
         Ok(provider_balancer)
     }
@@ -238,15 +226,9 @@ impl tower::Service<Request> for RoutingStrategyService {
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Result<(), Self::Error>> {
         match self {
-            RoutingStrategyService::ProviderLatencyPeakEwmaP2C(inner) => {
-                inner.poll_ready(cx)
-            }
-            RoutingStrategyService::WeightedProvider(inner) => {
-                inner.poll_ready(cx)
-            }
-            RoutingStrategyService::WeightedModel(inner) => {
-                inner.poll_ready(cx)
-            }
+            RoutingStrategyService::ProviderLatencyPeakEwmaP2C(inner) => inner.poll_ready(cx),
+            RoutingStrategyService::WeightedProvider(inner) => inner.poll_ready(cx),
+            RoutingStrategyService::WeightedModel(inner) => inner.poll_ready(cx),
             RoutingStrategyService::ModelLatency(inner) => {
                 return inner.poll_ready(cx);
             }
@@ -257,26 +239,18 @@ impl tower::Service<Request> for RoutingStrategyService {
 
     fn call(&mut self, req: Request) -> Self::Future {
         match self {
-            RoutingStrategyService::ProviderLatencyPeakEwmaP2C(inner) => {
-                ResponseFuture::PeakEwma {
-                    future: inner.call(req),
-                }
-            }
-            RoutingStrategyService::WeightedProvider(inner) => {
-                ResponseFuture::ProviderWeighted {
-                    future: inner.call(req),
-                }
-            }
-            RoutingStrategyService::WeightedModel(inner) => {
-                ResponseFuture::ModelWeighted {
-                    future: inner.call(req),
-                }
-            }
-            RoutingStrategyService::ModelLatency(inner) => {
-                ResponseFuture::ModelLatency {
-                    future: inner.call(req),
-                }
-            }
+            RoutingStrategyService::ProviderLatencyPeakEwmaP2C(inner) => ResponseFuture::PeakEwma {
+                future: inner.call(req),
+            },
+            RoutingStrategyService::WeightedProvider(inner) => ResponseFuture::ProviderWeighted {
+                future: inner.call(req),
+            },
+            RoutingStrategyService::WeightedModel(inner) => ResponseFuture::ModelWeighted {
+                future: inner.call(req),
+            },
+            RoutingStrategyService::ModelLatency(inner) => ResponseFuture::ModelLatency {
+                future: inner.call(req),
+            },
         }
     }
 }
@@ -318,10 +292,7 @@ pin_project! {
 impl Future for ResponseFuture {
     type Output = Result<Response, ApiError>;
 
-    fn poll(
-        self: std::pin::Pin<&mut Self>,
-        cx: &mut Context<'_>,
-    ) -> Poll<Self::Output> {
+    fn poll(self: std::pin::Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         match self.project() {
             EnumProj::PeakEwma { future } => Poll::Ready(ready!(
                 future
@@ -329,16 +300,15 @@ impl Future for ResponseFuture {
                     .map_err(InternalError::LoadBalancerError)
                     .map_err(Into::into)
             )),
-            EnumProj::ProviderWeighted { future }
-            | EnumProj::ModelWeighted { future } => Poll::Ready(ready!(
-                future
-                    .poll(cx)
-                    .map_err(InternalError::LoadBalancerError)
-                    .map_err(Into::into)
-            )),
-            EnumProj::ModelLatency { future } => {
-                Poll::Ready(ready!(future.poll(cx)))
+            EnumProj::ProviderWeighted { future } | EnumProj::ModelWeighted { future } => {
+                Poll::Ready(ready!(
+                    future
+                        .poll(cx)
+                        .map_err(InternalError::LoadBalancerError)
+                        .map_err(Into::into)
+                ))
             }
+            EnumProj::ModelLatency { future } => Poll::Ready(ready!(future.poll(cx))),
         }
     }
 }
