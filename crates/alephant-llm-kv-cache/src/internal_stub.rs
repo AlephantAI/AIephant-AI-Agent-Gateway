@@ -7,7 +7,10 @@ pub struct InternalStubBackend;
 
 #[async_trait]
 impl LlmKvBackend for InternalStubBackend {
-    async fn get(&self, _key: &str) -> Result<Option<String>, crate::error::LlmKvCacheError> {
+    async fn get(
+        &self,
+        _key: &str,
+    ) -> Result<Option<String>, crate::error::LlmKvCacheError> {
         Ok(None)
     }
 

@@ -99,13 +99,18 @@ enum VirtualKeyUpdateAction {
 }
 
 impl DatabaseListener {
-    pub async fn new(database_url: &str, app_state: AppState) -> Result<Self, InitError> {
-        let pg_listener = PgListener::connect(database_url).await.map_err(|e| {
-            error!(error = %e, "failed to create database listener");
-            InitError::DatabaseConnection(e)
-        })?;
+    pub async fn new(
+        database_url: &str,
+        app_state: AppState,
+    ) -> Result<Self, InitError> {
+        let pg_listener =
+            PgListener::connect(database_url).await.map_err(|e| {
+                error!(error = %e, "failed to create database listener");
+                InitError::DatabaseConnection(e)
+            })?;
 
-        let db_poll_interval = app_state.config().deployment_target.db_poll_interval;
+        let db_poll_interval =
+            app_state.config().deployment_target.db_poll_interval;
         let listener_reconnect_interval = app_state
             .config()
             .deployment_target
@@ -117,7 +122,8 @@ impl DatabaseListener {
             .as_ref()
             .ok_or(InitError::StoreNotConfigured("router_store"))?
             .clone();
-        let provider_fingerprint_baseline = app_state.provider_bootstrap_fingerprint();
+        let provider_fingerprint_baseline =
+            app_state.provider_bootstrap_fingerprint();
 
         Ok(Self {
             app_state,
@@ -204,13 +210,15 @@ impl DatabaseListener {
         };
 
         for row in updated_master_keys {
-            let should_process = match self.last_master_key_updated_at.get(&row.id) {
-                None => true,
-                Some(last_seen) => row.updated_at > *last_seen,
-            };
+            let should_process =
+                match self.last_master_key_updated_at.get(&row.id) {
+                    None => true,
+                    Some(last_seen) => row.updated_at > *last_seen,
+                };
 
             if should_process {
-                if let Some(cache) = self.app_state.0.master_key_cache.as_ref() {
+                if let Some(cache) = self.app_state.0.master_key_cache.as_ref()
+                {
                     cache.invalidate(row.id);
                 }
                 self.last_master_key_updated_at
@@ -264,9 +272,14 @@ impl DatabaseListener {
                     if let Some(current) = current_provider_fingerprint.take() {
                         self.provider_fingerprint_baseline = Some(current);
                     } else if self.provider_fingerprint_baseline.is_some() {
-                        match self.router_store.provider_gateway_fingerprint().await {
+                        match self
+                            .router_store
+                            .provider_gateway_fingerprint()
+                            .await
+                        {
                             Ok(current) => {
-                                self.provider_fingerprint_baseline = Some(current);
+                                self.provider_fingerprint_baseline =
+                                    Some(current);
                             }
                             Err(e) => {
                                 error!(
@@ -288,7 +301,9 @@ impl DatabaseListener {
         // -----------------------------------------------------------
         // Poll provider_configs for workspace allowlist hot-updates (F-10)
         // -----------------------------------------------------------
-        let provider_configs_changed = if let Some(last_poll) = self.last_poll_time {
+        let provider_configs_changed = if let Some(last_poll) =
+            self.last_poll_time
+        {
             self.router_store
                 .has_provider_configs_updated_since(last_poll)
                 .await
@@ -384,7 +399,9 @@ impl DatabaseListener {
                 ServiceState::HandlingNotification(notification) => {
                     // This runs outside select!, so it can't be cancelled by
                     // other branches
-                    if let Err(e) = self.handle_notification(&notification).await {
+                    if let Err(e) =
+                        self.handle_notification(&notification).await
+                    {
                         error!(error = %e, "failed to handle db listener notification, continuing");
                     }
                     state = ServiceState::Idle;
@@ -396,10 +413,16 @@ impl DatabaseListener {
                     if let Err(e) = self.pg_listener.unlisten_all().await {
                         error!(error = %e, "failed to unlisten all channels");
                     }
-                    if let Err(e) = self.pg_listener.listen("connected_cloud_gateways").await {
+                    if let Err(e) = self
+                        .pg_listener
+                        .listen("connected_cloud_gateways")
+                        .await
+                    {
                         error!(error = %e, "failed to listen on channel after reconnection");
                     } else {
-                        info!("successfully reconnected and listening on channel");
+                        info!(
+                            "successfully reconnected and listening on channel"
+                        );
                     }
                     state = ServiceState::Idle;
                 }
@@ -427,7 +450,8 @@ impl DatabaseListener {
                 RuntimeError::Internal(InternalError::Internal)
             })?;
 
-        let (providers_config, bare_model_expand) = build_from_db(&db_providers, &db_models);
+        let (providers_config, bare_model_expand) =
+            build_from_db(&db_providers, &db_models);
 
         let flags: FxHashMap<String, bool> = db_providers
             .iter()
@@ -478,18 +502,20 @@ impl DatabaseListener {
         info!(channel = notification.channel(), "processing notification");
 
         if notification.channel() == "connected_cloud_gateways" {
-            let payload =
-                serde_json::from_str::<ConnectedCloudGatewaysNotification>(notification.payload())
-                    .map_err(|e| {
-                        error!(error = %e, "failed to parse connected_cloud_gateways payload");
-                        InternalError::Deserialize {
-                            ty: "ConnectedCloudGatewaysNotification",
-                            error: e,
-                        }
-                    })?;
+            let payload = serde_json::from_str::<
+                ConnectedCloudGatewaysNotification,
+            >(notification.payload()).map_err(|e| {
+                error!(error = %e, "failed to parse connected_cloud_gateways payload");
+                InternalError::Deserialize {
+                    ty: "ConnectedCloudGatewaysNotification",
+                    error: e,
+                }
+            })?;
 
             match payload {
-                ConnectedCloudGatewaysNotification::RouterConfigUpdated { .. } => {
+                ConnectedCloudGatewaysNotification::RouterConfigUpdated {
+                    ..
+                } => {
                     // Cloud provider catalog changes are detected on the next
                     // poll cycle via has_providers_updated_since(). The
                     // routers table is no longer used for provider catalog
@@ -579,7 +605,10 @@ impl DatabaseListener {
                         Ok(())
                     }
                 },
-                ConnectedCloudGatewaysNotification::EnrichmentTouch { scope, id } => {
+                ConnectedCloudGatewaysNotification::EnrichmentTouch {
+                    scope,
+                    id,
+                } => {
                     let ids = self
                         .router_store
                         .list_virtual_key_ids_for_enrichment_touch(scope, id)
@@ -724,13 +753,17 @@ mod tests {
     }
 
     #[test]
-    fn should_reload_providers_defaults_false_on_first_poll_with_bootstrap_and_missing_probe() {
+    fn should_reload_providers_defaults_false_on_first_poll_with_bootstrap_and_missing_probe()
+     {
         assert!(!should_reload_providers(None, None, true));
     }
 
     #[test]
     fn should_reload_providers_follows_last_poll_probe_after_first_poll() {
-        let last_poll = Some(DateTime::from_timestamp(1_700_000_100, 0).expect("valid timestamp"));
+        let last_poll = Some(
+            DateTime::from_timestamp(1_700_000_100, 0)
+                .expect("valid timestamp"),
+        );
         assert!(should_reload_providers(last_poll, Some(true), true));
         assert!(should_reload_providers(last_poll, Some(true), false));
         assert!(!should_reload_providers(last_poll, Some(false), true));
@@ -738,14 +771,19 @@ mod tests {
     }
 
     #[test]
-    fn should_reload_providers_defaults_false_after_first_poll_when_probe_missing() {
-        let last_poll = Some(DateTime::from_timestamp(1_700_000_100, 0).expect("valid timestamp"));
+    fn should_reload_providers_defaults_false_after_first_poll_when_probe_missing()
+     {
+        let last_poll = Some(
+            DateTime::from_timestamp(1_700_000_100, 0)
+                .expect("valid timestamp"),
+        );
         assert!(!should_reload_providers(last_poll, None, true));
         assert!(!should_reload_providers(last_poll, None, false));
     }
 
     #[test]
-    fn classify_virtual_key_update_upserts_newer_active_row_with_fields_intact() {
+    fn classify_virtual_key_update_upserts_newer_active_row_with_fields_intact()
+    {
         let now = Utc::now();
         let last_seen = now - chrono::Duration::seconds(1);
         let mut vk = sample_vk("kh-upsert", now);
@@ -814,16 +852,21 @@ mod tests {
     #[test]
     fn deserialize_enrichment_touch_notification() {
         let j = r#"{"event":"enrichment_touch","scope":"agent","id":"550e8400-e29b-41d4-a716-446655440000"}"#;
-        let n: ConnectedCloudGatewaysNotification = serde_json::from_str(j).unwrap();
+        let n: ConnectedCloudGatewaysNotification =
+            serde_json::from_str(j).unwrap();
         match n {
-            ConnectedCloudGatewaysNotification::EnrichmentTouch { scope, id } => {
+            ConnectedCloudGatewaysNotification::EnrichmentTouch {
+                scope,
+                id,
+            } => {
                 assert_eq!(
                     scope,
                     crate::store::enrichment_touch::EnrichmentTouchScope::Agent
                 );
                 assert_eq!(
                     id,
-                    Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap()
+                    Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000")
+                        .unwrap()
                 );
             }
             _ => panic!("wrong variant"),

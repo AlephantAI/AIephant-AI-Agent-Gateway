@@ -21,7 +21,9 @@ pub(super) async fn dispatch_sync(
     let request_builder = request_builder.try_clone().ok_or_else(|| {
         // in theory, this should never happen, as we'll have already
         // collected the request body
-        tracing::error!("failed to clone request builder, cannot dispatch stream");
+        tracing::error!(
+            "failed to clone request builder, cannot dispatch stream"
+        );
         ApiError::Internal(InternalError::Internal)
     })?;
     let response: reqwest::Response = request_builder
@@ -37,16 +39,22 @@ pub(super) async fn dispatch_sync(
     // this is compiled out in release builds
     #[cfg(debug_assertions)]
     if status.is_server_error() || status.is_client_error() {
-        let body = response.text().await.map_err(InternalError::ReqwestError)?;
+        let body =
+            response.text().await.map_err(InternalError::ReqwestError)?;
         tracing::debug!(
             status_code = %status,
             error_resp_len = body.len(),
             "received error response"
         );
         let bytes = bytes::Bytes::from(body);
-        let stream = futures::stream::once(futures::future::ok::<_, ApiError>(bytes));
-        let (error_body, error_reader, tfft_rx) =
-            BodyReader::wrap_stream(stream, false, TfftTrigger::Never, cache_tap.clone());
+        let stream =
+            futures::stream::once(futures::future::ok::<_, ApiError>(bytes));
+        let (error_body, error_reader, tfft_rx) = BodyReader::wrap_stream(
+            stream,
+            false,
+            TfftTrigger::Never,
+            cache_tap.clone(),
+        );
         let response = resp_builder
             .body(error_body)
             .map_err(InternalError::HttpError)?;

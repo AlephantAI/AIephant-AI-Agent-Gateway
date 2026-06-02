@@ -6,30 +6,37 @@ use std::collections::HashMap;
 
 use async_openai::types::{
     ChatCompletionMessageToolCall, ChatCompletionNamedToolChoice,
-    ChatCompletionRequestAssistantMessage, ChatCompletionRequestAssistantMessageContent,
-    ChatCompletionRequestDeveloperMessage, ChatCompletionRequestDeveloperMessageContent,
-    ChatCompletionRequestMessage, ChatCompletionRequestMessageContentPartImage,
-    ChatCompletionRequestMessageContentPartText, ChatCompletionRequestSystemMessage,
-    ChatCompletionRequestSystemMessageContent, ChatCompletionRequestToolMessage,
-    ChatCompletionRequestToolMessageContent, ChatCompletionRequestUserMessage,
-    ChatCompletionRequestUserMessageContent, ChatCompletionRequestUserMessageContentPart,
-    ChatCompletionTool, ChatCompletionToolChoiceOption, ChatCompletionToolType,
-    CreateChatCompletionRequest, FunctionCall, FunctionName, FunctionObject, ImageUrl,
-    ResponseFormat, ServiceTier as ChatServiceTier,
+    ChatCompletionRequestAssistantMessage,
+    ChatCompletionRequestAssistantMessageContent,
+    ChatCompletionRequestDeveloperMessage,
+    ChatCompletionRequestDeveloperMessageContent, ChatCompletionRequestMessage,
+    ChatCompletionRequestMessageContentPartImage,
+    ChatCompletionRequestMessageContentPartText,
+    ChatCompletionRequestSystemMessage,
+    ChatCompletionRequestSystemMessageContent,
+    ChatCompletionRequestToolMessage, ChatCompletionRequestToolMessageContent,
+    ChatCompletionRequestUserMessage, ChatCompletionRequestUserMessageContent,
+    ChatCompletionRequestUserMessageContentPart, ChatCompletionTool,
+    ChatCompletionToolChoiceOption, ChatCompletionToolType,
+    CreateChatCompletionRequest, FunctionCall, FunctionName, FunctionObject,
+    ImageUrl, ResponseFormat, ServiceTier as ChatServiceTier,
     responses::{
-        ContentType, CreateResponse, Input, InputContent, InputItem, InputMessage, Role,
-        ServiceTier as ResponsesServiceTier, TextResponseFormat, ToolChoice, ToolChoiceMode,
-        ToolDefinition,
+        ContentType, CreateResponse, Input, InputContent, InputItem,
+        InputMessage, Role, ServiceTier as ResponsesServiceTier,
+        TextResponseFormat, ToolChoice, ToolChoiceMode, ToolDefinition,
     },
 };
 
 use crate::error::mapper::MapperError;
 
-pub fn convert(request: CreateResponse) -> Result<CreateChatCompletionRequest, MapperError> {
+pub fn convert(
+    request: CreateResponse,
+) -> Result<CreateChatCompletionRequest, MapperError> {
     let messages = convert_input(&request)?;
     let tools = convert_tools(&request);
     let tool_choice = convert_tool_choice(&request);
-    let reasoning_effort = request.reasoning.as_ref().and_then(|r| r.effort.clone());
+    let reasoning_effort =
+        request.reasoning.as_ref().and_then(|r| r.effort.clone());
     let response_format = convert_response_format(&request);
     let metadata = request
         .metadata
@@ -82,7 +89,9 @@ fn convert_input(
     if let Some(ref instructions) = request.instructions {
         messages.push(ChatCompletionRequestMessage::Developer(
             ChatCompletionRequestDeveloperMessage {
-                content: ChatCompletionRequestDeveloperMessageContent::Text(instructions.clone()),
+                content: ChatCompletionRequestDeveloperMessageContent::Text(
+                    instructions.clone(),
+                ),
                 name: None,
             },
         ));
@@ -92,7 +101,9 @@ fn convert_input(
         Input::Text(text) => {
             messages.push(ChatCompletionRequestMessage::User(
                 ChatCompletionRequestUserMessage {
-                    content: ChatCompletionRequestUserMessageContent::Text(text.clone()),
+                    content: ChatCompletionRequestUserMessageContent::Text(
+                        text.clone(),
+                    ),
                     name: None,
                 },
             ));
@@ -146,7 +157,9 @@ fn convert_message(
             let text = extract_plain_text(&msg.content);
             messages.push(ChatCompletionRequestMessage::System(
                 ChatCompletionRequestSystemMessage {
-                    content: ChatCompletionRequestSystemMessageContent::Text(text),
+                    content: ChatCompletionRequestSystemMessageContent::Text(
+                        text,
+                    ),
                     name: None,
                 },
             ));
@@ -155,7 +168,9 @@ fn convert_message(
             let text = extract_plain_text(&msg.content);
             messages.push(ChatCompletionRequestMessage::Developer(
                 ChatCompletionRequestDeveloperMessage {
-                    content: ChatCompletionRequestDeveloperMessageContent::Text(text),
+                    content: ChatCompletionRequestDeveloperMessageContent::Text(
+                        text,
+                    ),
                     name: None,
                 },
             ));
@@ -270,7 +285,9 @@ fn convert_custom_item(
             };
 
             ensure_last_is_assistant(messages);
-            if let Some(ChatCompletionRequestMessage::Assistant(asst)) = messages.last_mut() {
+            if let Some(ChatCompletionRequestMessage::Assistant(asst)) =
+                messages.last_mut()
+            {
                 asst.tool_calls.get_or_insert_with(Vec::new).push(tool_call);
             }
         }
@@ -288,7 +305,9 @@ fn convert_custom_item(
 
             messages.push(ChatCompletionRequestMessage::Tool(
                 ChatCompletionRequestToolMessage {
-                    content: ChatCompletionRequestToolMessageContent::Text(output),
+                    content: ChatCompletionRequestToolMessageContent::Text(
+                        output,
+                    ),
                     tool_call_id: call_id,
                 },
             ));
@@ -346,17 +365,25 @@ fn convert_tools(request: &CreateResponse) -> Option<Vec<ChatCompletionTool>> {
     }
 }
 
-fn convert_tool_choice(request: &CreateResponse) -> Option<ChatCompletionToolChoiceOption> {
+fn convert_tool_choice(
+    request: &CreateResponse,
+) -> Option<ChatCompletionToolChoiceOption> {
     request.tool_choice.as_ref().map(|tc| match tc {
-        ToolChoice::Mode(ToolChoiceMode::None) => ChatCompletionToolChoiceOption::None,
-        ToolChoice::Mode(ToolChoiceMode::Auto) => ChatCompletionToolChoiceOption::Auto,
-        ToolChoice::Mode(ToolChoiceMode::Required) => ChatCompletionToolChoiceOption::Required,
-        ToolChoice::Function { name } => {
-            ChatCompletionToolChoiceOption::Named(ChatCompletionNamedToolChoice {
+        ToolChoice::Mode(ToolChoiceMode::None) => {
+            ChatCompletionToolChoiceOption::None
+        }
+        ToolChoice::Mode(ToolChoiceMode::Auto) => {
+            ChatCompletionToolChoiceOption::Auto
+        }
+        ToolChoice::Mode(ToolChoiceMode::Required) => {
+            ChatCompletionToolChoiceOption::Required
+        }
+        ToolChoice::Function { name } => ChatCompletionToolChoiceOption::Named(
+            ChatCompletionNamedToolChoice {
                 r#type: ChatCompletionToolType::Function,
                 function: FunctionName { name: name.clone() },
-            })
-        }
+            },
+        ),
         ToolChoice::Hosted { .. } => ChatCompletionToolChoiceOption::Auto,
     })
 }
@@ -473,7 +500,9 @@ mod tests {
         }));
         let result = convert(req).unwrap();
         assert_eq!(result.messages.len(), 2);
-        if let ChatCompletionRequestMessage::Assistant(asst) = &result.messages[1] {
+        if let ChatCompletionRequestMessage::Assistant(asst) =
+            &result.messages[1]
+        {
             let tc = asst.tool_calls.as_ref().unwrap();
             assert_eq!(tc.len(), 2);
             assert_eq!(tc[0].id, "call_1");
@@ -684,9 +713,10 @@ mod tests {
             "prompt_cache_key": "pcache-123",
             "prompt_cache_retention": "24h"
         });
-        let request: CreateResponse =
-            serde_json::from_value(json.clone()).expect("deserialize CreateResponse");
-        let round = serde_json::to_value(&request).expect("serialize CreateResponse");
+        let request: CreateResponse = serde_json::from_value(json.clone())
+            .expect("deserialize CreateResponse");
+        let round =
+            serde_json::to_value(&request).expect("serialize CreateResponse");
 
         assert_eq!(round["include"], json["include"]);
         assert_eq!(round["reasoning"]["effort"], "medium");

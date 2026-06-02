@@ -176,14 +176,18 @@ where
     D::Error: Into<tower::BoxError>,
     D::Service: Service<http::Request<ReqBody>, Error = Infallible>,
     <D::Service as Service<http::Request<ReqBody>>>::Future: Send + 'static,
-    <<D as tower::discover::Discover>::Service as Service<http::Request<ReqBody>>>::Response:
-        Send + 'static,
+    <<D as tower::discover::Discover>::Service as Service<
+        http::Request<ReqBody>,
+    >>::Response: Send + 'static,
 {
     type Response = <D::Service as Service<http::Request<ReqBody>>>::Response;
     type Error = Error;
     type Future = ResponseFuture<D, ReqBody>;
 
-    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+    fn poll_ready(
+        &mut self,
+        cx: &mut Context<'_>,
+    ) -> Poll<Result<(), Self::Error>> {
         let _ = self.update_pending_from_discover(cx)?;
         self.promote_pending_to_ready(cx);
         Poll::Ready(Ok(()))
@@ -215,8 +219,9 @@ where
     D::Error: Into<tower::BoxError>,
     D::Service: Service<http::Request<ReqBody>, Error = Infallible>,
     <D::Service as Service<http::Request<ReqBody>>>::Future: Send + 'static,
-    <<D as tower::discover::Discover>::Service as Service<http::Request<ReqBody>>>::Response:
-        Send + 'static,
+    <<D as tower::discover::Discover>::Service as Service<
+        http::Request<ReqBody>,
+    >>::Response: Send + 'static,
 {
     Ready {
         error: Option<Error>,
@@ -234,16 +239,20 @@ where
     D::Error: Into<tower::BoxError>,
     D::Service: Service<http::Request<ReqBody>, Error = Infallible>,
     <D::Service as Service<http::Request<ReqBody>>>::Future: Send + 'static,
-    <<D as tower::discover::Discover>::Service as Service<http::Request<ReqBody>>>::Response:
-        Send + 'static,
+    <<D as tower::discover::Discover>::Service as Service<
+        http::Request<ReqBody>,
+    >>::Response: Send + 'static,
 {
-    type Output = Result<<D::Service as Service<http::Request<ReqBody>>>::Response, Error>;
+    type Output = Result<
+        <D::Service as Service<http::Request<ReqBody>>>::Response,
+        Error,
+    >;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         match self.project() {
-            ResponseFutureProj::Ready { error } => {
-                Poll::Ready(Err(error.take().expect("future polled after completion")))
-            }
+            ResponseFutureProj::Ready { error } => Poll::Ready(Err(error
+                .take()
+                .expect("future polled after completion"))),
             ResponseFutureProj::Inner { future } => {
                 match ready!(future.poll(cx)) {
                     Ok(res) => Poll::Ready(Ok(res)),

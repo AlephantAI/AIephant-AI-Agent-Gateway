@@ -64,20 +64,26 @@ pub(crate) fn build_llm_cache_hit_response(
     let hm = resp_builder.headers_mut().unwrap();
     let hdrs: HashMap<String, String> = entry.headers.clone();
     alephant_llm_kv_cache::merge_cached_headers(hm, &hdrs);
-    alephant_llm_kv_cache::apply_alephant_cache_hit_headers(hm, bucket_idx, entry.latency);
+    alephant_llm_kv_cache::apply_alephant_cache_hit_headers(
+        hm,
+        bucket_idx,
+        entry.latency,
+    );
     let chunks: Vec<Bytes> = entry
         .body
         .iter()
         .map(|s| Bytes::copy_from_slice(s.as_bytes()))
         .collect();
-    let stream = futures::stream::iter(chunks.into_iter().map(Ok::<_, ApiError>));
+    let stream =
+        futures::stream::iter(chunks.into_iter().map(Ok::<_, ApiError>));
     let append_nl = mapper_ctx.is_stream;
     let tfft = if mapper_ctx.is_stream {
         TfftTrigger::FirstModelToken
     } else {
         TfftTrigger::Never
     };
-    let (body, reader, tfft_rx) = BodyReader::wrap_stream(stream, append_nl, tfft, None);
+    let (body, reader, tfft_rx) =
+        BodyReader::wrap_stream(stream, append_nl, tfft, None);
     let response = resp_builder.body(body).map_err(InternalError::HttpError)?;
     Ok((response, reader, tfft_rx))
 }
@@ -118,9 +124,11 @@ mod tests {
     fn cache_write_keys_follow_effective_request_after_fallback() {
         let settings = test_settings();
         let original_url =
-            url::Url::parse("https://openai.test/v1/chat/completions").expect("original url");
+            url::Url::parse("https://openai.test/v1/chat/completions")
+                .expect("original url");
         let effective_url =
-            url::Url::parse("https://groq.test/v1/chat/completions").expect("effective url");
+            url::Url::parse("https://groq.test/v1/chat/completions")
+                .expect("effective url");
         let original_body = Bytes::from(
             serde_json::json!({
                 "model": "openai/gpt-5.4",
@@ -136,8 +144,10 @@ mod tests {
             .to_string(),
         );
 
-        let original_keys = llm_kv_slot_keys(&settings, &original_url, &original_body);
-        let effective_keys = llm_kv_write_slot_keys(&settings, &effective_url, &effective_body);
+        let original_keys =
+            llm_kv_slot_keys(&settings, &original_url, &original_body);
+        let effective_keys =
+            llm_kv_write_slot_keys(&settings, &effective_url, &effective_body);
 
         assert_ne!(effective_keys, original_keys);
         assert_eq!(
@@ -163,14 +173,18 @@ mod tests {
             .to_string(),
         );
 
-        let semantic_body = semantic_write_body_bytes(&original_body, &effective_body);
+        let semantic_body =
+            semantic_write_body_bytes(&original_body, &effective_body);
         assert_eq!(semantic_body, original_body.to_vec());
     }
 
     #[test]
     fn build_llm_cache_hit_response_applies_cache_hit_headers() {
         let entry = alephant_llm_kv_cache::LlmCacheEntry {
-            headers: HashMap::from([("content-type".to_string(), "application/json".to_string())]),
+            headers: HashMap::from([(
+                "content-type".to_string(),
+                "application/json".to_string(),
+            )]),
             latency: 42,
             body: vec![r#"{"ok":true}"#.to_string()],
         };

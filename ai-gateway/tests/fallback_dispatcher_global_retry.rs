@@ -8,7 +8,10 @@
 use std::collections::HashMap;
 
 use ai_gateway::{
-    config::{Config, alephant::AlephantFeatures, fallback_policy::FallbackPolicyConfig},
+    config::{
+        Config, alephant::AlephantFeatures,
+        fallback_policy::FallbackPolicyConfig,
+    },
     tests::{TestDefault, harness::Harness, mock::MockArgs},
 };
 use http::{Method, Request, StatusCode};

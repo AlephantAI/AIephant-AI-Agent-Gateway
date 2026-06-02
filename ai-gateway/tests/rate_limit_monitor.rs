@@ -78,7 +78,8 @@ async fn rate_limit_removes_provider_from_lb_pool() {
 
     // Start the rate limit monitor before making requests
     // It will poll for new monitors every 100ms in test mode
-    let rate_limit_monitor = RateLimitMonitor::new(harness.app_factory.state.clone());
+    let rate_limit_monitor =
+        RateLimitMonitor::new(harness.app_factory.state.clone());
     tokio::spawn(async move {
         rate_limit_monitor.run_forever().await.unwrap();
     });
@@ -105,7 +106,9 @@ async fn rate_limit_removes_provider_from_lb_pool() {
         let request = Request::builder()
             .method(Method::POST)
             .header("authorization", "Bearer sk-alephant-test-key")
-            .uri("http://router.alephant.test/router/my-router/chat/completions")
+            .uri(
+                "http://router.alephant.test/router/my-router/chat/completions",
+            )
             .body(request_body)
             .unwrap();
         let response = harness.call(request).await.unwrap();
@@ -123,12 +126,15 @@ async fn rate_limit_removes_provider_from_lb_pool() {
     let tolerance = num_requests as f64 * 0.20;
     let expected_openai_midpt = num_requests as f64 * 0.5;
     let expected_anthropic_midpt = num_requests as f64 * 0.5;
-    let openai_range_lower = (expected_openai_midpt - tolerance).max(0.0).floor() as u64;
+    let openai_range_lower =
+        (expected_openai_midpt - tolerance).max(0.0).floor() as u64;
     let openai_range_upper = (expected_openai_midpt + tolerance).ceil() as u64;
     let openai_range = openai_range_lower..openai_range_upper;
-    let anthropic_range_lower = (expected_anthropic_midpt - tolerance).floor() as u64;
-    let anthropic_range_upper =
-        ((expected_anthropic_midpt + tolerance).ceil() as u64).min(num_requests);
+    let anthropic_range_lower =
+        (expected_anthropic_midpt - tolerance).floor() as u64;
+    let anthropic_range_upper = ((expected_anthropic_midpt + tolerance).ceil()
+        as u64)
+        .min(num_requests);
     let anthropic_range = anthropic_range_lower..anthropic_range_upper;
 
     harness
@@ -150,7 +156,9 @@ async fn rate_limit_removes_provider_from_lb_pool() {
         let request = Request::builder()
             .method(Method::POST)
             .header("authorization", "Bearer sk-alephant-test-key")
-            .uri("http://router.alephant.test/router/my-router/chat/completions")
+            .uri(
+                "http://router.alephant.test/router/my-router/chat/completions",
+            )
             .body(request_body)
             .unwrap();
         let response = harness.call(request).await.unwrap();

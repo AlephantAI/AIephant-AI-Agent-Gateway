@@ -13,7 +13,10 @@ use http::uri::PathAndQuery;
 
 use crate::{
     endpoints::{ApiEndpoint, openai::OpenAI},
-    error::{api::ApiError, internal::InternalError, invalid_req::InvalidRequestError},
+    error::{
+        api::ApiError, internal::InternalError,
+        invalid_req::InvalidRequestError,
+    },
     types::extensions::UnifiedChatCompletionsResponsesBridge,
 };
 
@@ -24,8 +27,8 @@ use crate::{
 pub(crate) fn unified_chat_completions_routing_model(
     body: &[u8],
 ) -> Result<String, InvalidRequestError> {
-    let v: serde_json::Value =
-        serde_json::from_slice(body).map_err(InvalidRequestError::InvalidRequestBody)?;
+    let v: serde_json::Value = serde_json::from_slice(body)
+        .map_err(InvalidRequestError::InvalidRequestBody)?;
     let s = v
         .get("model")
         .and_then(serde_json::Value::as_str)
@@ -77,7 +80,8 @@ pub(crate) fn apply_chat_completions_body_redirect_if_needed(
         Some(q) => format!("responses?{q}"),
         None => "responses".to_string(),
     };
-    let new_pq = PathAndQuery::from_str(&new_pq_str).map_err(InternalError::InvalidUri)?;
+    let new_pq = PathAndQuery::from_str(&new_pq_str)
+        .map_err(InternalError::InvalidUri)?;
     parts.extensions.insert(new_pq);
     tracing::debug!(
         "unified_api: chat/completions body has Responses API shape (input, \
@@ -101,9 +105,11 @@ mod tests {
 
     #[test]
     fn chat_completions_redirects_to_responses_when_input_without_messages() {
-        let body =
-            Bytes::from(r#"{"model":"openai/gpt-5.4","input":[{"role":"user","content":"hi"}]}"#);
-        let mut parts = http::Request::builder().body(()).unwrap().into_parts().0;
+        let body = Bytes::from(
+            r#"{"model":"openai/gpt-5.4","input":[{"role":"user","content":"hi"}]}"#,
+        );
+        let mut parts =
+            http::Request::builder().body(()).unwrap().into_parts().0;
         parts
             .extensions
             .insert(PathAndQuery::from_str("chat/completions").unwrap());
@@ -111,9 +117,12 @@ mod tests {
             .extensions
             .insert(ApiEndpoint::OpenAI(OpenAI::chat_completions()));
 
-        let out =
-            apply_chat_completions_body_redirect_if_needed("chat/completions", &body, &mut parts)
-                .unwrap();
+        let out = apply_chat_completions_body_redirect_if_needed(
+            "chat/completions",
+            &body,
+            &mut parts,
+        )
+        .unwrap();
         assert_eq!(out, "responses");
         assert_eq!(
             parts.extensions.get::<ApiEndpoint>(),
@@ -127,13 +136,18 @@ mod tests {
     #[test]
     fn chat_completions_redirect_preserves_query() {
         let body = Bytes::from(r#"{"model":"m","input":[]}"#);
-        let mut parts = http::Request::builder().body(()).unwrap().into_parts().0;
-        parts
-            .extensions
-            .insert(PathAndQuery::from_str("chat/completions?trace=1").unwrap());
+        let mut parts =
+            http::Request::builder().body(()).unwrap().into_parts().0;
+        parts.extensions.insert(
+            PathAndQuery::from_str("chat/completions?trace=1").unwrap(),
+        );
 
-        apply_chat_completions_body_redirect_if_needed("chat/completions", &body, &mut parts)
-            .unwrap();
+        apply_chat_completions_body_redirect_if_needed(
+            "chat/completions",
+            &body,
+            &mut parts,
+        )
+        .unwrap();
 
         let pq = parts.extensions.get::<PathAndQuery>().unwrap();
         assert_eq!(pq.path(), "responses");
@@ -142,30 +156,39 @@ mod tests {
 
     #[test]
     fn chat_completions_no_redirect_when_messages_present() {
-        let body =
-            Bytes::from(r#"{"model":"openai/x","messages":[{"role":"user","content":"hi"}]}"#);
-        let mut parts = http::Request::builder().body(()).unwrap().into_parts().0;
+        let body = Bytes::from(
+            r#"{"model":"openai/x","messages":[{"role":"user","content":"hi"}]}"#,
+        );
+        let mut parts =
+            http::Request::builder().body(()).unwrap().into_parts().0;
         parts
             .extensions
             .insert(PathAndQuery::from_str("chat/completions").unwrap());
 
-        let out =
-            apply_chat_completions_body_redirect_if_needed("chat/completions", &body, &mut parts)
-                .unwrap();
+        let out = apply_chat_completions_body_redirect_if_needed(
+            "chat/completions",
+            &body,
+            &mut parts,
+        )
+        .unwrap();
         assert_eq!(out, "chat/completions");
     }
 
     #[test]
     fn chat_completions_no_redirect_without_input() {
         let body = Bytes::from(r#"{"model":"openai/x"}"#);
-        let mut parts = http::Request::builder().body(()).unwrap().into_parts().0;
+        let mut parts =
+            http::Request::builder().body(()).unwrap().into_parts().0;
         parts
             .extensions
             .insert(PathAndQuery::from_str("chat/completions").unwrap());
 
-        let out =
-            apply_chat_completions_body_redirect_if_needed("chat/completions", &body, &mut parts)
-                .unwrap();
+        let out = apply_chat_completions_body_redirect_if_needed(
+            "chat/completions",
+            &body,
+            &mut parts,
+        )
+        .unwrap();
         assert_eq!(out, "chat/completions");
     }
 }

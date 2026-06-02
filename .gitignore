@@ -39,4 +39,4 @@ scripts/provider_mock/.runtime/
 scripts/provider_mock/__pycache__/
 scripts/provider_mock/tests/__pycache__/
 crates/gateway-e2e-harness/scripts/__pycache__/
-
+examples/agent/langgraph/__pycache__/

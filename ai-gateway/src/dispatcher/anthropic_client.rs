@@ -50,7 +50,8 @@ impl Client {
         default_headers.insert(http::header::HOST, host_header(&base_url));
         default_headers.insert(
             http::header::CONTENT_TYPE,
-            HeaderValue::from_str(mime::APPLICATION_JSON.essence_str()).unwrap(),
+            HeaderValue::from_str(mime::APPLICATION_JSON.essence_str())
+                .unwrap(),
         );
 
         let inner = client_builder

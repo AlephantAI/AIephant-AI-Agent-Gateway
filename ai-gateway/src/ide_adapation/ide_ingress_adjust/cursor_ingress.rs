@@ -25,7 +25,10 @@ use crate::{
 ///
 /// Returns `(body, applied)` where `applied` is `true` when this hook ran
 /// (including semantic no-op on bytes).
-pub fn adjust(source_endpoint: &ApiEndpoint, body: Bytes) -> Result<(Bytes, bool), ApiError> {
+pub fn adjust(
+    source_endpoint: &ApiEndpoint,
+    body: Bytes,
+) -> Result<(Bytes, bool), ApiError> {
     if !matches!(
         source_endpoint,
         ApiEndpoint::OpenAI(OpenAI::ChatCompletions(_))
@@ -33,20 +36,24 @@ pub fn adjust(source_endpoint: &ApiEndpoint, body: Bytes) -> Result<(Bytes, bool
         return Ok((body, false));
     }
 
-    let mut value: Value =
-        serde_json::from_slice(&body).map_err(InvalidRequestError::InvalidRequestBody)?;
+    let mut value: Value = serde_json::from_slice(&body)
+        .map_err(InvalidRequestError::InvalidRequestBody)?;
 
     let mutated =
-        super::cursor_openai_normalize::normalize_cursor_openai_request_value(&mut value)?;
+        super::cursor_openai_normalize::normalize_cursor_openai_request_value(
+            &mut value,
+        )?;
 
     let out = if mutated {
-        Bytes::from(serde_json::to_vec(&value).map_err(InvalidRequestError::from)?)
+        Bytes::from(
+            serde_json::to_vec(&value).map_err(InvalidRequestError::from)?,
+        )
     } else {
         body
     };
 
-    let _: CreateChatCompletionRequest =
-        serde_json::from_slice(&out).map_err(InvalidRequestError::InvalidRequestBody)?;
+    let _: CreateChatCompletionRequest = serde_json::from_slice(&out)
+        .map_err(InvalidRequestError::InvalidRequestBody)?;
 
     tracing::trace!(
         mutated = mutated,

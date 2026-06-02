@@ -41,6 +41,159 @@ message EvaluateResponse {
   string change_model = 8;
 }
 
+message ValidateAgentPolicyRequest {
+  string workspace_id = 1;
+  string request_id = 2;
+  string agent_id = 3;
+  string department_id = 4;
+  string run_id = 5;
+  AgentPolicyPhase phase = 6;
+  string model = 7;
+  string provider = 8;
+  string tool_name = 9;
+  optional int64 estimated_cost_cents = 10;
+  AgentPolicyRuntimeContext runtime = 11;
+  string locale = 12;
+  string user_id = 13;
+  string virtual_key_id = 14;
+  string step_id = 15;
+  bytes metadata = 16;
+  string entity_type = 17;
+  string entity_id = 18;
+}
+
+enum AgentPolicyPhase {
+  AGENT_POLICY_PHASE_UNSPECIFIED = 0;
+  AGENT_POLICY_PHASE_MODEL_REQUEST = 1;
+  AGENT_POLICY_PHASE_TOOL_CALL = 2;
+  AGENT_POLICY_PHASE_RUN_UPDATE = 3;
+}
+
+message AgentPolicyRuntimeContext {
+  optional int32 request_count = 1;
+  optional int32 duration_sec = 2;
+  optional int32 retry_count = 3;
+}
+
+message ValidateAgentPolicyResponse {
+  bool allowed = 1;
+  string reason = 2;
+  string blocked_by = 3;
+  string route_hint = 4;
+  int64 snapshot_revision = 5;
+  string reason_message = 6;
+  string policy_id = 7;
+  AgentPolicyScope policy_scope = 8;
+  repeated AgentPolicyIssue violations = 9;
+  repeated AgentPolicyIssue warnings = 10;
+}
+
+enum AgentPolicyScope {
+  AGENT_POLICY_SCOPE_UNSPECIFIED = 0;
+  AGENT_POLICY_SCOPE_NONE = 1;
+  AGENT_POLICY_SCOPE_WORKSPACE = 2;
+  AGENT_POLICY_SCOPE_DEPARTMENT = 3;
+  AGENT_POLICY_SCOPE_AGENT = 4;
+}
+
+message AgentPolicyIssue {
+  string field = 1;
+  string reason = 2;
+  string blocked_by = 3;
+  string reason_message = 4;
+  string actual = 5;
+  repeated string expected = 6;
+  optional double actual_value = 7;
+  optional double expected_value = 8;
+  string unit = 9;
+  string operator = 10;
+}
+
 service PolicyService {
   rpc Evaluate(EvaluateRequest) returns (EvaluateResponse);
+  rpc EvaluateX402Inbound(X402InboundEvaluateRequest)
+      returns (X402InboundEvaluateResponse);
+  rpc ValidateAgentPolicy(ValidateAgentPolicyRequest)
+      returns (ValidateAgentPolicyResponse);
+}
+
+
+message X402InboundEvaluateRequest {
+  // Workspace that owns the endpoint. Required; must be a UUID string.
+  string workspace_id = 1;
+
+  // Endpoint being accessed. Required; must be a UUID string.
+  string endpoint_id = 2;
+
+  // Optional request size expressed as token/count string. When set and
+  // parseable, policy-service uses this value for max_request_size checks
+  // instead of req_body length.
+  string req_tokens = 3;
+
+  // Optional request body text. Used for max_request_size checks when
+  // req_tokens is empty or not parseable.
+  string req_body = 4;
+
+  // Optional forwarded metadata. buyer_wallet, amount_usdc, and network may
+  // be supplied here as case-insensitive keys, but top-level fields win.
+  map<string, string> headers = 5;
+
+  // Optional distributed tracing id from gateway / sidecar.
+  string trace_id = 6;
+
+  // Optional caller request id.
+  string request_id = 7;
+
+  // Optional caller session id.
+  string session_id = 8;
+
+  // Optional estimated request cost, encoded as decimal string.
+  string req_estimated_usd = 9;
+
+  // Optional buyer wallet identity. Required when endpoint buyer_access policy
+  // is allowlist; otherwise policy-service returns x402_buyer_wallet_required.
+  string buyer_wallet = 10;
+
+  // Optional payment or authorization amount in USDC, encoded as decimal
+  // string. If present and lower than endpoint price, the request is denied.
+  string amount_usdc = 11;
+
+  // Optional payment network identifier, for example eip155:8453. If both the
+  // endpoint snapshot and request provide network and they differ, denied.
+  string network = 12;
+
+  // Optional traffic source, for example direct / bazaar / agentic_market.
+  string source = 13;
+}
+
+message X402InboundEvaluateResponse {
+  // true means sidecar may continue payment verification / target forwarding.
+  bool allowed = 1;
+
+  // Machine-readable decision reason, for example x402_endpoint_ok.
+  string reason = 2;
+
+  // Component that denied the request, for example x402.endpoint.status.
+  string blocked_by = 3;
+
+  // Reserved routing hint for future gateway behavior.
+  string route_hint = 4;
+
+  // Endpoint policy snapshot revision used for this decision.
+  int64 snapshot_revision = 5;
+
+  // Extra sidecar-facing details.
+  X402InboundDetail detail = 6;
+}
+
+message X402InboundDetail {
+  // Endpoint price / required minimum amount in USDC.
+  double max_amount_usdc = 1;
+
+  // Remaining rate limit budget if available. Current MVP returns configured
+  // endpoint RPM on allow path.
+  int32 rate_limit_remaining = 2;
+
+  // Funding behavior hint, for example hold_on_service_failure.
+  string fund_policy = 3;
 }

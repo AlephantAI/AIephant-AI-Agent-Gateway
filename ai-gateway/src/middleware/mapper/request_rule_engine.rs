@@ -1,7 +1,9 @@
 use super::{
     capabilities::ProviderCapabilities,
     envelope::RequestEnvelope,
-    rules::{ProviderRuleSet, RequestRuleContext, ResponseFormatMode, ToolChoiceMode},
+    rules::{
+        ProviderRuleSet, RequestRuleContext, ResponseFormatMode, ToolChoiceMode,
+    },
 };
 use crate::error::mapper::MapperError;
 
@@ -37,7 +39,8 @@ pub fn prepare_request_envelope(
         return Ok(envelope);
     };
 
-    let context = build_request_rule_context(&resolved.capabilities, &resolved.rules);
+    let context =
+        build_request_rule_context(&resolved.capabilities, &resolved.rules);
     if !envelope.is_stream {
         super::non_stream_request_interpreter::apply_non_stream_request_profile(
             &resolved.non_stream_profile,
@@ -60,13 +63,15 @@ mod tests {
         endpoints::{ApiEndpoint, openai::OpenAI},
         middleware::mapper::{
             capabilities::ProviderCapabilities, envelope::RequestEnvelope,
-            profile_resolver::resolve_mapper_metadata, rule_data::default_provider_rules,
+            profile_resolver::resolve_mapper_metadata,
+            rule_data::default_provider_rules,
         },
         types::provider::InferenceProvider,
     };
 
     #[test]
-    fn request_rule_engine_downgrades_response_format_when_capability_disallows_it() {
+    fn request_rule_engine_downgrades_response_format_when_capability_disallows_it()
+     {
         let provider = InferenceProvider::Named("custom-openai".into());
         let capabilities = ProviderCapabilities {
             provider: provider.clone(),
@@ -112,7 +117,8 @@ mod tests {
                 .expect("metadata should resolve"),
         );
 
-        let prepared = super::prepare_request_envelope(envelope).expect("should prepare");
+        let prepared =
+            super::prepare_request_envelope(envelope).expect("should prepare");
 
         assert!(prepared.request_rule_context.is_some());
         assert!(prepared.openai_request.reasoning_effort.is_none());
@@ -144,7 +150,8 @@ mod tests {
                 .expect("metadata should resolve"),
         );
 
-        let prepared = super::prepare_request_envelope(envelope).expect("should prepare");
+        let prepared =
+            super::prepare_request_envelope(envelope).expect("should prepare");
 
         assert!(prepared.request_rule_context.is_some());
         assert_eq!(
@@ -178,7 +185,8 @@ mod tests {
                 .expect("metadata should resolve"),
         );
 
-        let prepared = super::prepare_request_envelope(envelope).expect("should prepare");
+        let prepared =
+            super::prepare_request_envelope(envelope).expect("should prepare");
 
         assert!(prepared.openai_request.reasoning_effort.is_none());
     }
@@ -204,11 +212,15 @@ mod tests {
             request,
         )
         .with_resolved_metadata(
-            resolve_mapper_metadata(&provider, Some("deepseek/deepseek-reasoner"))
-                .expect("metadata should resolve"),
+            resolve_mapper_metadata(
+                &provider,
+                Some("deepseek/deepseek-reasoner"),
+            )
+            .expect("metadata should resolve"),
         );
 
-        let prepared = super::prepare_request_envelope(envelope).expect("should prepare");
+        let prepared =
+            super::prepare_request_envelope(envelope).expect("should prepare");
 
         assert_eq!(
             prepared.openai_request.reasoning_effort,

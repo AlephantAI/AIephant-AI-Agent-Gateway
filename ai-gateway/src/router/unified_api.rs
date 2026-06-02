@@ -18,10 +18,12 @@ use crate::{
     default_model::choose_default_gateway_model,
     endpoints::{ApiEndpoint, anthropic::Anthropic, openai::OpenAI},
     error::{
-        api::ApiError, init::InitError, internal::InternalError, invalid_req::InvalidRequestError,
+        api::ApiError, init::InitError, internal::InternalError,
+        invalid_req::InvalidRequestError,
     },
     ide_adapation::{
-        apply_chat_completions_body_redirect_if_needed, client_profile::resolve_client_profile,
+        apply_chat_completions_body_redirect_if_needed,
+        client_profile::resolve_client_profile,
     },
     middleware::{
         large_context::maybe_transform_unified_api_chat_request,
@@ -33,8 +35,9 @@ use crate::{
     },
     types::{
         extensions::{
-            AuthContext, MasterKeyUnifiedModelPassthrough, UnifiedImplicitModelFallbackContext,
-            UnifiedModelBodyPassthrough, UnifiedModelPolicyChecked, VkPolicy,
+            AuthContext, MasterKeyUnifiedModelPassthrough,
+            UnifiedImplicitModelFallbackContext, UnifiedModelBodyPassthrough,
+            UnifiedModelPolicyChecked, VkPolicy,
         },
         provider::InferenceProvider,
         request::Request,
@@ -65,7 +68,10 @@ impl tower::Service<Request> for Service {
     type Future = ResponseFuture;
 
     #[inline]
-    fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+    fn poll_ready(
+        &mut self,
+        _cx: &mut Context<'_>,
+    ) -> Poll<Result<(), Self::Error>> {
         Poll::Ready(Ok(()))
     }
 
@@ -75,8 +81,18 @@ impl tower::Service<Request> for Service {
             tracing::info!("[unified_api] call: body collection started");
         }
         let (mut parts, body) = req.into_parts();
-        let debug_log_config = DebugLogConfig::from_headers(&mut parts.headers);
-        debug_log::maybe_log_headers("unified_api", &parts.headers, debug_log_config);
+        let debug_log_config = parts
+            .extensions
+            .get::<DebugLogConfig>()
+            .copied()
+            .unwrap_or_else(|| {
+                DebugLogConfig::from_headers(&mut parts.headers)
+            });
+        debug_log::maybe_log_headers(
+            "unified_api",
+            &parts.headers,
+            debug_log_config,
+        );
         let direct_proxies = self.direct_proxies.clone();
         let app_state = self.app_state.clone();
         let collect_future = body.collect();
@@ -175,7 +191,9 @@ impl TryFrom<&str> for UnifiedApi {
             "responses" => Ok(Self::Responses),
             "messages" => Ok(Self::Messages),
             "models" => Ok(Self::Models),
-            _ => Err(InvalidRequestError::UnsupportedEndpoint(value.to_string())),
+            _ => {
+                Err(InvalidRequestError::UnsupportedEndpoint(value.to_string()))
+            }
         }
     }
 }
@@ -194,7 +212,9 @@ struct ModelListItem {
     owned_by: String,
 }
 
-async fn list_models_response(app_state: AppState) -> Result<Response, ApiError> {
+async fn list_models_response(
+    app_state: AppState,
+) -> Result<Response, ApiError> {
     let mut models = models_from_provider_config(&app_state);
 
     if models.is_empty()
@@ -242,16 +262,17 @@ async fn list_models_response(app_state: AppState) -> Result<Response, ApiError>
         .map_err(|_| ApiError::Internal(InternalError::Internal))
 }
 
-fn models_from_provider_config(app_state: &AppState) -> IndexSet<(String, String)> {
+fn models_from_provider_config(
+    app_state: &AppState,
+) -> IndexSet<(String, String)> {
     app_state
         .get_providers_config()
         .iter()
         .flat_map(|(provider, config)| {
             let provider_code = provider.as_provider_code().to_string();
-            config
-                .models
-                .iter()
-                .map(move |model| (model.as_model_name().to_string(), provider_code.clone()))
+            config.models.iter().map(move |model| {
+                (model.as_model_name().to_string(), provider_code.clone())
+            })
         })
         .collect()
 }
@@ -282,15 +303,11 @@ mod models_tests {
         let body = response.into_body().collect().await.unwrap().to_bytes();
         let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(body["object"], "list");
-        assert!(
-            body["data"]
-                .as_array()
-                .expect("data array")
-                .iter()
-                .any(|model| model["id"] == "gpt-4o-mini"
-                    && model["object"] == "model"
-                    && model["owned_by"] == "openai")
-        );
+        assert!(body["data"].as_array().expect("data array").iter().any(
+            |model| model["id"] == "gpt-4o-mini"
+                && model["object"] == "model"
+                && model["owned_by"] == "openai"
+        ));
     }
 }
 
@@ -304,17 +321,20 @@ async fn inject_default_model_into_body_unified(
     vk: VkPolicy,
 ) -> Result<Bytes, ApiError> {
     if std::env::var_os("AI_GATEWAY_DEBUG_UNIFIED").is_some() {
-        tracing::info!("[unified_api] inject_default_model_into_body: entered path={path}");
+        tracing::info!(
+            "[unified_api] inject_default_model_into_body: entered path={path}"
+        );
     }
     tracing::warn!(path = %path, "inject_default_model_into_body_unified: entered");
     if model_field_from_json_body(&body).is_some() {
         return Ok(body);
     }
     let chosen = choose_default_gateway_model(&app, &path, &auth, &vk).await?;
-    let mut v: serde_json::Value =
-        serde_json::from_slice(&body).map_err(InvalidRequestError::InvalidRequestBody)?;
+    let mut v: serde_json::Value = serde_json::from_slice(&body)
+        .map_err(InvalidRequestError::InvalidRequestBody)?;
     v["model"] = serde_json::Value::String(chosen);
-    let out = serde_json::to_vec(&v).map_err(InvalidRequestError::InvalidRequestBody)?;
+    let out = serde_json::to_vec(&v)
+        .map_err(InvalidRequestError::InvalidRequestBody)?;
     Ok(Bytes::from(out))
 }
 
@@ -341,10 +361,13 @@ impl Future for ResponseFuture {
                     collect_future,
                     parts,
                 } => {
-                    let collected = match ready!(pin!(collect_future).poll(cx)) {
+                    let collected = match ready!(pin!(collect_future).poll(cx))
+                    {
                         Ok(collected) => collected,
                         Err(e) => {
-                            return Poll::Ready(Err(InternalError::CollectBodyError(e).into()));
+                            return Poll::Ready(Err(
+                                InternalError::CollectBodyError(e).into(),
+                            ));
                         }
                     };
                     let collected_bytes = collected.to_bytes();
@@ -359,18 +382,24 @@ impl Future for ResponseFuture {
                         &collected_bytes,
                         *this.debug_log_config,
                     );
-                    let mut parts = parts.take().expect("future polled after completion");
-                    let Some(extracted_path_and_query) = parts.extensions.get::<PathAndQuery>()
+                    let mut parts =
+                        parts.take().expect("future polled after completion");
+                    let Some(extracted_path_and_query) =
+                        parts.extensions.get::<PathAndQuery>()
                     else {
                         return Poll::Ready(Err(
-                            InternalError::ExtensionNotFound("PathAndQuery").into()
+                            InternalError::ExtensionNotFound("PathAndQuery")
+                                .into(),
                         ));
                     };
 
-                    let unified = UnifiedApi::try_from(extracted_path_and_query.path())?;
+                    let unified =
+                        UnifiedApi::try_from(extracted_path_and_query.path())?;
                     if matches!(unified, UnifiedApi::Models) {
                         this.state.set(State::ListModels {
-                            fut: Box::pin(list_models_response(this.app_state.clone())),
+                            fut: Box::pin(list_models_response(
+                                this.app_state.clone(),
+                            )),
                         });
                         continue;
                     }
@@ -378,13 +407,21 @@ impl Future for ResponseFuture {
                         UnifiedApi::ChatCompletions => {
                             ApiEndpoint::OpenAI(OpenAI::chat_completions())
                         }
-                        UnifiedApi::Completions => ApiEndpoint::OpenAI(OpenAI::completions()),
-                        UnifiedApi::Embeddings => ApiEndpoint::OpenAI(OpenAI::embeddings()),
+                        UnifiedApi::Completions => {
+                            ApiEndpoint::OpenAI(OpenAI::completions())
+                        }
+                        UnifiedApi::Embeddings => {
+                            ApiEndpoint::OpenAI(OpenAI::embeddings())
+                        }
                         UnifiedApi::ImageGenerations => {
                             ApiEndpoint::OpenAI(OpenAI::image_generations())
                         }
-                        UnifiedApi::Responses => ApiEndpoint::OpenAI(OpenAI::responses()),
-                        UnifiedApi::Messages => ApiEndpoint::Anthropic(Anthropic::messages()),
+                        UnifiedApi::Responses => {
+                            ApiEndpoint::OpenAI(OpenAI::responses())
+                        }
+                        UnifiedApi::Messages => {
+                            ApiEndpoint::Anthropic(Anthropic::messages())
+                        }
                         UnifiedApi::Models => unreachable!("handled above"),
                     };
                     parts.extensions.insert(api);
@@ -396,7 +433,9 @@ impl Future for ResponseFuture {
                     });
                 }
                 StateProj::ListModels { mut fut } => {
-                    let res = if let std::task::Poll::Ready(r) = fut.as_mut().poll(cx) {
+                    let res = if let std::task::Poll::Ready(r) =
+                        fut.as_mut().poll(cx)
+                    {
                         r
                     } else {
                         return std::task::Poll::Pending;
@@ -404,7 +443,9 @@ impl Future for ResponseFuture {
                     return std::task::Poll::Ready(res);
                 }
                 StateProj::AwaitDefaultModel { mut fut, parts } => {
-                    let res = if let std::task::Poll::Ready(r) = fut.as_mut().poll(cx) {
+                    let res = if let std::task::Poll::Ready(r) =
+                        fut.as_mut().poll(cx)
+                    {
                         r
                     } else {
                         return std::task::Poll::Pending;
@@ -415,13 +456,16 @@ impl Future for ResponseFuture {
                             return std::task::Poll::Ready(Err(e));
                         }
                     };
-                    let mut parts = parts.take().expect("future polled after completion");
+                    let mut parts =
+                        parts.take().expect("future polled after completion");
                     let path = parts
                         .extensions
                         .get::<PathAndQuery>()
                         .map(|value| value.path().to_string())
                         .unwrap_or_default();
-                    if let Some(ctx) = implicit_default_model_fallback_context(&path, &body) {
+                    if let Some(ctx) =
+                        implicit_default_model_fallback_context(&path, &body)
+                    {
                         parts.extensions.insert(ctx);
                     }
                     this.state.set(State::DetermineProvider {
@@ -438,11 +482,14 @@ impl Future for ResponseFuture {
                     let original_body = collected_body
                         .take()
                         .expect("future polled after completion");
-                    let mut parts = parts.take().expect("future polled after completion");
+                    let mut parts =
+                        parts.take().expect("future polled after completion");
                     let mut path = parts
                         .extensions
                         .get::<PathAndQuery>()
-                        .ok_or(InternalError::ExtensionNotFound("PathAndQuery"))?
+                        .ok_or(InternalError::ExtensionNotFound(
+                            "PathAndQuery",
+                        ))?
                         .path()
                         .to_string();
                     let body = if *pre_transformed {
@@ -454,19 +501,31 @@ impl Future for ResponseFuture {
                             original_body,
                         )?
                     };
-                    if !*pre_transformed && model_field_from_json_body(&body).is_none() {
-                        let Some(auth) = parts.extensions.get::<AuthContext>().cloned() else {
-                            return Poll::Ready(Err(InvalidRequestError::NoModelAvailable.into()));
+                    if !*pre_transformed
+                        && model_field_from_json_body(&body).is_none()
+                    {
+                        let Some(auth) =
+                            parts.extensions.get::<AuthContext>().cloned()
+                        else {
+                            return Poll::Ready(Err(
+                                InvalidRequestError::NoModelAvailable.into(),
+                            ));
                         };
-                        let Some(vk) = parts.extensions.get::<VkPolicy>().cloned() else {
-                            return Poll::Ready(Err(InvalidRequestError::NoModelAvailable.into()));
+                        let Some(vk) =
+                            parts.extensions.get::<VkPolicy>().cloned()
+                        else {
+                            return Poll::Ready(Err(
+                                InvalidRequestError::NoModelAvailable.into(),
+                            ));
                         };
                         let app = this.app_state.clone();
                         let path_c = path.clone();
                         this.state.set(State::AwaitDefaultModel {
-                            fut: Box::pin(inject_default_model_into_body_unified(
-                                app, path_c, body, auth, vk,
-                            )),
+                            fut: Box::pin(
+                                inject_default_model_into_body_unified(
+                                    app, path_c, body, auth, vk,
+                                ),
+                            ),
                             parts: Some(parts),
                         });
                         // Must `continue` to the next `match` round and
@@ -479,11 +538,14 @@ impl Future for ResponseFuture {
                         // `AwaitDefaultModel`, so this path matters).
                         continue;
                     }
-                    path =
-                        apply_chat_completions_body_redirect_if_needed(&path, &body, &mut parts)?;
+                    path = apply_chat_completions_body_redirect_if_needed(
+                        &path, &body, &mut parts,
+                    )?;
                     let explicit_client_model = !*pre_transformed;
-                    let client_profile = resolve_client_profile(&parts.headers).profile;
-                    let planner = UnifiedRoutePlanner::new(this.app_state.clone());
+                    let client_profile =
+                        resolve_client_profile(&parts.headers).profile;
+                    let planner =
+                        UnifiedRoutePlanner::new(this.app_state.clone());
                     let decision = planner.plan(UnifiedRouteRequest {
                         path: path.clone(),
                         body,
@@ -503,84 +565,95 @@ impl Future for ResponseFuture {
                     let out_body = decision.out_body;
                     parts.extensions.insert(provider.clone());
                     parts.extensions.insert(*this.debug_log_config);
-                    let request = Request::from_parts(parts, axum_core::body::Body::from(out_body));
+                    let request = Request::from_parts(
+                        parts,
+                        axum_core::body::Body::from(out_body),
+                    );
                     this.state.set(State::InitProxy {
                         request: Some(request),
                         provider,
                     });
                 }
                 StateProj::InitProxy { request, provider } => {
-                    let mut request = request.take().expect("future polled after completion");
-                    let mut direct_proxy =
-                        if let Some(p) = this.direct_proxies.get(provider).cloned() {
-                            p
-                        } else {
-                            let custom_fallback = request
-                                .extensions()
-                                .get::<AuthContext>()
-                                .is_some_and(|auth| {
-                                    auth.is_custom_provider && auth.master_key_base_url.is_some()
-                                });
-                            if !custom_fallback {
-                                tracing::warn!(
-                                    provider = %provider,
-                                    "requested provider is not configured for direct proxy"
-                                );
-                                return Poll::Ready(Err(InvalidRequestError::UnsupportedProvider(
-                                    provider.clone(),
-                                )
-                                .into()));
-                            }
-                            let auth = request
-                                .extensions()
-                                .get::<AuthContext>()
-                                .expect("custom_fallback implies AuthContext");
-                            tracing::debug!(
-                                parsed_provider = %provider,
-                                master_key_id = ?auth.master_key_id,
-                                vk_prefix = %auth.virtual_key_prefix,
-                                "unified_api: direct proxy miss for parsed provider; \
-                                 falling back via master_key base_url",
+                    let mut request =
+                        request.take().expect("future polled after completion");
+                    let mut direct_proxy = if let Some(p) =
+                        this.direct_proxies.get(provider).cloned()
+                    {
+                        p
+                    } else {
+                        let custom_fallback = request
+                            .extensions()
+                            .get::<AuthContext>()
+                            .is_some_and(|auth| {
+                                auth.is_custom_provider
+                                    && auth.master_key_base_url.is_some()
+                            });
+                        if !custom_fallback {
+                            tracing::warn!(
+                                provider = %provider,
+                                "requested provider is not configured for direct proxy"
                             );
-                            request
-                                .extensions_mut()
-                                .insert(MasterKeyUnifiedModelPassthrough);
-                            let carrier = this
-                                .direct_proxies
-                                .get(&InferenceProvider::Custom)
-                                .cloned()
-                                .map(|p| ("custom", p))
-                                .or_else(|| {
-                                    this.direct_proxies
-                                        .get(&InferenceProvider::OpenAI)
-                                        .cloned()
-                                        .map(|p| ("openai", p))
-                                });
-                            let Some((carrier_name, proxy)) = carrier else {
-                                tracing::warn!(
-                                    parsed_provider = %provider,
-                                    "unified_api: custom master_key base_url set but \
-                                     neither Custom nor OpenAI direct proxy stack exists"
-                                );
-                                return Poll::Ready(Err(InvalidRequestError::UnsupportedProvider(
+                            return Poll::Ready(Err(
+                                InvalidRequestError::UnsupportedProvider(
                                     provider.clone(),
                                 )
-                                .into()));
-                            };
-                            tracing::debug!(fallback_carrier = carrier_name);
-                            proxy
+                                .into(),
+                            ));
+                        }
+                        let auth = request
+                            .extensions()
+                            .get::<AuthContext>()
+                            .expect("custom_fallback implies AuthContext");
+                        tracing::debug!(
+                            parsed_provider = %provider,
+                            master_key_id = ?auth.master_key_id,
+                            vk_prefix = %auth.virtual_key_prefix,
+                            "unified_api: direct proxy miss for parsed provider; \
+                             falling back via master_key base_url",
+                        );
+                        request
+                            .extensions_mut()
+                            .insert(MasterKeyUnifiedModelPassthrough);
+                        let carrier = this
+                            .direct_proxies
+                            .get(&InferenceProvider::Custom)
+                            .cloned()
+                            .map(|p| ("custom", p))
+                            .or_else(|| {
+                                this.direct_proxies
+                                    .get(&InferenceProvider::OpenAI)
+                                    .cloned()
+                                    .map(|p| ("openai", p))
+                            });
+                        let Some((carrier_name, proxy)) = carrier else {
+                            tracing::warn!(
+                                parsed_provider = %provider,
+                                "unified_api: custom master_key base_url set but \
+                                 neither Custom nor OpenAI direct proxy stack exists"
+                            );
+                            return Poll::Ready(Err(
+                                InvalidRequestError::UnsupportedProvider(
+                                    provider.clone(),
+                                )
+                                .into(),
+                            ));
                         };
+                        tracing::debug!(fallback_carrier = carrier_name);
+                        proxy
+                    };
                     let response_future = direct_proxy.call(request);
                     this.state.set(State::Proxy { response_future });
                 }
                 StateProj::Proxy { response_future } => {
-                    let response = ready!(response_future.poll(cx)).map_err(|_| {
-                        tracing::error!(
-                            "encountered error from what should be \
+                    let response =
+                        ready!(response_future.poll(cx)).map_err(|_| {
+                            tracing::error!(
+                                "encountered error from what should be \
                                  infallible service"
-                        );
-                        InternalError::Internal
-                    })?;
+                            );
+                            InternalError::Internal
+                        })?;
                     return Poll::Ready(Ok(response));
                 }
             }
@@ -604,12 +677,19 @@ mod tests {
             .to_string(),
         );
 
-        let ctx = implicit_default_model_fallback_context("chat/completions", &body)
-            .expect("chat completions should produce fallback context");
+        let ctx =
+            implicit_default_model_fallback_context("chat/completions", &body)
+                .expect("chat completions should produce fallback context");
         assert_eq!(ctx.selected_model, "openai/gpt-5.4");
 
-        assert!(implicit_default_model_fallback_context("responses", &body).is_none());
-        assert!(implicit_default_model_fallback_context("embeddings", &body).is_none());
+        assert!(
+            implicit_default_model_fallback_context("responses", &body)
+                .is_none()
+        );
+        assert!(
+            implicit_default_model_fallback_context("embeddings", &body)
+                .is_none()
+        );
     }
 
     #[test]
@@ -621,6 +701,9 @@ mod tests {
             .to_string(),
         );
 
-        assert!(implicit_default_model_fallback_context("chat/completions", &body).is_none());
+        assert!(
+            implicit_default_model_fallback_context("chat/completions", &body)
+                .is_none()
+        );
     }
 }

@@ -6,7 +6,9 @@ use thiserror::Error;
 use super::api::ErrorResponse;
 use crate::{
     error::api::ErrorDetails,
-    middleware::mapper::openai::{INVALID_REQUEST_ERROR_TYPE, SERVER_ERROR_TYPE},
+    middleware::mapper::openai::{
+        INVALID_REQUEST_ERROR_TYPE, SERVER_ERROR_TYPE,
+    },
     types::json::Json,
 };
 
@@ -31,15 +33,18 @@ impl StreamError {
                 reqwest_eventsource::Error::Utf8(_)
                 | reqwest_eventsource::Error::Parser(_)
                 | reqwest_eventsource::Error::Transport(_) => true,
-                reqwest_eventsource::Error::InvalidStatusCode(status_code, _response) => {
-                    status_code.is_server_error()
-                }
+                reqwest_eventsource::Error::InvalidStatusCode(
+                    status_code,
+                    _response,
+                ) => status_code.is_server_error(),
 
                 reqwest_eventsource::Error::InvalidLastEventId(_)
                 | reqwest_eventsource::Error::InvalidContentType(_, _)
                 | reqwest_eventsource::Error::StreamEnded => false,
             },
-            StreamError::UpstreamError { status_code, .. } => status_code.is_server_error(),
+            StreamError::UpstreamError { status_code, .. } => {
+                status_code.is_server_error()
+            }
             StreamError::BodyError(_error) => false,
         }
     }
@@ -61,7 +66,9 @@ impl IntoResponse for StreamError {
                     );
                 }
 
-                if let Ok(upstream_error) = serde_json::from_str::<ErrorResponse>(&body) {
+                if let Ok(upstream_error) =
+                    serde_json::from_str::<ErrorResponse>(&body)
+                {
                     (status_code, Json(upstream_error)).into_response()
                 } else {
                     let error_type = if status_code.is_server_error() {

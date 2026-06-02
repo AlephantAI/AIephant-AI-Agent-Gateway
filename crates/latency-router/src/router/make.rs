@@ -53,14 +53,18 @@ where
     S: Service<Target>,
     S::Response: Discover,
     <S::Response as Discover>::Key: Hash + Send + Sync,
-    <S::Response as Discover>::Service: Service<http::Request<ReqBody>, Error = Infallible>,
+    <S::Response as Discover>::Service:
+        Service<http::Request<ReqBody>, Error = Infallible>,
     P: Hash,
 {
     type Response = LatencyRouter<P, S::Response, ReqBody>;
     type Error = S::Error;
     type Future = MakeFuture<S::Future, ReqBody, P>;
 
-    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+    fn poll_ready(
+        &mut self,
+        cx: &mut Context<'_>,
+    ) -> Poll<Result<(), Self::Error>> {
         self.inner.poll_ready(cx)
     }
 
@@ -87,7 +91,8 @@ where
     F: Future<Output = Result<T, E>>,
     T: Discover,
     <T as Discover>::Key: Hash + Send + Sync,
-    <T as Discover>::Service: Service<http::Request<ReqBody>, Error = Infallible>,
+    <T as Discover>::Service:
+        Service<http::Request<ReqBody>, Error = Infallible>,
     P: Hash,
 {
     type Output = Result<LatencyRouter<P, T, ReqBody>, E>;

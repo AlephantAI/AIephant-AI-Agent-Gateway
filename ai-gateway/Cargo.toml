@@ -38,6 +38,8 @@ flate2 = { workspace = true }
 futures = { workspace = true }
 governor = { workspace = true }
 heck = { workspace = true }
+hex = { workspace = true }
+hmac = { workspace = true }
 http = { workspace = true }
 http-body = { workspace = true }
 http-body-util = { workspace = true }
@@ -100,6 +102,7 @@ weighted-balance = { workspace = true }
 workspace_root = { workspace = true, optional = true }
 alephant-llm-kv-cache = { workspace = true, default-features = false }
 tiktoken-rs = "0.11.0"
+jsonschema = { workspace = true }
 
 [build-dependencies]
 tonic-build = { workspace = true }

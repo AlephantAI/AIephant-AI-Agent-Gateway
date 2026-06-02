@@ -1,0 +1,228 @@
+syntax = "proto3";
+
+package payment.v1;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/AlephantAI/alephant-gateway2/payment-ledger-service/proto/payment/v1;paymentv1";
+
+// Error contract:
+//
+// X402 business failures are returned as normal OK responses with the
+// response failure_reason field set to an English user-facing message.
+// Transport, authentication, permission, and system failures may still use
+// google.rpc.Status through the gRPC status channel. The status.message field
+// is an English user-facing message. The status.details field includes a
+// google.rpc.ErrorInfo entry with:
+//
+//   reason: canonical gRPC code reason, such as UNAUTHENTICATED
+//   domain: "payment-ledger-service"
+//   metadata["msg"]: internal diagnostic error text
+//
+// Example JSON:
+// {
+//   "code": 16,
+//   "message": "Authentication failed. Please check your credentials and try again.",
+//   "details": [{
+//     "@type": "type.googleapis.com/google.rpc.ErrorInfo",
+//     "reason": "UNAUTHENTICATED",
+//     "domain": "payment-ledger-service",
+//     "metadata": {"msg": "invalid internal auth token"}
+//   }]
+// }
+//
+service X402PaymentService {
+  rpc GetPaymentRequirements(GetPaymentRequirementsRequest) returns (GetPaymentRequirementsResponse);
+  rpc VerifyPayment(VerifyPaymentRequest) returns (VerifyPaymentResponse);
+  rpc VerifyAndSettlePayment(VerifyAndSettlePaymentRequest) returns (VerifyAndSettlePaymentResponse);
+  rpc SettlePayment(SettlePaymentRequest) returns (SettlePaymentResponse);
+  rpc RecordServiceResult(RecordServiceResultRequest) returns (RecordServiceResultResponse);
+  rpc AuthorizeOutboundSpend(AuthorizeOutboundSpendRequest) returns (AuthorizeOutboundSpendResponse);
+  rpc RecordOutboundResult(RecordOutboundResultRequest) returns (RecordOutboundResultResponse);
+}
+
+message Money {
+  string amount = 1;
+  string asset = 2;
+  string network = 3;
+}
+
+message EndpointPaymentSnapshot {
+  string workspace_id = 1;
+  string endpoint_id = 2;
+  string agent_id = 3;
+  string snapshot_revision = 4;
+  string method = 5;
+  string path = 6;
+  Money price = 7;
+  string receive_wallet_address = 8;
+  string ale_receive_wallet_address = 9;
+  string fee_wallet_address = 10;
+  int32 fee_bps = 11;
+  string facilitator = 12;
+  string cache_billing_mode = 13;
+  string resource_url = 14;
+  string resource_description = 15;
+  string resource_mime_type = 16;
+  string split_treasury_id = 17;
+}
+
+message RequestContext {
+  string trace_id = 1;
+  string request_id = 2;
+  string request_hash = 3;
+  string buyer_ip_hash = 4;
+  string user_agent_hash = 5;
+}
+
+message GetPaymentRequirementsRequest {
+  EndpointPaymentSnapshot snapshot = 1;
+  RequestContext context = 2;
+}
+
+message GetPaymentRequirementsResponse {
+  string activity_id = 1;
+  string payment_required_header = 2;
+  string scheme = 3;
+  string resource = 4;
+  Money price = 5;
+  string pay_to = 6;
+  string facilitator = 7;
+  google.protobuf.Timestamp expires_at = 8;
+  string failure_reason = 9;
+  bool success = 10;
+}
+
+message VerifyPaymentRequest {
+  string activity_id = 1;
+  EndpointPaymentSnapshot snapshot = 2;
+  RequestContext context = 3;
+  string payment_signature = 4;
+}
+
+message VerifyPaymentResponse {
+  string activity_id = 1;
+  string payment_status = 2;
+  string buyer_wallet = 3;
+  string payment_signature_hash = 4;
+  string facilitator = 5;
+  string facilitator_request_id = 6;
+  string failure_reason = 7;
+  bool retryable = 8;
+  bool success = 9;
+}
+
+message VerifyAndSettlePaymentRequest {
+  string activity_id = 1;
+  EndpointPaymentSnapshot snapshot = 2;
+  RequestContext context = 3;
+  string payment_signature = 4;
+}
+
+message VerifyAndSettlePaymentResponse {
+  string activity_id = 1;
+  string payment_status = 2;
+  string settlement_status = 3;
+  string split_status = 4;
+  string buyer_wallet = 5;
+  string payment_signature_hash = 6;
+  string facilitator = 7;
+  string facilitator_request_id = 8;
+  string tx_hash = 9;
+  uint64 block_number = 10;
+  Money gross = 11;
+  Money alephant_fee = 12;
+  Money net = 13;
+  string payment_response_header = 14;
+  string failure_reason = 15;
+  bool retryable = 16;
+  bool success = 17;
+}
+
+message SettlePaymentRequest {
+  string activity_id = 1;
+  RequestContext context = 2;
+}
+
+message SettlePaymentResponse {
+  string activity_id = 1;
+  string settlement_status = 2;
+  string split_status = 3;
+  string tx_hash = 4;
+  uint64 block_number = 5;
+  Money gross = 6;
+  Money alephant_fee = 7;
+  Money net = 8;
+  string payment_response_header = 9;
+  string failure_reason = 10;
+  bool retryable = 11;
+  bool success = 12;
+}
+
+message RecordServiceResultRequest {
+  string activity_id = 1;
+  string trace_id = 2;
+  string service_status = 3;
+  int32 upstream_status_code = 4;
+  string failure_reason = 5;
+  string cache_billing_mode = 6;
+  string response_hash = 7;
+}
+
+message RecordServiceResultResponse {
+  string activity_id = 1;
+  string service_status = 2;
+  bool event_enqueued = 3;
+  string failure_reason = 4;
+  bool success = 5;
+}
+
+message AuthorizeOutboundSpendRequest {
+  string workspace_id = 1;
+  string agent_id = 2;
+  string trace_id = 3;
+  string external_host = 4;
+  string external_path = 5;
+  string payment_required_header = 6;
+  Money amount = 7;
+  string policy_decision_json = 8;
+  string spend_wallet_id = 9;
+  CommandEnvelope command = 10;
+}
+
+message AuthorizeOutboundSpendResponse {
+  string outbound_spend_id = 1;
+  string status = 2;
+  string payment_signature = 3;
+  string spend_wallet_address = 4;
+  string failure_reason = 5;
+  bool retryable = 6;
+  bool success = 7;
+}
+
+message RecordOutboundResultRequest {
+  string outbound_spend_id = 1;
+  string trace_id = 2;
+  string status = 3;
+  int32 external_status_code = 4;
+  string tx_hash = 5;
+  string failure_reason = 6;
+  CommandEnvelope command = 7;
+}
+
+message RecordOutboundResultResponse {
+  string outbound_spend_id = 1;
+  string status = 2;
+  bool event_enqueued = 3;
+  string failure_reason = 4;
+  bool success = 5;
+}
+
+message CommandEnvelope {
+  string actor_type = 1;
+  string actor_id = 2;
+  string workspace_id = 3;
+  string permission_scope = 4;
+  string request_id = 5;
+  string correlation_id = 6;
+}

@@ -22,6 +22,20 @@ request-log:
   transport: redis
   request-response-stream-key: lc:stream:alephant-request-response-logs
 
+agent:
+  enabled: true
+  allow-header-context: true
+  event-stream-key: "lc:stream:alephant-agent-events"
+  event-log-http-fallback-enabled: true
+  event-log-http-endpoint: "/v1/log/agent-event"
+  event-log-http-timeout-ms: 1000
+  event-log-http-auth-header: "authorization"
+  event-log-http-auth-token: ""
+  context-conflict-action: warn
+  step-conflict-action: warn
+  metadata-redaction: basic
+  policy-mode: audit
+
 policy:
   enabled: true
   grpc-endpoint: "http://alephantai-policy-service.dev.svc.cluster.local:9090"

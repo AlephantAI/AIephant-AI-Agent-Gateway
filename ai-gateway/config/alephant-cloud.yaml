@@ -22,6 +22,21 @@ request-log:
   transport: redis
   request-response-stream-key: lc:stream:alephant-request-response-logs
 
+agent:
+  enabled: true
+  allow-header-context: true
+  event-stream-key: "lc:stream:alephant-agent-events"
+  event-log-http-fallback-enabled: true
+  event-log-http-endpoint: "/v1/log/agent-event"
+  event-log-http-timeout-ms: 1000
+  event-log-http-auth-header: "authorization"
+  event-log-http-auth-token: ""
+  context-conflict-action: warn
+  step-conflict-action: warn
+  metadata-redaction: basic
+  policy-timeout-ms: 3000
+  policy-mode: audit
+
 policy:
   enabled: true
   grpc-endpoint: "http://alephantai-policy-service.dev.svc.cluster.local:9090"
@@ -75,3 +90,13 @@ global:
     max-concurrent: 10000
     backend: redis
     redis-key-prefix: "gw:gifl:"
+
+# x402 sidecar agent payment flow. Disabled by default; enable only when
+# payment-service and policy-service are reachable.
+x402:
+  enabled: true
+  payment-grpc-endpoint: "http://127.0.0.1:9090"
+  log-stream-key: "lc:stream:x402_payment:log"
+  request-body-log-max-bytes: 0
+  request-body-policy-max-bytes: 1048576
+  payment-timeout: "5s"

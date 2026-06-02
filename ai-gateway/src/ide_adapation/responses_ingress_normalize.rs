@@ -6,8 +6,8 @@ use serde_json::{Value, json};
 
 use crate::{
     error::{
-        api::ApiError, internal::InternalError, invalid_req::InvalidRequestError,
-        mapper::MapperError,
+        api::ApiError, internal::InternalError,
+        invalid_req::InvalidRequestError, mapper::MapperError,
     },
     ide_adapation::client_profile::ClientProfile,
 };
@@ -27,8 +27,8 @@ pub(crate) struct ResponsesRequestRoutingFields {
 pub(crate) fn responses_request_routing_fields(
     body: &Bytes,
 ) -> Result<ResponsesRequestRoutingFields, ApiError> {
-    let root: Value =
-        serde_json::from_slice(body).map_err(InvalidRequestError::InvalidRequestBody)?;
+    let root: Value = serde_json::from_slice(body)
+        .map_err(InvalidRequestError::InvalidRequestBody)?;
     let model = root
         .get("model")
         .and_then(Value::as_str)
@@ -52,10 +52,16 @@ pub fn apply_responses_wire_normalize_for_client(
     body: Bytes,
     profile: ClientProfile,
 ) -> Result<Bytes, ApiError> {
-    apply_responses_normalize(body, ResponsesNormalizeMode::CreateResponseCompat, profile)
+    apply_responses_normalize(
+        body,
+        ResponsesNormalizeMode::CreateResponseCompat,
+        profile,
+    )
 }
 
-pub fn apply_openai_responses_wire_normalize(body: Bytes) -> Result<Bytes, ApiError> {
+pub fn apply_openai_responses_wire_normalize(
+    body: Bytes,
+) -> Result<Bytes, ApiError> {
     apply_responses_normalize(
         body,
         ResponsesNormalizeMode::OpenAiWire,
@@ -75,8 +81,8 @@ fn apply_responses_normalize(
     mode: ResponsesNormalizeMode,
     profile: ClientProfile,
 ) -> Result<Bytes, ApiError> {
-    let mut root: Value =
-        serde_json::from_slice(&body).map_err(InvalidRequestError::InvalidRequestBody)?;
+    let mut root: Value = serde_json::from_slice(&body)
+        .map_err(InvalidRequestError::InvalidRequestBody)?;
     let changed = normalize_responses_request_value(&mut root, mode, profile)?;
     if !changed {
         return Ok(body);
@@ -101,7 +107,10 @@ fn normalize_responses_request_value(
     Ok(changed)
 }
 
-fn normalize_tools_array(root: &mut Value, profile: ClientProfile) -> Result<bool, ApiError> {
+fn normalize_tools_array(
+    root: &mut Value,
+    profile: ClientProfile,
+) -> Result<bool, ApiError> {
     let Some(tools) = root.get_mut("tools") else {
         return Ok(false);
     };
@@ -117,9 +126,13 @@ fn normalize_tools_array(root: &mut Value, profile: ClientProfile) -> Result<boo
             Some("tool_search") if profile == ClientProfile::CodexCli => {
                 let mut tool = tool;
                 if let Some(obj) = tool.as_object_mut() {
-                    obj.insert("type".to_string(), Value::String("function".to_string()));
-                    obj.entry("name".to_string())
-                        .or_insert_with(|| Value::String("tool_search".to_string()));
+                    obj.insert(
+                        "type".to_string(),
+                        Value::String("function".to_string()),
+                    );
+                    obj.entry("name".to_string()).or_insert_with(|| {
+                        Value::String("tool_search".to_string())
+                    });
                     obj.remove("execution");
                     changed = true;
                 }
@@ -162,14 +175,21 @@ fn normalize_tools_array(root: &mut Value, profile: ClientProfile) -> Result<boo
     Ok(changed)
 }
 
-fn flatten_codex_namespace_tool(namespace: Value, normalized: &mut Vec<Value>) -> bool {
+fn flatten_codex_namespace_tool(
+    namespace: Value,
+    normalized: &mut Vec<Value>,
+) -> bool {
     let Some(namespace_obj) = namespace.as_object() else {
         return true;
     };
-    let Some(namespace_name) = namespace_obj.get("name").and_then(Value::as_str) else {
+    let Some(namespace_name) =
+        namespace_obj.get("name").and_then(Value::as_str)
+    else {
         return true;
     };
-    let Some(namespace_tools) = namespace_obj.get("tools").and_then(Value::as_array) else {
+    let Some(namespace_tools) =
+        namespace_obj.get("tools").and_then(Value::as_array)
+    else {
         return true;
     };
 
@@ -177,18 +197,21 @@ fn flatten_codex_namespace_tool(namespace: Value, normalized: &mut Vec<Value>) -
         let Some(child_obj) = child.as_object() else {
             continue;
         };
-        let Some(child_name) = child_obj.get("name").and_then(Value::as_str) else {
+        let Some(child_name) = child_obj.get("name").and_then(Value::as_str)
+        else {
             continue;
         };
 
         let mut function_tool = serde_json::Map::new();
-        function_tool.insert("type".to_string(), Value::String("function".to_string()));
+        function_tool
+            .insert("type".to_string(), Value::String("function".to_string()));
         function_tool.insert(
             "name".to_string(),
             Value::String(format!("{namespace_name}__{child_name}")),
         );
         if let Some(description) = child_obj.get("description") {
-            function_tool.insert("description".to_string(), description.clone());
+            function_tool
+                .insert("description".to_string(), description.clone());
         }
         let parameters = child_obj
             .get("parameters")
@@ -212,9 +235,9 @@ fn json_text_field(v: Option<&Value>) -> String {
 
 fn json_image_url_field(v: Option<&Value>) -> String {
     v.and_then(|u| {
-        u.as_str()
-            .map(str::to_owned)
-            .or_else(|| u.get("url").and_then(|x| x.as_str()).map(str::to_owned))
+        u.as_str().map(str::to_owned).or_else(|| {
+            u.get("url").and_then(|x| x.as_str()).map(str::to_owned)
+        })
     })
     .unwrap_or_default()
 }
@@ -225,7 +248,9 @@ pub(crate) fn normalize_responses_message_content_json(
     normalize_input_message_content_json(content)
 }
 
-fn normalize_input_message_content_json(content: &mut Value) -> Result<bool, MapperError> {
+fn normalize_input_message_content_json(
+    content: &mut Value,
+) -> Result<bool, MapperError> {
     match content {
         Value::String(_) => Ok(false),
         Value::Array(parts) => {
@@ -237,21 +262,25 @@ fn normalize_input_message_content_json(content: &mut Value) -> Result<bool, Map
             let mut new_parts = Vec::with_capacity(parts.len());
             for part in parts.iter() {
                 if let Some(obj) = part.as_object() {
-                    let typ = obj.get("type").and_then(|t| t.as_str()).unwrap_or("");
+                    let typ =
+                        obj.get("type").and_then(|t| t.as_str()).unwrap_or("");
                     match typ {
                         "input_text" | "input_image" | "input_file" => {
                             new_parts.push(part.clone());
                         }
                         "text" => {
                             let text = json_text_field(obj.get("text"));
-                            new_parts.push(json!({ "type": "input_text", "text": text }));
+                            new_parts.push(
+                                json!({ "type": "input_text", "text": text }),
+                            );
                             changed = true;
                         }
                         "image_url" => {
-                            let url = json_image_url_field(obj.get("image_url"));
+                            let url =
+                                json_image_url_field(obj.get("image_url"));
                             if url.is_empty() {
-                                let payload =
-                                    serde_json::to_string(part).map_err(MapperError::SerdeError)?;
+                                let payload = serde_json::to_string(part)
+                                    .map_err(MapperError::SerdeError)?;
                                 new_parts.push(json!({
                                     "type": "input_text",
                                     "text": format!("[alephant:image_url]\n{payload}")
@@ -267,12 +296,14 @@ fn normalize_input_message_content_json(content: &mut Value) -> Result<bool, Map
                         }
                         "" if obj.contains_key("text") => {
                             let text = json_text_field(obj.get("text"));
-                            new_parts.push(json!({ "type": "input_text", "text": text }));
+                            new_parts.push(
+                                json!({ "type": "input_text", "text": text }),
+                            );
                             changed = true;
                         }
                         _ => {
-                            let payload =
-                                serde_json::to_string(part).map_err(MapperError::SerdeError)?;
+                            let payload = serde_json::to_string(part)
+                                .map_err(MapperError::SerdeError)?;
                             new_parts.push(json!({
                                 "type": "input_text",
                                 "text": format!("[alephant:content_part type={typ}]\n{payload}")
@@ -302,10 +333,12 @@ fn normalize_input_message_content_json(content: &mut Value) -> Result<bool, Map
                 "image_url" => {
                     let url = json_image_url_field(map.get("image_url"));
                     if url.is_empty() {
-                        let s = serde_json::to_string(&Value::Object(map.clone()))
-                            .map_err(MapperError::SerdeError)?;
-                        *content =
-                            Value::String(format!("[alephant:message_content image_url]\n{s}"));
+                        let s =
+                            serde_json::to_string(&Value::Object(map.clone()))
+                                .map_err(MapperError::SerdeError)?;
+                        *content = Value::String(format!(
+                            "[alephant:message_content image_url]\n{s}"
+                        ));
                     } else {
                         *content = Value::Array(vec![json!({
                             "type": "input_image",
@@ -323,8 +356,9 @@ fn normalize_input_message_content_json(content: &mut Value) -> Result<bool, Map
                 _ => {
                     let s = serde_json::to_string(&Value::Object(map.clone()))
                         .map_err(MapperError::SerdeError)?;
-                    *content =
-                        Value::String(format!("[alephant:message_content_object type={typ}]\n{s}"));
+                    *content = Value::String(format!(
+                        "[alephant:message_content_object type={typ}]\n{s}"
+                    ));
                     Ok(true)
                 }
             }
@@ -351,7 +385,9 @@ fn refusal_part(refusal: String) -> Value {
     })
 }
 
-fn normalize_assistant_message_content_json(content: &mut Value) -> Result<bool, MapperError> {
+fn normalize_assistant_message_content_json(
+    content: &mut Value,
+) -> Result<bool, MapperError> {
     match content {
         Value::String(_) => Ok(false),
         Value::Array(parts) => {
@@ -363,14 +399,18 @@ fn normalize_assistant_message_content_json(content: &mut Value) -> Result<bool,
             let mut new_parts = Vec::with_capacity(parts.len());
             for part in parts.iter() {
                 if let Some(obj) = part.as_object() {
-                    let typ = obj.get("type").and_then(|t| t.as_str()).unwrap_or("");
+                    let typ =
+                        obj.get("type").and_then(|t| t.as_str()).unwrap_or("");
                     match typ {
                         "output_text" => {
                             let mut p = part.clone();
                             if let Some(map) = p.as_object_mut()
                                 && !map.contains_key("annotations")
                             {
-                                map.insert("annotations".to_string(), json!([]));
+                                map.insert(
+                                    "annotations".to_string(),
+                                    json!([]),
+                                );
                                 changed = true;
                             }
                             new_parts.push(p);
@@ -398,8 +438,8 @@ fn normalize_assistant_message_content_json(content: &mut Value) -> Result<bool,
                             changed = true;
                         }
                         _ => {
-                            let payload =
-                                serde_json::to_string(part).map_err(MapperError::SerdeError)?;
+                            let payload = serde_json::to_string(part)
+                                .map_err(MapperError::SerdeError)?;
                             new_parts.push(output_text_part(format!(
                                 "[alephant:assistant_content_part \
                                  type={typ}]\n{payload}"
@@ -424,7 +464,9 @@ fn normalize_assistant_message_content_json(content: &mut Value) -> Result<bool,
                     Ok(true)
                 }
                 "refusal" => {
-                    let refusal = json_text_field(map.get("refusal").or_else(|| map.get("text")));
+                    let refusal = json_text_field(
+                        map.get("refusal").or_else(|| map.get("text")),
+                    );
                     *content = Value::Array(vec![refusal_part(refusal)]);
                     Ok(true)
                 }
@@ -444,7 +486,8 @@ fn normalize_assistant_message_content_json(content: &mut Value) -> Result<bool,
             }
         }
         _ => {
-            *content = Value::Array(vec![output_text_part(content.to_string())]);
+            *content =
+                Value::Array(vec![output_text_part(content.to_string())]);
             Ok(true)
         }
     }
@@ -453,7 +496,10 @@ fn normalize_assistant_message_content_json(content: &mut Value) -> Result<bool,
 pub(crate) fn rewrite_responses_input_items_for_create_response(
     root: &mut Value,
 ) -> Result<bool, MapperError> {
-    rewrite_responses_input_items(root, ResponsesNormalizeMode::CreateResponseCompat)
+    rewrite_responses_input_items(
+        root,
+        ResponsesNormalizeMode::CreateResponseCompat,
+    )
 }
 
 fn rewrite_responses_input_items(
@@ -474,7 +520,8 @@ fn rewrite_responses_input_items(
             Some(_) => false,
         };
         if is_message {
-            let is_assistant = item.get("role").and_then(|r| r.as_str()) == Some("assistant");
+            let is_assistant =
+                item.get("role").and_then(|r| r.as_str()) == Some("assistant");
             if let Some(content) = item.get_mut("content") {
                 changed |= match (mode, is_assistant) {
                     (ResponsesNormalizeMode::OpenAiWire, true) => {
@@ -489,7 +536,8 @@ fn rewrite_responses_input_items(
             .get("type")
             .and_then(|t| t.as_str())
             .unwrap_or("unknown");
-        let payload = serde_json::to_string(item).map_err(MapperError::SerdeError)?;
+        let payload =
+            serde_json::to_string(item).map_err(MapperError::SerdeError)?;
         *item = json!({
             "type": "message",
             "role": "user",
@@ -549,7 +597,10 @@ mod rewrite_input_tests {
         );
         let out = apply_responses_wire_normalize(body).unwrap();
         let v: serde_json::Value = serde_json::from_slice(&out).unwrap();
-        assert!(v.get("tools").is_none() || v["tools"].as_array().unwrap().is_empty());
+        assert!(
+            v.get("tools").is_none()
+                || v["tools"].as_array().unwrap().is_empty()
+        );
     }
 
     #[test]
@@ -575,7 +626,11 @@ mod rewrite_input_tests {
             .unwrap(),
         );
 
-        let out = apply_responses_wire_normalize_for_client(body, ClientProfile::CodexCli).unwrap();
+        let out = apply_responses_wire_normalize_for_client(
+            body,
+            ClientProfile::CodexCli,
+        )
+        .unwrap();
         let v: serde_json::Value = serde_json::from_slice(&out).unwrap();
         assert_eq!(v["tools"][0]["type"], "function");
         assert_eq!(v["tools"][0]["name"], "tool_search");
@@ -609,7 +664,11 @@ mod rewrite_input_tests {
             .unwrap(),
         );
 
-        let out = apply_responses_wire_normalize_for_client(body, ClientProfile::CodexCli).unwrap();
+        let out = apply_responses_wire_normalize_for_client(
+            body,
+            ClientProfile::CodexCli,
+        )
+        .unwrap();
         let v: serde_json::Value = serde_json::from_slice(&out).unwrap();
         assert_eq!(v["tools"][0]["type"], "function");
         assert_eq!(v["tools"][0]["name"], "multi_agent_v1__spawn_agent");
@@ -661,8 +720,11 @@ mod rewrite_input_tests {
             .unwrap(),
         );
 
-        let out =
-            apply_responses_wire_normalize_for_client(body, ClientProfile::CursorIde).unwrap();
+        let out = apply_responses_wire_normalize_for_client(
+            body,
+            ClientProfile::CursorIde,
+        )
+        .unwrap();
         let v: serde_json::Value = serde_json::from_slice(&out).unwrap();
         assert_eq!(v["tools"][0]["type"], "tool_search");
         let err = serde_json::from_slice::<CreateResponse>(&out).unwrap_err();

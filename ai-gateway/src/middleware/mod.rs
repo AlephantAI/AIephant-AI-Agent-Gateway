@@ -1,7 +1,8 @@
 pub mod add_extension;
 pub mod auth;
 pub mod client_ip_rate_limit;
-mod counted_body;
+pub(crate) mod counted_body;
+pub mod debug_log;
 pub mod fallback_request_log;
 pub mod gateway_in_flight_limit;
 pub mod large_context;

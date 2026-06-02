@@ -6,6 +6,20 @@ alephant:
   log-collector-url: "http://localhost:8585"
   features: none
 
+agent:
+  enabled: true
+  allow-header-context: true
+  event-stream-key: "lc:stream:alephant-agent-events"
+  event-log-http-fallback-enabled: true
+  event-log-http-endpoint: "/v1/log/agent-event"
+  event-log-http-timeout-ms: 1000
+  event-log-http-auth-header: "authorization"
+  event-log-http-auth-token: ""
+  context-conflict-action: warn
+  step-conflict-action: warn
+  metadata-redaction: basic
+  policy-mode: audit
+
 rate-limit-store:
   type: redis
   host-url: "redis://localhost:6379"

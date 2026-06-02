@@ -1,10 +1,15 @@
 use super::{
     families::ProviderProtocolFamily,
-    rules::{MultimodalMode, ReasoningMode, ResponseFormatMode, SystemHandling, ToolChoiceMode},
+    rules::{
+        MultimodalMode, ReasoningMode, ResponseFormatMode, SystemHandling,
+        ToolChoiceMode,
+    },
 };
 use crate::types::provider::InferenceProvider;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize,
+)]
 #[serde(rename_all = "kebab-case")]
 pub enum MessageContentMode {
     #[serde(rename = "openai-style")]
@@ -13,7 +18,9 @@ pub enum MessageContentMode {
     BedrockContent,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize,
+)]
 #[serde(rename_all = "kebab-case")]
 pub enum ResponseContentMode {
     Passthrough,
@@ -21,21 +28,27 @@ pub enum ResponseContentMode {
     BedrockOutputMessage,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize,
+)]
 #[serde(rename_all = "kebab-case")]
 pub enum ToolCallMappingMode {
     Native,
     ProviderSpecificHelper,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize,
+)]
 #[serde(rename_all = "kebab-case")]
 pub enum FinishReasonMappingMode {
     Passthrough,
     ProviderSpecificHelper,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize,
+)]
 #[serde(rename_all = "kebab-case")]
 pub enum UsageMappingMode {
     Passthrough,

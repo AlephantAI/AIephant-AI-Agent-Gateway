@@ -51,7 +51,11 @@ impl AppRedis {
         Ok(())
     }
 
-    pub async fn incr_and_expire(&self, key: &str, ttl_secs: i64) -> Result<(), redis::RedisError> {
+    pub async fn incr_and_expire(
+        &self,
+        key: &str,
+        ttl_secs: i64,
+    ) -> Result<(), redis::RedisError> {
         use redis::AsyncCommands;
         let mut guard = self.conn.lock().await;
         if guard.is_none() {
@@ -76,7 +80,8 @@ impl AppRedis {
             *guard = Some(client.get_multiplexed_async_connection().await?);
         }
         let conn = guard.as_mut().expect("connection ensured");
-        let _: redis::Value = script.key(key).arg(arg).invoke_async(conn).await?;
+        let _: redis::Value =
+            script.key(key).arg(arg).invoke_async(conn).await?;
         Ok(())
     }
 
@@ -130,7 +135,10 @@ impl AppRedis {
         Ok(v == 1)
     }
 
-    pub async fn get_opt_string(&self, key: &str) -> Result<Option<String>, redis::RedisError> {
+    pub async fn get_opt_string(
+        &self,
+        key: &str,
+    ) -> Result<Option<String>, redis::RedisError> {
         use redis::AsyncCommands;
         let mut guard = self.conn.lock().await;
         if guard.is_none() {
@@ -142,7 +150,10 @@ impl AppRedis {
         Ok(v)
     }
 
-    pub async fn key_exists(&self, key: &str) -> Result<bool, redis::RedisError> {
+    pub async fn key_exists(
+        &self,
+        key: &str,
+    ) -> Result<bool, redis::RedisError> {
         use redis::AsyncCommands;
         let mut guard = self.conn.lock().await;
         if guard.is_none() {
@@ -153,7 +164,10 @@ impl AppRedis {
         conn.exists(key).await
     }
 
-    pub async fn get_string(&self, key: &str) -> Result<Option<String>, redis::RedisError> {
+    pub async fn get_string(
+        &self,
+        key: &str,
+    ) -> Result<Option<String>, redis::RedisError> {
         use redis::AsyncCommands;
 
         let mut guard = self.conn.lock().await;
@@ -180,6 +194,29 @@ impl AppRedis {
         let conn = guard.as_mut().expect("connection ensured");
         let _: () = conn.set_ex(key, value, ttl_secs).await?;
         Ok(())
+    }
+
+    pub async fn set_nx_ex(
+        &self,
+        key: &str,
+        value: &str,
+        ttl_secs: u64,
+    ) -> Result<bool, redis::RedisError> {
+        let mut guard = self.conn.lock().await;
+        if guard.is_none() {
+            let client = redis::Client::open(self.url.as_str())?;
+            *guard = Some(client.get_multiplexed_async_connection().await?);
+        }
+        let conn = guard.as_mut().expect("connection ensured");
+        let inserted: Option<String> = redis::cmd("SET")
+            .arg(key)
+            .arg(value)
+            .arg("NX")
+            .arg("EX")
+            .arg(ttl_secs)
+            .query_async(conn)
+            .await?;
+        Ok(inserted.is_some())
     }
 
     pub async fn del(&self, key: &str) -> Result<(), redis::RedisError> {

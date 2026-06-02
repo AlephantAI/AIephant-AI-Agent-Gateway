@@ -19,6 +19,9 @@ static DECR_FLOOR: LazyLock<Script> = LazyLock::new(|| {
     )
 });
 
-pub async fn decr_floor_refresh_ttl(client: &AppRedis, key: &str) -> Result<(), redis::RedisError> {
+pub async fn decr_floor_refresh_ttl(
+    client: &AppRedis,
+    key: &str,
+) -> Result<(), redis::RedisError> {
     client.invoke_script(&DECR_FLOOR, key, TTL_SECS).await
 }

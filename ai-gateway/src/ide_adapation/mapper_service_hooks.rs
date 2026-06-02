@@ -13,13 +13,14 @@ use crate::{
     app_state::AppState,
     endpoints::{ApiEndpoint, anthropic::Anthropic, openai::OpenAI},
     error::{
-        api::ApiError, internal::InternalError, invalid_req::InvalidRequestError,
-        mapper::MapperError, stream::StreamError,
+        api::ApiError, internal::InternalError,
+        invalid_req::InvalidRequestError, mapper::MapperError,
+        stream::StreamError,
     },
     ide_adapation::{
         client_profile::{
-            ClientProfile, ClientProfileResolution, native_semantic_passthrough,
-            resolve_client_profile,
+            ClientProfile, ClientProfileResolution,
+            native_semantic_passthrough, resolve_client_profile,
         },
         cursor_responses_openrouter_bridge,
         ide_ingress_adjust::{IdeIngressAdjustMeta, apply_ide_ingress_adjust},
@@ -97,7 +98,10 @@ pub(crate) fn record_client_profile_passthrough_metrics_and_extension(
     app_state.0.metrics.mapper_client_profile_resolved.add(
         1,
         &[
-            KeyValue::new("profile", client_profile_resolution.profile.as_otel_label()),
+            KeyValue::new(
+                "profile",
+                client_profile_resolution.profile.as_otel_label(),
+            ),
             KeyValue::new(
                 "explicit",
                 if client_profile_resolution.from_explicit_header {
@@ -135,14 +139,16 @@ pub(crate) fn mapper_context_native_semantic_passthrough(
     let provider = target_endpoint.provider();
     match source_endpoint {
         ApiEndpoint::OpenAI(OpenAI::ChatCompletions(_)) => {
-            let req = serde_json::from_slice::<CreateChatCompletionRequest>(body)
-                .map_err(InvalidRequestError::InvalidRequestBody)?;
+            let req =
+                serde_json::from_slice::<CreateChatCompletionRequest>(body)
+                    .map_err(InvalidRequestError::InvalidRequestBody)?;
             let is_stream = req.stream.unwrap_or(false);
             let model = ModelId::from_str_and_provider(provider, &req.model)
                 .map_err(InternalError::MapperError)?;
             let anthropic_openai_usage = is_stream.then(|| {
                 std::sync::Arc::new(std::sync::Mutex::new(
-                    crate::types::extensions::AnthropicStreamOpenAiUsageState::default(),
+                    crate::types::extensions::AnthropicStreamOpenAiUsageState::default(
+                    ),
                 ))
             });
             Ok(MapperContext {
@@ -182,7 +188,8 @@ pub(crate) fn mapper_context_native_semantic_passthrough(
                 .map_err(InternalError::MapperError)?;
             let anthropic_openai_usage = is_stream.then(|| {
                 std::sync::Arc::new(std::sync::Mutex::new(
-                    crate::types::extensions::AnthropicStreamOpenAiUsageState::default(),
+                    crate::types::extensions::AnthropicStreamOpenAiUsageState::default(
+                    ),
                 ))
             });
             Ok(MapperContext {
@@ -264,7 +271,9 @@ pub(crate) async fn map_response_cursor_responses_branch(
                     new_bytes.put("\n\n".as_bytes());
                     new_bytes.freeze()
                 });
-            let final_body = axum_core::body::Body::new(reqwest::Body::wrap_stream(mapped_stream));
+            let final_body = axum_core::body::Body::new(
+                reqwest::Body::wrap_stream(mapped_stream),
+            );
             return Ok(CursorResponsesMapOutcome::Done(Response::from_parts(
                 parts, final_body,
             )));
@@ -273,21 +282,23 @@ pub(crate) async fn map_response_cursor_responses_branch(
             "cursor responses → OpenAI-compatible chat/completions SSE; map \
              Chat SSE back to Responses"
         );
-        let origin = mapper_ctx
-            .cursor_responses_origin
-            .clone()
-            .ok_or(InternalError::ExtensionNotFound("cursor_responses_origin"))?;
-        let resp = cursor_responses_openrouter_bridge::map_stream_response_chat_to_responses(
-            parts,
-            body,
-            origin,
-            mapper_ctx.client_expects_responses_wire,
-        )
-        .await?;
+        let origin = mapper_ctx.cursor_responses_origin.clone().ok_or(
+            InternalError::ExtensionNotFound("cursor_responses_origin"),
+        )?;
+        let resp =
+            cursor_responses_openrouter_bridge::map_stream_response_chat_to_responses(
+                parts,
+                body,
+                origin,
+                mapper_ctx.client_expects_responses_wire,
+            )
+            .await?;
         return Ok(CursorResponsesMapOutcome::Done(resp));
     }
 
-    if unified_responses_bridge_chat_completions_sse && !mapper_ctx.client_expects_responses_wire {
+    if unified_responses_bridge_chat_completions_sse
+        && !mapper_ctx.client_expects_responses_wire
+    {
         tracing::trace!(
             "cursor + unified chat URL: passthrough upstream Chat Completions \
              JSON (no Responses-shape rewrite)"
@@ -304,10 +315,13 @@ pub(crate) async fn map_response_cursor_responses_branch(
         .cursor_responses_origin
         .as_ref()
         .ok_or(InternalError::ExtensionNotFound("cursor_responses_origin"))?;
-    let resp = cursor_responses_openrouter_bridge::map_json_response_chat_to_responses(
-        parts, body, origin,
-    )
-    .await?;
+    let resp =
+        cursor_responses_openrouter_bridge::map_json_response_chat_to_responses(
+            parts,
+            body,
+            origin,
+        )
+        .await?;
     Ok(CursorResponsesMapOutcome::Done(resp))
 }
 
@@ -332,10 +346,15 @@ pub(crate) fn map_stream_unified_responses_chat_bridge(
     body: crate::types::body::Body,
 ) -> Result<UnifiedResponsesChatBridgeMapOutcome, ApiError> {
     if !bridge_chat_completions || !is_stream {
-        return Ok(UnifiedResponsesChatBridgeMapOutcome::Continue { parts, body });
+        return Ok(UnifiedResponsesChatBridgeMapOutcome::Continue {
+            parts,
+            body,
+        });
     }
 
-    tracing::trace!("unified responses → Chat Completions SSE bridge (streaming)");
+    tracing::trace!(
+        "unified responses → Chat Completions SSE bridge (streaming)"
+    );
     let state = Arc::new(Mutex::new(BridgeStreamState::default()));
     let mapped_stream = body
         .into_data_stream()
@@ -344,13 +363,15 @@ pub(crate) fn map_stream_unified_responses_chat_bridge(
             let state = Arc::clone(&state);
             async move {
                 let opt = {
-                    let mut guard = state.lock().expect("responses bridge mutex poisoned");
+                    let mut guard =
+                        state.lock().expect("responses bridge mutex poisoned");
                     guard.process_upstream_sse_json(&bytes)?
                 };
                 Ok(opt)
             }
         });
-    let final_body = axum_core::body::Body::new(reqwest::Body::wrap_stream(mapped_stream));
+    let final_body =
+        axum_core::body::Body::new(reqwest::Body::wrap_stream(mapped_stream));
     Ok(UnifiedResponsesChatBridgeMapOutcome::Done(
         Response::from_parts(parts, final_body),
     ))

@@ -9,6 +9,7 @@ use uuid::Uuid;
 
 use super::{model_id::ModelId, org::OrgId, user::UserId};
 use crate::{
+    agent::context::AgentContext,
     config::router::RouterConfig,
     middleware::{
         large_context::headers::TokenLimitExceptionHandler,
@@ -36,6 +37,9 @@ pub struct AuthContext {
     pub user_id: UserId,
     /// Maps to `workspace_id` in the new `virtual_keys` schema.
     pub org_id: OrgId,
+    /// `workspaces.type::text` resolved during virtual-key auth when PG
+    /// enrichment is available.
+    pub workspace_type: Option<String>,
     /// The row `id` from `virtual_keys`.
     pub virtual_key_id: Option<Uuid>,
     /// `virtual_keys.key_prefix` (public prefix for display / RMT).
@@ -57,6 +61,10 @@ pub struct AuthContext {
     pub entity_id: Uuid,
     /// Display name for logs list; empty when unknown.
     pub entity_name: String,
+    /// Agent display name derived from the authenticated VK label
+    /// `agent:<name>`. This is display metadata only; identity, policy, and
+    /// billing must continue to use stable IDs.
+    pub registered_agent_name: Option<String>,
     /// RMT `body_ttl_days`: from workspace active `subscriptions.log_limit`
     /// (clamped to 1–730).
     pub body_ttl_days: u16,
@@ -86,6 +94,8 @@ pub struct RequestContext {
     pub llm_kv_cache_read_allowed: bool,
     /// When false, skip LLM KV cache write.
     pub llm_kv_cache_write_allowed: bool,
+    /// Agent Gateway context parsed from headers or system-derived metadata.
+    pub agent_context: Option<AgentContext>,
 }
 
 #[derive(Debug, Default, Clone)]
@@ -252,6 +262,8 @@ pub enum RequestKind {
     UnifiedApi,
     DirectProxy,
     CustomProvider,
+    AgentEvents,
+    X402Agent,
 }
 
 /// Shared flag between the fallback request-log middleware and precise

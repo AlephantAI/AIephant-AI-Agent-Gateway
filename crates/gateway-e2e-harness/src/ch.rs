@@ -28,7 +28,8 @@ impl ChClient {
             Ok(s) if !s.is_empty() => s,
             _ => return Ok(None),
         };
-        let mut query_url = Url::parse(&base).context("CLICKHOUSE_HTTP_URL / CLICKHOUSE_URL")?;
+        let mut query_url = Url::parse(&base)
+            .context("CLICKHOUSE_HTTP_URL / CLICKHOUSE_URL")?;
         if let Ok(db) = std::env::var("CLICKHOUSE_DATABASE")
             && !db.is_empty()
         {
@@ -72,13 +73,15 @@ impl ChClient {
                     if attempt + 1 == poll.max_attempts {
                         return Ok(None);
                     }
-                    tokio::time::sleep(Duration::from_millis(poll.backoff_ms)).await;
+                    tokio::time::sleep(Duration::from_millis(poll.backoff_ms))
+                        .await;
                 }
                 Err(e) => {
                     if attempt + 1 == poll.max_attempts {
                         return Err(e);
                     }
-                    tokio::time::sleep(Duration::from_millis(poll.backoff_ms)).await;
+                    tokio::time::sleep(Duration::from_millis(poll.backoff_ms))
+                        .await;
                 }
             }
         }
@@ -135,7 +138,9 @@ fn validate_assert_poll_steps(
         return Ok(());
     };
     if steps.is_empty() {
-        anyhow::bail!("ch.assertPoll: steps must not be empty when assertPoll is set");
+        anyhow::bail!(
+            "ch.assertPoll: steps must not be empty when assertPoll is set"
+        );
     }
     let mut i = 0;
     while i < steps.len() {
@@ -165,7 +170,11 @@ fn validate_assert_poll_steps(
     Ok(())
 }
 
-async fn run_sql_with_poll(ch: &ChClient, sql_exec: &str, poll: &ChPoll) -> anyhow::Result<String> {
+async fn run_sql_with_poll(
+    ch: &ChClient,
+    sql_exec: &str,
+    poll: &ChPoll,
+) -> anyhow::Result<String> {
     for attempt in 0..poll.max_attempts {
         match ch.run_sql(sql_exec).await {
             Ok(body) => return Ok(body),
@@ -177,7 +186,8 @@ async fn run_sql_with_poll(ch: &ChClient, sql_exec: &str, poll: &ChPoll) -> anyh
                         poll.max_attempts,
                     );
                 }
-                tokio::time::sleep(Duration::from_millis(poll.backoff_ms)).await;
+                tokio::time::sleep(Duration::from_millis(poll.backoff_ms))
+                    .await;
             }
         }
     }
@@ -188,18 +198,20 @@ fn assert_first_row_matches(
     last_rows: &[serde_json::Value],
     equals: &serde_json::Map<String, serde_json::Value>,
 ) -> anyhow::Result<()> {
-    let row = last_rows
-        .first()
-        .ok_or_else(|| anyhow::anyhow!("AssertRow: no rows from previous clickhouseQuery"))?;
-    let obj = row
-        .as_object()
-        .ok_or_else(|| anyhow::anyhow!("AssertRow: first row is not a JSON object"))?;
+    let row = last_rows.first().ok_or_else(|| {
+        anyhow::anyhow!("AssertRow: no rows from previous clickhouseQuery")
+    })?;
+    let obj = row.as_object().ok_or_else(|| {
+        anyhow::anyhow!("AssertRow: first row is not a JSON object")
+    })?;
     for (k, expected) in equals {
-        let got = obj
-            .get(k)
-            .ok_or_else(|| anyhow::anyhow!("AssertRow: column {k:?} missing in row {obj:?}"))?;
+        let got = obj.get(k).ok_or_else(|| {
+            anyhow::anyhow!("AssertRow: column {k:?} missing in row {obj:?}")
+        })?;
         if got != expected {
-            anyhow::bail!("AssertRow: column {k:?} expected {expected}, got {got}");
+            anyhow::bail!(
+                "AssertRow: column {k:?} expected {expected}, got {got}"
+            );
         }
     }
     Ok(())
@@ -243,8 +255,12 @@ pub async fn run_ch_spec(
                 i += 1;
             }
             ChStep::ClickhouseQuery { sql } => {
-                if matches!(spec.steps.get(i + 1), Some(ChStep::AssertRow { .. })) {
-                    let ChStep::AssertRow { equals } = &spec.steps[i + 1] else {
+                if matches!(
+                    spec.steps.get(i + 1),
+                    Some(ChStep::AssertRow { .. })
+                ) {
+                    let ChStep::AssertRow { equals } = &spec.steps[i + 1]
+                    else {
                         unreachable!("guarded by matches");
                     };
                     let sql_exec = curl
@@ -255,25 +271,37 @@ pub async fn run_ch_spec(
 
                     if let Some(ap) = spec.assert_poll.as_ref() {
                         for assert_attempt in 0..ap.max_attempts {
-                            match assert_first_row_matches(&out.last_rows, equals) {
+                            match assert_first_row_matches(
+                                &out.last_rows,
+                                equals,
+                            ) {
                                 Ok(()) => break,
                                 Err(e) => {
                                     if assert_attempt + 1 == ap.max_attempts {
-                                        let hint = first_row_hint(&out.last_rows);
+                                        let hint =
+                                            first_row_hint(&out.last_rows);
                                         anyhow::bail!(
                                             "ch: assertPoll: {e:#} (sample: \
                                              {hint})"
                                         );
                                     }
-                                    tokio::time::sleep(Duration::from_millis(ap.backoff_ms)).await;
-                                    let body = run_sql_with_poll(ch, &sql_exec, &poll).await?;
-                                    out.last_rows = parse_json_each_row_lines(&body);
+                                    tokio::time::sleep(Duration::from_millis(
+                                        ap.backoff_ms,
+                                    ))
+                                    .await;
+                                    let body =
+                                        run_sql_with_poll(ch, &sql_exec, &poll)
+                                            .await?;
+                                    out.last_rows =
+                                        parse_json_each_row_lines(&body);
                                 }
                             }
                         }
                     } else {
                         assert_first_row_matches(&out.last_rows, equals)
-                            .map_err(|e| anyhow::anyhow!("ch: assert: {e:#}"))?;
+                            .map_err(|e| {
+                                anyhow::anyhow!("ch: assert: {e:#}")
+                            })?;
                     }
                     i += 2;
                 } else {

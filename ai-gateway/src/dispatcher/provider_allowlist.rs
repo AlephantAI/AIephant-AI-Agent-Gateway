@@ -11,12 +11,15 @@ pub(super) fn enforce_workspace_provider_allowlist(
     auth_ctx: Option<&AuthContext>,
     target_provider: &InferenceProvider,
 ) -> Result<(), ApiError> {
-    let Some(workspace_id) = allowlist_workspace_id_for_request(auth_ctx) else {
+    let Some(workspace_id) = allowlist_workspace_id_for_request(auth_ctx)
+    else {
         return Ok(());
     };
 
     // F-10: enforce workspace provider allowlist in Cloud mode.
-    if !app_state.is_provider_allowed_for_workspace(workspace_id, target_provider) {
+    if !app_state
+        .is_provider_allowed_for_workspace(workspace_id, target_provider)
+    {
         tracing::warn!(
             provider = %target_provider,
             workspace_id = %workspace_id,
@@ -28,11 +31,16 @@ pub(super) fn enforce_workspace_provider_allowlist(
             None,
             target_provider,
         );
-        return Err(InternalError::ProviderNotAllowedForWorkspace(target_provider.clone()).into());
+        return Err(InternalError::ProviderNotAllowedForWorkspace(
+            target_provider.clone(),
+        )
+        .into());
     }
     Ok(())
 }
 
-pub(super) fn allowlist_workspace_id_for_request(auth_ctx: Option<&AuthContext>) -> Option<Uuid> {
+pub(super) fn allowlist_workspace_id_for_request(
+    auth_ctx: Option<&AuthContext>,
+) -> Option<Uuid> {
     auth_ctx.map(|ctx| *ctx.org_id.as_ref())
 }

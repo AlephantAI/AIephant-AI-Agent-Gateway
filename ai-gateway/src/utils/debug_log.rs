@@ -22,7 +22,9 @@ impl DebugLogConfig {
     }
 
     pub(crate) fn from_headers(headers: &mut http::HeaderMap) -> Self {
-        Self::from_headers_with_env(headers, |key| std::env::var_os(key).map(|_| ""))
+        Self::from_headers_with_env(headers, |key| {
+            std::env::var_os(key).map(|_| "")
+        })
     }
 
     pub(crate) fn from_headers_with_env<'a>(
@@ -31,7 +33,8 @@ impl DebugLogConfig {
     ) -> Self {
         let env_headers = debug_headers_enabled_with(&getenv);
         let env_body = debug_body_enabled_with(getenv);
-        let header_override = take_debug_bool_header(headers, DEBUG_HEADERS_HEADER);
+        let header_override =
+            take_debug_bool_header(headers, DEBUG_HEADERS_HEADER);
         let body_override = take_debug_bool_header(headers, DEBUG_BODY_HEADER);
         Self {
             headers: header_override.unwrap_or(env_headers),
@@ -52,7 +55,10 @@ pub(crate) fn remove_debug_control_headers(headers: &mut http::HeaderMap) {
     headers.remove(DEBUG_BODY_HEADER);
 }
 
-fn take_debug_bool_header(headers: &mut http::HeaderMap, name: &'static str) -> Option<bool> {
+fn take_debug_bool_header(
+    headers: &mut http::HeaderMap,
+    name: &'static str,
+) -> Option<bool> {
     let value = headers.remove(name)?;
     value.to_str().ok().and_then(parse_debug_bool_header_value)
 }
@@ -73,11 +79,15 @@ pub(crate) fn debug_body_enabled() -> bool {
     debug_body_enabled_with(|key| std::env::var_os(key).map(|_| ""))
 }
 
-fn debug_headers_enabled_with<'a>(getenv: impl Fn(&str) -> Option<&'a str>) -> bool {
+fn debug_headers_enabled_with<'a>(
+    getenv: impl Fn(&str) -> Option<&'a str>,
+) -> bool {
     getenv(DEBUG_HEADERS_ENV).is_some()
 }
 
-fn debug_body_enabled_with<'a>(getenv: impl Fn(&str) -> Option<&'a str>) -> bool {
+fn debug_body_enabled_with<'a>(
+    getenv: impl Fn(&str) -> Option<&'a str>,
+) -> bool {
     getenv(DEBUG_BODY_ENV).is_some()
 }
 
@@ -106,13 +116,17 @@ pub(crate) fn debug_body_preview(body: &[u8]) -> DebugBodyPreview {
     debug_body_preview_with_limit(body, DEBUG_BODY_MAX_LOG_BYTES)
 }
 
-pub(crate) fn debug_body_preview_with_limit(body: &[u8], max_log_bytes: usize) -> DebugBodyPreview {
+pub(crate) fn debug_body_preview_with_limit(
+    body: &[u8],
+    max_log_bytes: usize,
+) -> DebugBodyPreview {
     let body_len = body.len();
-    let display_body =
-        redacted_json_body(body).unwrap_or_else(|| String::from_utf8_lossy(body).into_owned());
+    let display_body = redacted_json_body(body)
+        .unwrap_or_else(|| String::from_utf8_lossy(body).into_owned());
     let truncated = display_body.len() > max_log_bytes;
     let body = if truncated {
-        String::from_utf8_lossy(&display_body.as_bytes()[..max_log_bytes]).into_owned()
+        String::from_utf8_lossy(&display_body.as_bytes()[..max_log_bytes])
+            .into_owned()
     } else {
         display_body
     };
@@ -186,7 +200,11 @@ pub(crate) fn maybe_log_headers(
     );
 }
 
-pub(crate) fn maybe_log_body(scope: &'static str, body: &[u8], config: DebugLogConfig) {
+pub(crate) fn maybe_log_body(
+    scope: &'static str,
+    body: &[u8],
+    config: DebugLogConfig,
+) {
     if !config.body {
         return;
     }
@@ -308,9 +326,12 @@ mod tests {
     #[test]
     fn debug_log_config_uses_env_defaults_without_request_headers() {
         let mut headers = http::HeaderMap::new();
-        let cfg = super::DebugLogConfig::from_headers_with_env(&mut headers, |key| {
-            (key == "AI_GATEWAY_DEBUG_HEADERS" || key == "AI_GATEWAY_DEBUG_BODY").then_some("true")
-        });
+        let cfg =
+            super::DebugLogConfig::from_headers_with_env(&mut headers, |key| {
+                (key == "AI_GATEWAY_DEBUG_HEADERS"
+                    || key == "AI_GATEWAY_DEBUG_BODY")
+                    .then_some("true")
+            });
 
         assert!(cfg.headers);
         assert!(cfg.body);
@@ -328,9 +349,10 @@ mod tests {
             http::HeaderValue::from_static("true"),
         );
 
-        let cfg = super::DebugLogConfig::from_headers_with_env(&mut headers, |key| {
-            (key == "AI_GATEWAY_DEBUG_HEADERS").then_some("true")
-        });
+        let cfg =
+            super::DebugLogConfig::from_headers_with_env(&mut headers, |key| {
+                (key == "AI_GATEWAY_DEBUG_HEADERS").then_some("true")
+            });
 
         assert!(!cfg.headers);
         assert!(cfg.body);

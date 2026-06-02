@@ -63,7 +63,10 @@ where
     type Error = S::Error;
     type Future = Either<Ready<Result<Self::Response, Self::Error>>, S::Future>;
 
-    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+    fn poll_ready(
+        &mut self,
+        cx: &mut Context<'_>,
+    ) -> Poll<Result<(), Self::Error>> {
         self.inner.poll_ready(cx)
     }
 
@@ -75,10 +78,9 @@ where
         match req.uri().path() {
             "/health" => Either::Left(ready(Ok(healthy_response()))),
             "/healthz/ready" => {
-                let is_ready = self
-                    .app_state
-                    .as_ref()
-                    .is_none_or(super::super::app_state::AppState::is_cache_warmed);
+                let is_ready = self.app_state.as_ref().is_none_or(
+                    super::super::app_state::AppState::is_cache_warmed,
+                );
                 if is_ready {
                     Either::Left(ready(Ok(healthy_response())))
                 } else {

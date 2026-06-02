@@ -18,11 +18,17 @@ use weighted_balance::weight::Weight;
 use crate::{
     app_state::AppState,
     config::{
-        balance::BalanceConfigInner, fallback_bridge, monitor::GracePeriod, router::RouterConfig,
+        balance::BalanceConfigInner, fallback_bridge, monitor::GracePeriod,
+        router::RouterConfig,
     },
     discover::{
-        model::{key::Key as ModelKey, weighted_key::WeightedKey as ModelWeightedKey},
-        provider::{key::Key as ProviderKey, weighted_key::WeightedKey as ProviderWeightedKey},
+        model::{
+            key::Key as ModelKey, weighted_key::WeightedKey as ModelWeightedKey,
+        },
+        provider::{
+            key::Key as ProviderKey,
+            weighted_key::WeightedKey as ProviderWeightedKey,
+        },
     },
     dispatcher::{Dispatcher, DispatcherService},
     error::{
@@ -33,7 +39,8 @@ use crate::{
     types::{provider::InferenceProvider, router::RouterId},
 };
 
-pub type HealthMonitorMap = Arc<RwLock<HashMap<RouterId, ProviderHealthMonitor>>>;
+pub type HealthMonitorMap =
+    Arc<RwLock<HashMap<RouterId, ProviderHealthMonitor>>>;
 
 #[derive(Debug, Clone)]
 pub enum ProviderHealthMonitor {
@@ -111,7 +118,9 @@ impl ProviderHealthMonitor {
             ProviderHealthMonitor::ProviderLatency(inner) => {
                 check_provider_latency_monitor(inner).await
             }
-            ProviderHealthMonitor::ModelLatency(inner) => check_model_latency_monitor(inner).await,
+            ProviderHealthMonitor::ModelLatency(inner) => {
+                check_model_latency_monitor(inner).await
+            }
         }
     }
 }
@@ -120,19 +129,24 @@ impl ProviderHealthMonitor {
 async fn check_provider_weighted_monitor(
     inner: &mut ProviderMonitorInner<ProviderWeightedKey>,
 ) -> Result<(), runtime::RuntimeError> {
-    for (endpoint_type, balance_config) in inner.router_config.load_balance.as_ref() {
+    for (endpoint_type, balance_config) in
+        inner.router_config.load_balance.as_ref()
+    {
         match balance_config {
             BalanceConfigInner::ProviderWeighted { providers } => {
                 for target in providers {
                     let provider = &target.provider;
                     let weight = Weight::from(
-                        target
-                            .weight
-                            .to_f64()
-                            .ok_or_else(|| InitError::InvalidWeight(target.provider.clone()))?,
+                        target.weight.to_f64().ok_or_else(|| {
+                            InitError::InvalidWeight(target.provider.clone())
+                        })?,
                     );
 
-                    let key = ProviderWeightedKey::new(provider.clone(), *endpoint_type, weight);
+                    let key = ProviderWeightedKey::new(
+                        provider.clone(),
+                        *endpoint_type,
+                        weight,
+                    );
                     let is_healthy = inner.check_health(provider)?;
                     let was_unhealthy = inner.unhealthy_keys.contains(&key);
 
@@ -144,7 +158,9 @@ async fn check_provider_weighted_monitor(
                             Some(crate::fallback::evaluator::FailoverSource::Health),
                             provider,
                         );
-                        if let Err(e) = inner.tx.send(Change::Remove(key.clone())).await {
+                        if let Err(e) =
+                            inner.tx.send(Change::Remove(key.clone())).await
+                        {
                             error!(error = ?e, "Failed to send remove event for unhealthy provider");
                         }
                         inner.unhealthy_keys.insert(key);
@@ -175,7 +191,9 @@ async fn check_provider_weighted_monitor(
                             Some(crate::fallback::evaluator::FailoverSource::Health),
                             provider,
                         );
-                        if let Err(e) = inner.tx.send(Change::Insert(key, service)).await {
+                        if let Err(e) =
+                            inner.tx.send(Change::Insert(key, service)).await
+                        {
                             error!(error = ?e, "Failed to send insert event for healthy provider");
                         }
                         if let Some(publisher) = &inner.health_broadcaster {
@@ -189,7 +207,8 @@ async fn check_provider_weighted_monitor(
                         }
                     }
 
-                    let metric_attributes = [KeyValue::new("provider", provider.to_string())];
+                    let metric_attributes =
+                        [KeyValue::new("provider", provider.to_string())];
                     if is_healthy {
                         inner
                             .app_state
@@ -208,7 +227,9 @@ async fn check_provider_weighted_monitor(
                 }
             }
             BalanceConfigInner::ModelWeighted { .. } => {
-                tracing::error!("Model weighted entries in a provider weighted monitor");
+                tracing::error!(
+                    "Model weighted entries in a provider weighted monitor"
+                );
                 return Err(InternalError::Internal.into());
             }
             BalanceConfigInner::BalancedLatency { .. } => {
@@ -216,7 +237,9 @@ async fn check_provider_weighted_monitor(
                 return Err(InternalError::Internal.into());
             }
             BalanceConfigInner::ModelLatency { .. } => {
-                tracing::error!("Model latency entries in a provider weighted monitor");
+                tracing::error!(
+                    "Model latency entries in a provider weighted monitor"
+                );
                 return Err(InternalError::Internal.into());
             }
         }
@@ -229,22 +252,27 @@ async fn check_provider_weighted_monitor(
 async fn check_model_weighted_monitor(
     inner: &mut ProviderMonitorInner<ModelWeightedKey>,
 ) -> Result<(), runtime::RuntimeError> {
-    for (endpoint_type, balance_config) in inner.router_config.load_balance.as_ref() {
+    for (endpoint_type, balance_config) in
+        inner.router_config.load_balance.as_ref()
+    {
         match balance_config {
             BalanceConfigInner::ModelWeighted { models } => {
                 for target in models {
                     let model = &target.model;
-                    let provider = model
-                        .inference_provider()
-                        .ok_or_else(|| InitError::ModelIdNotRecognized(model.to_string()))?;
-                    let weight = Weight::from(
-                        target
-                            .weight
-                            .to_f64()
-                            .ok_or_else(|| InitError::InvalidWeight(provider.clone()))?,
-                    );
+                    let provider =
+                        model.inference_provider().ok_or_else(|| {
+                            InitError::ModelIdNotRecognized(model.to_string())
+                        })?;
+                    let weight =
+                        Weight::from(target.weight.to_f64().ok_or_else(
+                            || InitError::InvalidWeight(provider.clone()),
+                        )?);
 
-                    let key = ModelWeightedKey::new(model.clone(), *endpoint_type, weight);
+                    let key = ModelWeightedKey::new(
+                        model.clone(),
+                        *endpoint_type,
+                        weight,
+                    );
                     let is_healthy = inner.check_health(&provider)?;
                     let was_unhealthy = inner.unhealthy_keys.contains(&key);
 
@@ -258,18 +286,25 @@ async fn check_model_weighted_monitor(
                         );
                         let all_models_of_unhealthy_provider = models
                             .iter()
-                            .filter(|m| m.model.inference_provider().as_ref() == Some(&provider))
+                            .filter(|m| {
+                                m.model.inference_provider().as_ref()
+                                    == Some(&provider)
+                            })
                             .collect::<Vec<_>>();
 
                         // Send removal changes for all models of the unhealthy
                         // provider concurrently
                         let mut join_set = JoinSet::new();
-                        for unhealthy_model in all_models_of_unhealthy_provider {
+                        for unhealthy_model in all_models_of_unhealthy_provider
+                        {
                             let weight = Weight::from(
-                                unhealthy_model
-                                    .weight
-                                    .to_f64()
-                                    .ok_or_else(|| InitError::InvalidWeight(provider.clone()))?,
+                                unhealthy_model.weight.to_f64().ok_or_else(
+                                    || {
+                                        InitError::InvalidWeight(
+                                            provider.clone(),
+                                        )
+                                    },
+                                )?,
                             );
                             let unhealthy_key = ModelWeightedKey::new(
                                 unhealthy_model.model.clone(),
@@ -279,12 +314,14 @@ async fn check_model_weighted_monitor(
                             let tx = inner.tx.clone();
 
                             inner.unhealthy_keys.insert(unhealthy_key.clone());
-                            join_set
-                                .spawn(async move { tx.send(Change::Remove(unhealthy_key)).await });
+                            join_set.spawn(async move {
+                                tx.send(Change::Remove(unhealthy_key)).await
+                            });
                         }
 
                         // we can't use join_all because we want to avoid panics
-                        while let Some(task_result) = join_set.join_next().await {
+                        while let Some(task_result) = join_set.join_next().await
+                        {
                             match task_result {
                                 Ok(send_result) => {
                                     if let Err(e) = send_result {
@@ -316,16 +353,23 @@ async fn check_model_weighted_monitor(
                         );
                         let all_models_of_now_healthy_provider = models
                             .iter()
-                            .filter(|m| m.model.inference_provider().as_ref() == Some(&provider))
+                            .filter(|m| {
+                                m.model.inference_provider().as_ref()
+                                    == Some(&provider)
+                            })
                             .collect::<Vec<_>>();
                         inner.unhealthy_keys.remove(&key);
 
-                        for healthy_model in all_models_of_now_healthy_provider {
+                        for healthy_model in all_models_of_now_healthy_provider
+                        {
                             let weight = Weight::from(
-                                healthy_model
-                                    .weight
-                                    .to_f64()
-                                    .ok_or_else(|| InitError::InvalidWeight(provider.clone()))?,
+                                healthy_model.weight.to_f64().ok_or_else(
+                                    || {
+                                        InitError::InvalidWeight(
+                                            provider.clone(),
+                                        )
+                                    },
+                                )?,
                             );
                             let key = ModelWeightedKey::new(
                                 healthy_model.model.clone(),
@@ -339,7 +383,11 @@ async fn check_model_weighted_monitor(
                                 provider.clone(),
                             )
                             .await?;
-                            if let Err(e) = inner.tx.send(Change::Insert(key, service)).await {
+                            if let Err(e) = inner
+                                .tx
+                                .send(Change::Insert(key, service))
+                                .await
+                            {
                                 error!(error = ?e, "Failed to send insert event for healthy provider");
                             }
                         }
@@ -354,7 +402,8 @@ async fn check_model_weighted_monitor(
                         }
                     }
 
-                    let metric_attributes = [KeyValue::new("provider", provider.to_string())];
+                    let metric_attributes =
+                        [KeyValue::new("provider", provider.to_string())];
                     if is_healthy {
                         inner
                             .app_state
@@ -373,7 +422,9 @@ async fn check_model_weighted_monitor(
                 }
             }
             BalanceConfigInner::ProviderWeighted { .. } => {
-                tracing::error!("Provider weighted entries in a model weighted monitor");
+                tracing::error!(
+                    "Provider weighted entries in a model weighted monitor"
+                );
                 return Err(InternalError::Internal.into());
             }
             BalanceConfigInner::BalancedLatency { .. } => {
@@ -381,7 +432,9 @@ async fn check_model_weighted_monitor(
                 return Err(InternalError::Internal.into());
             }
             BalanceConfigInner::ModelLatency { .. } => {
-                tracing::error!("Model latency entries in a model weighted monitor");
+                tracing::error!(
+                    "Model latency entries in a model weighted monitor"
+                );
                 return Err(InternalError::Internal.into());
             }
         }
@@ -393,11 +446,14 @@ async fn check_model_weighted_monitor(
 async fn check_provider_latency_monitor(
     inner: &mut ProviderMonitorInner<ProviderKey>,
 ) -> Result<(), runtime::RuntimeError> {
-    for (endpoint_type, balance_config) in inner.router_config.load_balance.as_ref() {
+    for (endpoint_type, balance_config) in
+        inner.router_config.load_balance.as_ref()
+    {
         match balance_config {
             BalanceConfigInner::BalancedLatency { providers } => {
                 for provider in providers {
-                    let key = ProviderKey::new(provider.clone(), *endpoint_type);
+                    let key =
+                        ProviderKey::new(provider.clone(), *endpoint_type);
                     let is_healthy = inner.check_health(provider)?;
                     let was_unhealthy = inner.unhealthy_keys.contains(&key);
 
@@ -409,7 +465,9 @@ async fn check_provider_latency_monitor(
                             Some(crate::fallback::evaluator::FailoverSource::Health),
                             provider,
                         );
-                        if let Err(e) = inner.tx.send(Change::Remove(key.clone())).await {
+                        if let Err(e) =
+                            inner.tx.send(Change::Remove(key.clone())).await
+                        {
                             error!(error = ?e, "Failed to send remove event for unhealthy provider");
                         }
                         inner.unhealthy_keys.insert(key);
@@ -440,7 +498,9 @@ async fn check_provider_latency_monitor(
                             Some(crate::fallback::evaluator::FailoverSource::Health),
                             provider,
                         );
-                        if let Err(e) = inner.tx.send(Change::Insert(key, service)).await {
+                        if let Err(e) =
+                            inner.tx.send(Change::Insert(key, service)).await
+                        {
                             error!(error = ?e, "Failed to send insert event for healthy provider");
                         }
                         if let Some(publisher) = &inner.health_broadcaster {
@@ -454,7 +514,8 @@ async fn check_provider_latency_monitor(
                         }
                     }
 
-                    let metric_attributes = [KeyValue::new("provider", provider.to_string())];
+                    let metric_attributes =
+                        [KeyValue::new("provider", provider.to_string())];
                     if is_healthy {
                         inner
                             .app_state
@@ -494,13 +555,16 @@ async fn check_provider_latency_monitor(
 async fn check_model_latency_monitor(
     inner: &mut ProviderMonitorInner<ModelKey>,
 ) -> Result<(), runtime::RuntimeError> {
-    for (endpoint_type, balance_config) in inner.router_config.load_balance.as_ref() {
+    for (endpoint_type, balance_config) in
+        inner.router_config.load_balance.as_ref()
+    {
         match balance_config {
             BalanceConfigInner::ModelLatency { models } => {
                 for model in models {
-                    let provider = model
-                        .inference_provider()
-                        .ok_or_else(|| InitError::ModelIdNotRecognized(model.to_string()))?;
+                    let provider =
+                        model.inference_provider().ok_or_else(|| {
+                            InitError::ModelIdNotRecognized(model.to_string())
+                        })?;
                     let key = ModelKey::new(model.clone(), *endpoint_type);
                     let is_healthy = inner.check_health(&provider)?;
                     let was_unhealthy = inner.unhealthy_keys.contains(&key);
@@ -515,24 +579,32 @@ async fn check_model_latency_monitor(
                         );
                         let all_models_of_unhealthy_provider = models
                             .iter()
-                            .filter(|m| m.inference_provider().as_ref() == Some(&provider))
+                            .filter(|m| {
+                                m.inference_provider().as_ref()
+                                    == Some(&provider)
+                            })
                             .collect::<Vec<_>>();
 
                         // Send removal changes for all models of the unhealthy
                         // provider concurrently
                         let mut join_set = JoinSet::new();
-                        for unhealthy_model in all_models_of_unhealthy_provider {
-                            let unhealthy_key =
-                                ModelKey::new(unhealthy_model.clone(), *endpoint_type);
+                        for unhealthy_model in all_models_of_unhealthy_provider
+                        {
+                            let unhealthy_key = ModelKey::new(
+                                unhealthy_model.clone(),
+                                *endpoint_type,
+                            );
                             let tx = inner.tx.clone();
 
                             inner.unhealthy_keys.insert(unhealthy_key.clone());
-                            join_set
-                                .spawn(async move { tx.send(Change::Remove(unhealthy_key)).await });
+                            join_set.spawn(async move {
+                                tx.send(Change::Remove(unhealthy_key)).await
+                            });
                         }
 
                         // we can't use join_all because we want to avoid panics
-                        while let Some(task_result) = join_set.join_next().await {
+                        while let Some(task_result) = join_set.join_next().await
+                        {
                             match task_result {
                                 Ok(send_result) => {
                                     if let Err(e) = send_result {
@@ -564,12 +636,16 @@ async fn check_model_latency_monitor(
                         );
                         let all_models_of_now_healthy_provider = models
                             .iter()
-                            .filter(|m| m.inference_provider().as_ref() == Some(&provider))
+                            .filter(|m| {
+                                m.inference_provider().as_ref()
+                                    == Some(&provider)
+                            })
                             .collect::<Vec<_>>();
                         inner.unhealthy_keys.remove(&key);
 
                         for model in all_models_of_now_healthy_provider {
-                            let key = ModelKey::new(model.clone(), *endpoint_type);
+                            let key =
+                                ModelKey::new(model.clone(), *endpoint_type);
                             let service = Dispatcher::new(
                                 inner.app_state.clone(),
                                 &inner.router_id,
@@ -577,7 +653,11 @@ async fn check_model_latency_monitor(
                                 provider.clone(),
                             )
                             .await?;
-                            if let Err(e) = inner.tx.send(Change::Insert(key, service)).await {
+                            if let Err(e) = inner
+                                .tx
+                                .send(Change::Insert(key, service))
+                                .await
+                            {
                                 error!(error = ?e, "Failed to send insert event for healthy provider");
                             }
                         }
@@ -592,7 +672,8 @@ async fn check_model_latency_monitor(
                         }
                     }
 
-                    let metric_attributes = [KeyValue::new("provider", provider.to_string())];
+                    let metric_attributes =
+                        [KeyValue::new("provider", provider.to_string())];
                     if is_healthy {
                         inner
                             .app_state
@@ -619,7 +700,9 @@ async fn check_model_latency_monitor(
                 return Err(InternalError::Internal.into());
             }
             BalanceConfigInner::BalancedLatency { .. } => {
-                tracing::error!("provider latency entries in a model latency monitor");
+                tracing::error!(
+                    "provider latency entries in a model latency monitor"
+                );
                 return Err(InternalError::Internal.into());
             }
         }
@@ -656,8 +739,14 @@ impl<K> ProviderMonitorInner<K> {
                 if !cfg.enabled {
                     return None;
                 }
-                let redis_url = app_state.config().request_log.log_queue_redis_url.clone()?;
-                Some(super::broadcast::HealthEventPublisher::new(redis_url, cfg))
+                let redis_url = app_state
+                    .config()
+                    .request_log
+                    .log_queue_redis_url
+                    .clone()?;
+                Some(super::broadcast::HealthEventPublisher::new(
+                    redis_url, cfg,
+                ))
             });
         Self {
             tx,
@@ -669,16 +758,22 @@ impl<K> ProviderMonitorInner<K> {
         }
     }
 
-    fn check_health(&self, provider: &InferenceProvider) -> Result<bool, InternalError> {
+    fn check_health(
+        &self,
+        provider: &InferenceProvider,
+    ) -> Result<bool, InternalError> {
         if matches!(provider, InferenceProvider::Custom) {
             return Ok(true);
         }
 
         let provider_endpoints = provider.endpoints();
-        let params = fallback_bridge::resolved_health_monitor_config(self.app_state.config());
+        let params = fallback_bridge::resolved_health_monitor_config(
+            self.app_state.config(),
+        );
         let mut all_healthy = true;
         for endpoint in provider_endpoints {
-            let endpoint_metrics = self.app_state.0.endpoint_metrics.health_metrics(endpoint)?;
+            let endpoint_metrics =
+                self.app_state.0.endpoint_metrics.health_metrics(endpoint)?;
             let requests = endpoint_metrics.request_count.total();
             match &params.grace_period {
                 GracePeriod::Requests { min_requests } => {
@@ -715,7 +810,10 @@ impl HealthMonitor {
         tracing::info!("starting health and uptime monitors");
 
         let interval_duration =
-            fallback_bridge::resolved_health_monitor_config(self.app_state.config()).interval;
+            fallback_bridge::resolved_health_monitor_config(
+                self.app_state.config(),
+            )
+            .interval;
         let mut interval = time::interval(interval_duration);
 
         loop {
@@ -775,7 +873,12 @@ impl AppState {
     ) {
         self.0.health_monitors.write().await.insert(
             router_id.clone(),
-            ProviderHealthMonitor::provider_weighted(tx, router_id, router_config, self.clone()),
+            ProviderHealthMonitor::provider_weighted(
+                tx,
+                router_id,
+                router_config,
+                self.clone(),
+            ),
         );
     }
 
@@ -787,7 +890,12 @@ impl AppState {
     ) {
         self.0.health_monitors.write().await.insert(
             router_id.clone(),
-            ProviderHealthMonitor::model_weighted(tx, router_id, router_config, self.clone()),
+            ProviderHealthMonitor::model_weighted(
+                tx,
+                router_id,
+                router_config,
+                self.clone(),
+            ),
         );
     }
 
@@ -799,7 +907,12 @@ impl AppState {
     ) {
         self.0.health_monitors.write().await.insert(
             router_id.clone(),
-            ProviderHealthMonitor::provider_latency(tx, router_id, router_config, self.clone()),
+            ProviderHealthMonitor::provider_latency(
+                tx,
+                router_id,
+                router_config,
+                self.clone(),
+            ),
         );
     }
 
@@ -811,7 +924,12 @@ impl AppState {
     ) {
         self.0.health_monitors.write().await.insert(
             router_id.clone(),
-            ProviderHealthMonitor::model_latency(tx, router_id, router_config, self.clone()),
+            ProviderHealthMonitor::model_latency(
+                tx,
+                router_id,
+                router_config,
+                self.clone(),
+            ),
         );
     }
 }

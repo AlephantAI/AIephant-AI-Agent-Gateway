@@ -14,6 +14,7 @@ use uuid::Uuid;
 
 use super::model_info::ModelInfo;
 use crate::{
+    agent::{context::AgentContext, name::resolve_agent_name},
     app_state::AppState,
     config::deployment_target::DeploymentTarget,
     error::{init::InitError, logger::LoggerError},
@@ -23,11 +24,13 @@ use crate::{
     types::{
         body::BodyReader,
         extensions::{
-            AuthContext, LargeContextDecision, MapperContext, PromptCompressionTokenPair,
-            PromptContext, PromptHeaderForRequestLog,
+            AuthContext, LargeContextDecision, MapperContext,
+            PromptCompressionTokenPair, PromptContext,
+            PromptHeaderForRequestLog,
         },
         logger::{
-            AiGatewayBodyMapping, AlephantLogMetadata, Log, LogMessage, RequestLog, ResponseLog,
+            AiGatewayBodyMapping, AlephantLogMetadata, Log, LogMessage,
+            RequestLog, ResponseLog,
         },
         provider::InferenceProvider,
         router::RouterId,
@@ -46,7 +49,9 @@ fn nonempty_string_opt(s: &str) -> Option<String> {
     }
 }
 
-fn parse_ai_gateway_body_mapping(raw: Option<&String>) -> Option<AiGatewayBodyMapping> {
+fn parse_ai_gateway_body_mapping(
+    raw: Option<&String>,
+) -> Option<AiGatewayBodyMapping> {
     let s = raw.map_or("", String::as_str).trim();
     if s.is_empty() {
         return None;
@@ -59,13 +64,17 @@ fn parse_ai_gateway_body_mapping(raw: Option<&String>) -> Option<AiGatewayBodyMa
     }
 }
 
-fn inference_provider_for_ingest_meta(provider: &InferenceProvider) -> Option<String> {
+fn inference_provider_for_ingest_meta(
+    provider: &InferenceProvider,
+) -> Option<String> {
     match provider {
         InferenceProvider::OpenAI => Some("openai".to_string()),
         InferenceProvider::Anthropic => Some("anthropic".to_string()),
         InferenceProvider::Bedrock => Some("bedrock".to_string()),
         InferenceProvider::GoogleGemini => Some("google-ai-studio".to_string()),
-        InferenceProvider::Ollama | InferenceProvider::Custom | InferenceProvider::Named(_) => None,
+        InferenceProvider::Ollama
+        | InferenceProvider::Custom
+        | InferenceProvider::Named(_) => None,
     }
 }
 
@@ -92,6 +101,97 @@ fn extract_request_properties(
         inject_session_properties(&mut properties, session_ctx);
     }
     properties
+}
+
+#[derive(Debug, Clone, Default)]
+struct AgentLogFields {
+    alephant_agent_id: Option<String>,
+    self_reported_agent_name: Option<String>,
+    alephant_agent_name: Option<String>,
+    alephant_agent_name_source: Option<String>,
+    alephant_agent_uid: Option<Uuid>,
+    alephant_run_id: Option<String>,
+    alephant_step_id: Option<String>,
+    alephant_parent_step_id: Option<String>,
+    alephant_tool_call_id: Option<String>,
+    alephant_handoff_id: Option<String>,
+    alephant_graph_node: Option<String>,
+    alephant_iteration: Option<u32>,
+    alephant_state_hash: Option<String>,
+    alephant_step_kind: Option<String>,
+    alephant_step_source: Option<String>,
+    alephant_step_confidence: Option<String>,
+    alephant_agent_trust_level: Option<String>,
+}
+
+fn clone_nonempty(value: &Option<String>) -> Option<String> {
+    value.as_deref().and_then(nonempty_string_opt)
+}
+
+fn agent_log_fields(agent_ctx: Option<&AgentContext>) -> AgentLogFields {
+    let Some(agent_ctx) = agent_ctx else {
+        return AgentLogFields::default();
+    };
+
+    AgentLogFields {
+        alephant_agent_id: clone_nonempty(&agent_ctx.agent_id_external),
+        self_reported_agent_name: clone_nonempty(&agent_ctx.agent_name),
+        alephant_agent_name: None,
+        alephant_agent_name_source: None,
+        alephant_agent_uid: agent_ctx.agent_uid,
+        alephant_run_id: clone_nonempty(&agent_ctx.run_id),
+        alephant_step_id: clone_nonempty(&agent_ctx.step_id),
+        alephant_parent_step_id: clone_nonempty(&agent_ctx.parent_step_id),
+        alephant_tool_call_id: clone_nonempty(&agent_ctx.tool_call_id),
+        alephant_handoff_id: clone_nonempty(&agent_ctx.handoff_id),
+        alephant_graph_node: clone_nonempty(&agent_ctx.graph_node),
+        alephant_iteration: agent_ctx.iteration,
+        alephant_state_hash: clone_nonempty(&agent_ctx.state_hash),
+        alephant_step_kind: agent_ctx
+            .step_kind
+            .map(|kind| kind.as_str().to_string()),
+        alephant_step_source: Some(agent_ctx.step_source.as_str().to_string()),
+        alephant_step_confidence: Some(
+            agent_ctx.step_confidence.as_str().to_string(),
+        ),
+        alephant_agent_trust_level: Some(
+            agent_ctx.trust_level.as_str().to_string(),
+        ),
+    }
+}
+
+fn apply_final_agent_name_to_request_log(
+    registered_agent_name: Option<&str>,
+    agent_fields: &mut AgentLogFields,
+    properties: &mut IndexMap<String, String>,
+) {
+    let resolved_agent_name = resolve_agent_name(
+        registered_agent_name,
+        None,
+        agent_fields.self_reported_agent_name.as_deref(),
+    );
+    agent_fields.alephant_agent_name = resolved_agent_name.name;
+    agent_fields.alephant_agent_name_source =
+        resolved_agent_name.source.map(str::to_string);
+    if let Some(trust_level) = resolved_agent_name.trust_level {
+        agent_fields.alephant_agent_trust_level =
+            Some(trust_level.as_str().to_string());
+    }
+    if let Some(conflict) = resolved_agent_name.conflict {
+        properties.insert(
+            "registeredAgentName".to_string(),
+            conflict.registered_agent_name,
+        );
+        properties.insert(
+            "selfReportedAgentName".to_string(),
+            conflict.self_reported_agent_name,
+        );
+        properties.insert(
+            "selfReportedAgentNameSource".to_string(),
+            conflict.self_reported_agent_name_source.to_string(),
+        );
+        properties.insert("agentNameConflict".to_string(), "true".to_string());
+    }
 }
 
 fn resolved_response_cost(
@@ -157,13 +257,18 @@ pub struct LoggerService {
     #[builder(default)]
     session_ctx: Option<SessionHeaders>,
     #[builder(default)]
+    agent_ctx: Option<AgentContext>,
+    #[builder(default)]
     ai_gateway_body_mapping: Option<String>,
     #[builder(default = DebugLogConfig::from_env())]
     debug_log_config: DebugLogConfig,
 }
 
 impl LoggerService {
-    fn build_alephant_metadata(&mut self, model: &str) -> Result<AlephantLogMetadata, LoggerError> {
+    fn build_alephant_metadata(
+        &mut self,
+        model: &str,
+    ) -> Result<AlephantLogMetadata, LoggerError> {
         let mut alephant_metadata = AlephantLogMetadata::from_headers(
             &mut self.request_headers,
             self.router_id.clone(),
@@ -171,7 +276,8 @@ impl LoggerService {
             self.prompt_ctx.clone(),
         )?;
         alephant_metadata.gateway_model = Some(model.to_string());
-        alephant_metadata.gateway_provider = inference_provider_for_ingest_meta(&self.provider);
+        alephant_metadata.gateway_provider =
+            inference_provider_for_ingest_meta(&self.provider);
         alephant_metadata.provider_model_id =
             self.mapper_ctx.model.as_ref().map(ToString::to_string);
         if let Some(ref decision) = self.large_context_decision {
@@ -179,7 +285,9 @@ impl LoggerService {
         }
         alephant_metadata.is_passthrough_billing = Some(true);
         alephant_metadata.ai_gateway_body_mapping =
-            parse_ai_gateway_body_mapping(self.ai_gateway_body_mapping.as_ref());
+            parse_ai_gateway_body_mapping(
+                self.ai_gateway_body_mapping.as_ref(),
+            );
         Ok(alephant_metadata)
     }
 
@@ -195,7 +303,8 @@ impl LoggerService {
         let alephant_metadata = self.build_alephant_metadata(&model)?;
         let tfft_future = TFFTFuture::new(self.start_instant, self.tfft_rx);
         let collect_future = self.response_body.collect();
-        let (response_body, tfft_duration) = tokio::join!(collect_future, tfft_future);
+        let (response_body, tfft_duration) =
+            tokio::join!(collect_future, tfft_future);
         let response_body = response_body
             .inspect_err(|_| tracing::error!("infallible errored"))
             .expect("infallible never errors")
@@ -208,7 +317,8 @@ impl LoggerService {
             "dispatcher response collected"
         );
         if self.debug_log_config.body {
-            let preview = crate::utils::debug_log::debug_body_preview(&response_body);
+            let preview =
+                crate::utils::debug_log::debug_body_preview(&response_body);
             tracing::info!(
                 target_url = %target,
                 body_len = preview.body_len,
@@ -224,8 +334,10 @@ impl LoggerService {
         tracing::trace!(tfft_duration = ?tfft_duration, "tfft_duration");
         let req_body_len = self.request_body.len();
         let resp_body_len = response_body.len();
-        let usage_counts =
-            usage_counts_from_response_body_for_log(self.mapper_ctx.is_stream, &response_body);
+        let usage_counts = usage_counts_from_response_body_for_log(
+            self.mapper_ctx.is_stream,
+            &response_body,
+        );
         let origin_prompt_tokens = self
             .prompt_compression_tokens
             .as_ref()
@@ -233,23 +345,33 @@ impl LoggerService {
                 i64::from(p.origin_prompt_token)
             });
         let response_cost = resolved_response_cost(None, &usage_counts);
-        let country_code = header_optional_string(&self.request_headers, "cf-ipcountry")
-            .or_else(|| header_optional_string(&self.request_headers, "x-alephant-country-code"));
+        let country_code =
+            header_optional_string(&self.request_headers, "cf-ipcountry")
+                .or_else(|| {
+                    header_optional_string(
+                        &self.request_headers,
+                        "x-alephant-country-code",
+                    )
+                });
         let request_referrer = self
             .request_headers
             .get(header::REFERER)
             .and_then(|v| v.to_str().ok())
             .map(std::borrow::ToOwned::to_owned);
-        let (request_body_str, response_body_str, body_ttl_days, storage_location) =
-            crate::logger::cloud_bodies::resolve_cloud_log_bodies(
-                &self.app_state.0.s3,
-                self.auth_ctx.body_ttl_days,
-                self.request_id,
-                self.auth_ctx.org_id,
-                &self.request_body,
-                &response_body,
-            )
-            .await?;
+        let (
+            request_body_str,
+            response_body_str,
+            body_ttl_days,
+            storage_location,
+        ) = crate::logger::cloud_bodies::resolve_cloud_log_bodies(
+            &self.app_state.0.s3,
+            self.auth_ctx.body_ttl_days,
+            self.request_id,
+            self.auth_ctx.org_id,
+            &self.request_body,
+            &response_body,
+        )
+        .await?;
 
         let attributes = [
             KeyValue::new("provider", self.provider.to_string()),
@@ -271,11 +393,20 @@ impl LoggerService {
             provider => provider.to_string().to_uppercase(),
         };
 
-        let properties =
-            extract_request_properties(&self.request_headers, self.session_ctx.as_ref());
+        let mut properties = extract_request_properties(
+            &self.request_headers,
+            self.session_ctx.as_ref(),
+        );
+        let mut agent_fields = agent_log_fields(self.agent_ctx.as_ref());
+        apply_final_agent_name_to_request_log(
+            self.auth_ctx.registered_agent_name.as_deref(),
+            &mut agent_fields,
+            &mut properties,
+        );
 
         let completed_at = Utc::now();
-        let latency_ms = (completed_at - self.start_time).num_milliseconds().max(0);
+        let latency_ms =
+            (completed_at - self.start_time).num_milliseconds().max(0);
         let log_response_created_at = self.response_created_at;
         let tfft_ms = if self.mapper_ctx.is_stream {
             i64::try_from(tfft_duration.as_millis()).unwrap_or(i64::MAX)
@@ -283,13 +414,14 @@ impl LoggerService {
             0
         };
 
-        let (prompt_id, prompt_version) = if let Some(ref h) = self.prompt_header_for_request_log {
-            (Some(h.prompt_id.clone()), h.prompt_version.clone())
-        } else if let Some(ref ctx) = self.prompt_ctx {
-            (Some(ctx.prompt_id.clone()), ctx.prompt_version_id.clone())
-        } else {
-            (None, None)
-        };
+        let (prompt_id, prompt_version) =
+            if let Some(ref h) = self.prompt_header_for_request_log {
+                (Some(h.prompt_id.clone()), h.prompt_version.clone())
+            } else if let Some(ref ctx) = self.prompt_ctx {
+                (Some(ctx.prompt_id.clone()), ctx.prompt_version_id.clone())
+            } else {
+                (None, None)
+            };
 
         let ai_mapping_internal = self
             .ai_gateway_body_mapping
@@ -301,7 +433,9 @@ impl LoggerService {
             None
         } else if let Some(store) = self.app_state.router_store() {
             match store.fetch_department_name_by_id(department_id).await {
-                Ok(Some(name)) => nonempty_string_opt(name.trim()).or(Some(String::new())),
+                Ok(Some(name)) => {
+                    nonempty_string_opt(name.trim()).or(Some(String::new()))
+                }
                 Ok(None) => Some(String::new()),
                 Err(e) => {
                     tracing::warn!(
@@ -320,6 +454,7 @@ impl LoggerService {
             .id(self.request_id)
             .user_id(self.auth_ctx.user_id)
             .workspace_id(self.auth_ctx.org_id)
+            .workspace_type(self.auth_ctx.workspace_type.clone())
             .session_id(
                 self.session_ctx
                     .as_ref()
@@ -328,10 +463,30 @@ impl LoggerService {
             .prompt_id(prompt_id)
             .prompt_version(prompt_version)
             .properties(properties)
+            .alephant_agent_id(agent_fields.alephant_agent_id)
+            .alephant_agent_name(agent_fields.alephant_agent_name)
+            .alephant_agent_name_source(agent_fields.alephant_agent_name_source)
+            .alephant_agent_uid(agent_fields.alephant_agent_uid)
+            .alephant_run_id(agent_fields.alephant_run_id)
+            .alephant_step_id(agent_fields.alephant_step_id)
+            .alephant_parent_step_id(agent_fields.alephant_parent_step_id)
+            .alephant_tool_call_id(agent_fields.alephant_tool_call_id)
+            .alephant_handoff_id(agent_fields.alephant_handoff_id)
+            .alephant_graph_node(agent_fields.alephant_graph_node)
+            .alephant_iteration(agent_fields.alephant_iteration)
+            .alephant_state_hash(agent_fields.alephant_state_hash)
+            .alephant_step_kind(agent_fields.alephant_step_kind)
+            .alephant_step_source(agent_fields.alephant_step_source)
+            .alephant_step_confidence(agent_fields.alephant_step_confidence)
+            .alephant_agent_trust_level(agent_fields.alephant_agent_trust_level)
             .alephant_virtual_key_id(self.auth_ctx.virtual_key_id)
             .alephant_master_key_id(self.auth_ctx.master_key_id)
-            .alephant_virtual_key_name(nonempty_string_opt(&self.auth_ctx.entity_name))
-            .alephant_virtual_key_prefix(nonempty_string_opt(&self.auth_ctx.virtual_key_prefix))
+            .alephant_virtual_key_name(nonempty_string_opt(
+                &self.auth_ctx.entity_name,
+            ))
+            .alephant_virtual_key_prefix(nonempty_string_opt(
+                &self.auth_ctx.virtual_key_prefix,
+            ))
             .alephant_department_name(alephant_department_name)
             .department_id(department_id)
             .entity_type(self.auth_ctx.entity_type.clone())
@@ -420,13 +575,19 @@ mod tests {
             ALEPHANT_SESSION_ID_PROPERTY, ALEPHANT_SESSION_NAME_PROPERTY,
             ALEPHANT_SESSION_PATH_PROPERTY, SessionHeaders,
         },
-        types::{extensions::PromptCompressionTokenPair, usage_tokens::UsageTokenCounts},
+        types::{
+            extensions::PromptCompressionTokenPair,
+            usage_tokens::UsageTokenCounts,
+        },
     };
 
     #[test]
     fn extract_request_properties_includes_session_properties() {
         let mut headers = HeaderMap::new();
-        headers.insert("alephant-property-custom", HeaderValue::from_static("keep"));
+        headers.insert(
+            "alephant-property-custom",
+            HeaderValue::from_static("keep"),
+        );
         let session = SessionHeaders {
             session_id: "session-123".to_string(),
             session_path: Some("/workflow/step-1".to_string()),
@@ -525,5 +686,162 @@ mod tests {
             .as_ref()
             .map_or(usage.prompt_tokens, |p| i64::from(p.origin_prompt_token));
         assert_eq!(got, 4_096);
+    }
+}
+
+#[cfg(test)]
+mod agent_property_tests {
+    use indexmap::IndexMap;
+    use uuid::Uuid;
+
+    use crate::agent::context::{
+        AgentConfidence, AgentContext, AgentStepKind, AgentStepSource,
+        AgentTrustLevel,
+    };
+
+    #[test]
+    fn agent_log_fields_extracts_standard_keys_without_properties() {
+        let mut properties = IndexMap::new();
+        properties
+            .insert("alephant-property-custom".to_string(), "keep".to_string());
+        let agent_uid = Uuid::parse_str("01890f5a-52fd-7b9a-b51e-33a22f7b6f24")
+            .expect("static uuid is valid");
+        let ctx = AgentContext {
+            agent_id_external: Some("coding-agent".to_string()),
+            agent_name: Some("Support Bot".to_string()),
+            agent_uid: Some(agent_uid),
+            run_id: Some("run-1".to_string()),
+            step_id: Some("step-1".to_string()),
+            parent_step_id: Some("step-0".to_string()),
+            tool_call_id: Some("call-1".to_string()),
+            handoff_id: Some("handoff-1".to_string()),
+            graph_node: Some("planner".to_string()),
+            iteration: Some(3),
+            state_hash: Some("sha256:abc".to_string()),
+            step_kind: Some(AgentStepKind::Planning),
+            step_source: AgentStepSource::Runtime,
+            step_confidence: AgentConfidence::High,
+            trust_level: AgentTrustLevel::SelfReported,
+            ..AgentContext::default()
+        };
+
+        let fields = super::agent_log_fields(Some(&ctx));
+
+        assert_eq!(fields.alephant_agent_id.as_deref(), Some("coding-agent"));
+        assert_eq!(
+            fields.self_reported_agent_name.as_deref(),
+            Some("Support Bot")
+        );
+        assert_eq!(fields.alephant_agent_uid, Some(agent_uid));
+        assert_eq!(fields.alephant_run_id.as_deref(), Some("run-1"));
+        assert_eq!(fields.alephant_step_id.as_deref(), Some("step-1"));
+        assert_eq!(fields.alephant_parent_step_id.as_deref(), Some("step-0"));
+        assert_eq!(fields.alephant_tool_call_id.as_deref(), Some("call-1"));
+        assert_eq!(fields.alephant_handoff_id.as_deref(), Some("handoff-1"));
+        assert_eq!(fields.alephant_graph_node.as_deref(), Some("planner"));
+        assert_eq!(fields.alephant_iteration, Some(3));
+        assert_eq!(fields.alephant_state_hash.as_deref(), Some("sha256:abc"));
+        assert_eq!(fields.alephant_step_kind.as_deref(), Some("planning"));
+        assert_eq!(fields.alephant_step_source.as_deref(), Some("runtime"));
+        assert_eq!(fields.alephant_step_confidence.as_deref(), Some("high"));
+        assert_eq!(
+            fields.alephant_agent_trust_level.as_deref(),
+            Some("self_reported")
+        );
+        assert_eq!(
+            properties
+                .get("alephant-property-custom")
+                .map(String::as_str),
+            Some("keep")
+        );
+        assert!(!properties.contains_key("Alephant-Agent-Id"));
+    }
+
+    #[test]
+    fn request_log_agent_name_prefers_registered_name_and_records_conflict() {
+        let mut fields = super::AgentLogFields {
+            self_reported_agent_name: Some("External Bot".to_string()),
+            alephant_agent_trust_level: Some("self_reported".to_string()),
+            ..super::AgentLogFields::default()
+        };
+        let mut properties = IndexMap::new();
+
+        super::apply_final_agent_name_to_request_log(
+            Some("Support Bot"),
+            &mut fields,
+            &mut properties,
+        );
+
+        assert_eq!(fields.alephant_agent_name.as_deref(), Some("Support Bot"));
+        assert_eq!(
+            fields.alephant_agent_name_source.as_deref(),
+            Some("virtual_key_label")
+        );
+        assert_eq!(
+            fields.alephant_agent_trust_level.as_deref(),
+            Some("auth_bound")
+        );
+        assert_eq!(
+            properties.get("registeredAgentName").map(String::as_str),
+            Some("Support Bot")
+        );
+        assert_eq!(
+            properties.get("selfReportedAgentName").map(String::as_str),
+            Some("External Bot")
+        );
+        assert_eq!(
+            properties
+                .get("selfReportedAgentNameSource")
+                .map(String::as_str),
+            Some("self_reported_header")
+        );
+        assert_eq!(
+            properties.get("agentNameConflict").map(String::as_str),
+            Some("true")
+        );
+    }
+
+    #[test]
+    fn request_log_agent_name_uses_header_name_when_unregistered() {
+        let mut fields = super::AgentLogFields {
+            self_reported_agent_name: Some("External Bot".to_string()),
+            alephant_agent_trust_level: Some("self_reported".to_string()),
+            ..super::AgentLogFields::default()
+        };
+        let mut properties = IndexMap::new();
+
+        super::apply_final_agent_name_to_request_log(
+            None,
+            &mut fields,
+            &mut properties,
+        );
+
+        assert_eq!(fields.alephant_agent_name.as_deref(), Some("External Bot"));
+        assert_eq!(
+            fields.alephant_agent_name_source.as_deref(),
+            Some("self_reported_header")
+        );
+        assert_eq!(
+            fields.alephant_agent_trust_level.as_deref(),
+            Some("self_reported")
+        );
+        assert!(properties.get("agentNameConflict").is_none());
+    }
+
+    #[test]
+    fn request_log_agent_name_stays_empty_when_no_source_exists() {
+        let mut fields = super::AgentLogFields::default();
+        let mut properties = IndexMap::new();
+
+        super::apply_final_agent_name_to_request_log(
+            None,
+            &mut fields,
+            &mut properties,
+        );
+
+        assert_eq!(fields.alephant_agent_name, None);
+        assert_eq!(fields.alephant_agent_name_source, None);
+        assert_eq!(fields.alephant_agent_trust_level, None);
+        assert!(properties.is_empty());
     }
 }

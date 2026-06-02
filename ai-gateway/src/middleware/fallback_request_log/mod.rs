@@ -11,6 +11,7 @@ use tracing::Instrument;
 use uuid::Uuid;
 
 use crate::{
+    agent::{context::AgentContext, headers::parse_agent_context_from_headers},
     app_state::AppState,
     error::api::{ApiError, ErrorDetails, ErrorResponse},
     logger::service::LoggerService,
@@ -61,7 +62,10 @@ pub struct FallbackRequestLogService<S> {
 
 impl<S> tower::Service<Request> for FallbackRequestLogService<S>
 where
-    S: tower::Service<Request, Response = Response, Error = ApiError> + Clone + Send + 'static,
+    S: tower::Service<Request, Response = Response, Error = ApiError>
+        + Clone
+        + Send
+        + 'static,
     S::Future: Send + 'static,
 {
     type Response = Response;
@@ -85,6 +89,15 @@ where
         let auth_ctx = req.extensions().get::<AuthContext>().cloned();
         let router_id = req.extensions().get::<RouterId>().cloned();
         let provider = req.extensions().get::<InferenceProvider>().cloned();
+        let agent_cfg = &app_state.config().agent;
+        let agent_ctx = if agent_cfg.enabled && agent_cfg.allow_header_context {
+            fallback_agent_context_from_headers(
+                &headers,
+                agent_cfg.max_header_value_bytes,
+            )
+        } else {
+            None
+        };
         let start_instant = Instant::now();
         let start_time = Utc::now();
 
@@ -102,6 +115,7 @@ where
                             &headers,
                             router_id,
                             provider,
+                            agent_ctx,
                             start_time,
                             start_instant,
                             &api_err,
@@ -123,6 +137,7 @@ fn emit_fallback_log(
     headers: &http::HeaderMap,
     router_id: Option<RouterId>,
     provider: Option<InferenceProvider>,
+    agent_ctx: Option<AgentContext>,
     start_time: chrono::DateTime<Utc>,
     start_instant: Instant,
     api_err: &ApiError,
@@ -199,6 +214,7 @@ fn emit_fallback_log(
         .prompt_ctx(None)
         .prompt_header_for_request_log(None)
         .session_ctx(None)
+        .agent_ctx(agent_ctx)
         .build();
 
     let app_state = app_state.clone();
@@ -215,6 +231,13 @@ fn emit_fallback_log(
         }
         .instrument(tracing::Span::current()),
     );
+}
+
+fn fallback_agent_context_from_headers(
+    headers: &http::HeaderMap,
+    max_header_value_bytes: usize,
+) -> Option<AgentContext> {
+    parse_agent_context_from_headers(headers, max_header_value_bytes)
 }
 
 fn build_error_response_json(api_err: &ApiError) -> Vec<u8> {
@@ -234,8 +257,29 @@ fn error_status_code(api_err: &ApiError) -> http::StatusCode {
     match api_err {
         ApiError::InvalidRequest(_) => http::StatusCode::BAD_REQUEST,
         ApiError::Authentication(_) => http::StatusCode::UNAUTHORIZED,
-        ApiError::Internal(_) | ApiError::StreamError(_) | ApiError::Panic(_) => {
-            http::StatusCode::INTERNAL_SERVER_ERROR
-        }
+        ApiError::Internal(_)
+        | ApiError::StreamError(_)
+        | ApiError::Panic(_) => http::StatusCode::INTERNAL_SERVER_ERROR,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use http::{HeaderMap, HeaderValue};
+
+    #[test]
+    fn fallback_agent_context_from_headers_parses_without_request_context() {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            "alephant-agent-id",
+            HeaderValue::from_static("coding-agent"),
+        );
+        headers.insert("alephant-run-id", HeaderValue::from_static("run-1"));
+
+        let ctx = super::fallback_agent_context_from_headers(&headers, 256)
+            .expect("agent context should parse from headers");
+
+        assert_eq!(ctx.agent_id_external.as_deref(), Some("coding-agent"));
+        assert_eq!(ctx.run_id.as_deref(), Some("run-1"));
     }
 }

@@ -1,6 +1,7 @@
 use anthropic_ai_sdk::types::message::CreateMessageParams;
 use async_openai::types::{
-    CreateCompletionRequest, CreateEmbeddingRequest, CreateImageRequest, ImageModel,
+    CreateCompletionRequest, CreateEmbeddingRequest, CreateImageRequest,
+    ImageModel,
 };
 use bytes::Bytes;
 use http::Extensions;
@@ -11,7 +12,8 @@ use crate::{
     ide_adapation::{
         client_profile::ClientProfile,
         responses_ingress_normalize::{
-            apply_responses_wire_normalize_for_client, responses_request_routing_fields,
+            apply_responses_wire_normalize_for_client,
+            responses_request_routing_fields,
         },
         unified_chat_completions_routing_model,
     },
@@ -90,7 +92,10 @@ impl UnifiedRoutePlanner {
     }
 
     #[allow(dead_code)]
-    fn check_model_access(extensions: &mut Extensions, model: &str) -> Result<(), ApiError> {
+    fn check_model_access(
+        extensions: &mut Extensions,
+        model: &str,
+    ) -> Result<(), ApiError> {
         check_vk_model_access(extensions, model)
     }
 
@@ -105,23 +110,29 @@ impl UnifiedRoutePlanner {
                 Ok((model, body))
             }
             "responses" => {
-                let body = apply_responses_wire_normalize_for_client(body, client_profile)?;
+                let body = apply_responses_wire_normalize_for_client(
+                    body,
+                    client_profile,
+                )?;
                 let fields = responses_request_routing_fields(&body)?;
                 Ok((fields.model, body))
             }
             "completions" => {
-                let request = serde_json::from_slice::<CreateCompletionRequest>(&body)
-                    .map_err(InvalidRequestError::InvalidRequestBody)?;
+                let request =
+                    serde_json::from_slice::<CreateCompletionRequest>(&body)
+                        .map_err(InvalidRequestError::InvalidRequestBody)?;
                 Ok((request.model, body))
             }
             "embeddings" => {
-                let request = serde_json::from_slice::<CreateEmbeddingRequest>(&body)
-                    .map_err(InvalidRequestError::InvalidRequestBody)?;
+                let request =
+                    serde_json::from_slice::<CreateEmbeddingRequest>(&body)
+                        .map_err(InvalidRequestError::InvalidRequestBody)?;
                 Ok((request.model, body))
             }
             "images/generations" => {
-                let request = serde_json::from_slice::<CreateImageRequest>(&body)
-                    .map_err(InvalidRequestError::InvalidRequestBody)?;
+                let request =
+                    serde_json::from_slice::<CreateImageRequest>(&body)
+                        .map_err(InvalidRequestError::InvalidRequestBody)?;
                 let model_s = request
                     .model
                     .as_ref()
@@ -139,11 +150,15 @@ impl UnifiedRoutePlanner {
                 Ok((model, body))
             }
             "messages" => {
-                let request = serde_json::from_slice::<CreateMessageParams>(&body)
-                    .map_err(InvalidRequestError::InvalidRequestBody)?;
+                let request =
+                    serde_json::from_slice::<CreateMessageParams>(&body)
+                        .map_err(InvalidRequestError::InvalidRequestBody)?;
                 Ok((request.model, body))
             }
-            _ => Err(InvalidRequestError::UnsupportedEndpoint(path.to_string()).into()),
+            _ => {
+                Err(InvalidRequestError::UnsupportedEndpoint(path.to_string())
+                    .into())
+            }
         }
     }
 
@@ -156,7 +171,10 @@ impl UnifiedRoutePlanner {
     }
 
     #[allow(dead_code)]
-    pub fn plan(&self, request: UnifiedRouteRequest) -> Result<RouteDecision, ApiError> {
+    pub fn plan(
+        &self,
+        request: UnifiedRouteRequest,
+    ) -> Result<RouteDecision, ApiError> {
         let UnifiedRouteRequest {
             path,
             body,
@@ -164,9 +182,12 @@ impl UnifiedRoutePlanner {
             explicit_client_model,
             client_profile,
         } = request;
-        let (selected_model, out_body) = Self::routing_model_for_path(&path, body, client_profile)?;
+        let (selected_model, out_body) =
+            Self::routing_model_for_path(&path, body, client_profile)?;
 
-        if let Err(error) = Self::check_model_access(&mut extensions, &selected_model) {
+        if let Err(error) =
+            Self::check_model_access(&mut extensions, &selected_model)
+        {
             self.app_state.0.metrics.vk.model_denied.add(1, &[]);
             tracing::debug!(
                 model = %selected_model,
@@ -175,7 +196,8 @@ impl UnifiedRoutePlanner {
             return Err(error);
         }
 
-        let selected_provider = Self::resolve_provider_from_master_key(&extensions)?;
+        let selected_provider =
+            Self::resolve_provider_from_master_key(&extensions)?;
 
         Ok(RouteDecision {
             selected_provider: selected_provider.clone(),
@@ -198,7 +220,9 @@ mod tests {
     use serde_json::json;
     use uuid::Uuid;
 
-    use super::{RouteCandidateReason, UnifiedRoutePlanner, UnifiedRouteRequest};
+    use super::{
+        RouteCandidateReason, UnifiedRoutePlanner, UnifiedRouteRequest,
+    };
     use crate::types::{
         extensions::{AuthContext, VkPolicy},
         org::OrgId,
@@ -207,11 +231,14 @@ mod tests {
         user::UserId,
     };
 
-    fn auth_context_with_allowed(providers: Option<Vec<InferenceProvider>>) -> AuthContext {
+    fn auth_context_with_allowed(
+        providers: Option<Vec<InferenceProvider>>,
+    ) -> AuthContext {
         AuthContext {
             api_key: Secret::from("sk-test".to_string()),
             user_id: UserId::new(Uuid::new_v4()),
             org_id: OrgId::new(Uuid::new_v4()),
+            workspace_type: None,
             virtual_key_id: Some(Uuid::new_v4()),
             virtual_key_prefix: "vk-test".to_string(),
             master_key_id: Some(Uuid::new_v4()),
@@ -220,13 +247,16 @@ mod tests {
             entity_type: String::new(),
             entity_id: Uuid::nil(),
             entity_name: String::new(),
+            registered_agent_name: None,
             body_ttl_days: 90,
             is_custom_provider: false,
             master_key_allowed_providers: providers,
         }
     }
 
-    fn unsupported_gateway_model_message(err: crate::error::api::ApiError) -> String {
+    fn unsupported_gateway_model_message(
+        err: crate::error::api::ApiError,
+    ) -> String {
         match err {
             crate::error::api::ApiError::InvalidRequest(
                 crate::error::invalid_req::InvalidRequestError::UnsupportedGatewayModel(message),
@@ -257,7 +287,8 @@ mod tests {
             body: Bytes::from(serde_json::to_vec(&body).unwrap()),
             extensions,
             explicit_client_model,
-            client_profile: crate::ide_adapation::client_profile::ClientProfile::Unknown,
+            client_profile:
+                crate::ide_adapation::client_profile::ClientProfile::Unknown,
         }
     }
 
@@ -268,8 +299,9 @@ mod tests {
             InferenceProvider::OpenAI,
         ])));
 
-        let provider = UnifiedRoutePlanner::resolve_provider_from_master_key(&extensions)
-            .expect("single OpenAI provider should resolve");
+        let provider =
+            UnifiedRoutePlanner::resolve_provider_from_master_key(&extensions)
+                .expect("single OpenAI provider should resolve");
 
         assert_eq!(provider, InferenceProvider::OpenAI);
     }
@@ -281,8 +313,9 @@ mod tests {
             InferenceProvider::Anthropic,
         ])));
 
-        let provider = UnifiedRoutePlanner::resolve_provider_from_master_key(&extensions)
-            .expect("single Anthropic provider should resolve");
+        let provider =
+            UnifiedRoutePlanner::resolve_provider_from_master_key(&extensions)
+                .expect("single Anthropic provider should resolve");
 
         assert_eq!(provider, InferenceProvider::Anthropic);
     }
@@ -300,8 +333,10 @@ mod tests {
             let mut extensions = http::Extensions::new();
             extensions.insert(auth_context_with_allowed(providers));
 
-            let err = UnifiedRoutePlanner::resolve_provider_from_master_key(&extensions)
-                .expect_err("provider should not resolve");
+            let err = UnifiedRoutePlanner::resolve_provider_from_master_key(
+                &extensions,
+            )
+            .expect_err("provider should not resolve");
 
             assert_eq!(
                 unsupported_gateway_model_message(err),
@@ -314,8 +349,9 @@ mod tests {
     fn rejects_missing_auth_context() {
         let extensions = http::Extensions::new();
 
-        let err = UnifiedRoutePlanner::resolve_provider_from_master_key(&extensions)
-            .expect_err("provider should not resolve");
+        let err =
+            UnifiedRoutePlanner::resolve_provider_from_master_key(&extensions)
+                .expect_err("provider should not resolve");
 
         assert_eq!(
             unsupported_gateway_model_message(err),
@@ -365,7 +401,8 @@ mod tests {
         );
 
         let decision = planner.plan(request).expect("plan should succeed");
-        let out: serde_json::Value = serde_json::from_slice(&decision.out_body).unwrap();
+        let out: serde_json::Value =
+            serde_json::from_slice(&decision.out_body).unwrap();
 
         assert_eq!(decision.selected_model, "openai/gpt-5.5");
         assert_eq!(out["tools"][0]["type"], "web_search_preview");
@@ -530,7 +567,8 @@ mod tests {
             ),
             extensions,
             explicit_client_model: true,
-            client_profile: crate::ide_adapation::client_profile::ClientProfile::Unknown,
+            client_profile:
+                crate::ide_adapation::client_profile::ClientProfile::Unknown,
         };
 
         let err = planner.plan(request).expect_err("model should be denied");

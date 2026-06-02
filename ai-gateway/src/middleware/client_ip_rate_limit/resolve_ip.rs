@@ -9,7 +9,9 @@ use crate::error::init::InitError;
 
 /// Parse CIDR strings from config into [`IpNetwork`]; startup fails if any
 /// entry is invalid.
-pub fn parse_trusted_proxy_networks(cidrs: &[String]) -> Result<Vec<IpNetwork>, InitError> {
+pub fn parse_trusted_proxy_networks(
+    cidrs: &[String],
+) -> Result<Vec<IpNetwork>, InitError> {
     cidrs
         .iter()
         .map(|s| {
@@ -25,10 +27,15 @@ pub fn parse_trusted_proxy_networks(cidrs: &[String]) -> Result<Vec<IpNetwork>, 
 /// Return the **client IP** used for rate-limit buckets (design: trust XFF only
 /// when peer IP matches trusted CIDRs).
 #[must_use]
-pub fn effective_client_ip(peer_ip: IpAddr, headers: &HeaderMap, trusted: &[IpNetwork]) -> IpAddr {
+pub fn effective_client_ip(
+    peer_ip: IpAddr,
+    headers: &HeaderMap,
+    trusted: &[IpNetwork],
+) -> IpAddr {
     let trust_xff = trusted.iter().any(|n| n.contains(peer_ip));
     if trust_xff
-        && let Some(raw) = headers.get("x-forwarded-for").and_then(|h| h.to_str().ok())
+        && let Some(raw) =
+            headers.get("x-forwarded-for").and_then(|h| h.to_str().ok())
         && let Some(first) = raw.split(',').next()
     {
         let trimmed = first.trim();
@@ -51,7 +58,10 @@ mod tests {
     fn empty_trusted_ignores_xff() {
         let peer = IpAddr::V4(Ipv4Addr::new(192, 0, 2, 1));
         let mut headers = HeaderMap::new();
-        headers.insert("x-forwarded-for", http::HeaderValue::from_static("9.9.9.9"));
+        headers.insert(
+            "x-forwarded-for",
+            http::HeaderValue::from_static("9.9.9.9"),
+        );
         assert_eq!(
             effective_client_ip(peer, &headers, &[]),
             peer,
@@ -79,7 +89,10 @@ mod tests {
         let peer = IpAddr::V4(Ipv4Addr::new(198, 51, 100, 1));
         let trusted: Vec<IpNetwork> = vec!["10.0.0.0/8".parse().unwrap()];
         let mut headers = HeaderMap::new();
-        headers.insert("x-forwarded-for", http::HeaderValue::from_static("9.9.9.9"));
+        headers.insert(
+            "x-forwarded-for",
+            http::HeaderValue::from_static("9.9.9.9"),
+        );
         assert_eq!(
             effective_client_ip(peer, &headers, trusted.as_slice()),
             peer
@@ -103,6 +116,8 @@ mod tests {
 
     #[test]
     fn parse_trusted_rejects_garbage() {
-        assert!(parse_trusted_proxy_networks(&["not-a-cidr".to_string()]).is_err());
+        assert!(
+            parse_trusted_proxy_networks(&["not-a-cidr".to_string()]).is_err()
+        );
     }
 }

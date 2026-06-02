@@ -23,10 +23,15 @@ use crate::{
 /// Applies [`cursor_openai_normalize::normalize_cursor_openai_request_value`]
 /// to any `POST …/chat/completions` JSON body before mapper strict parsing.
 /// No-op when JSON has no `messages` array or normalization yields no change.
-pub fn apply_global_chat_completions_wire_normalize(body: Bytes) -> Result<Bytes, ApiError> {
-    let mut value: Value =
-        serde_json::from_slice(&body).map_err(InvalidRequestError::InvalidRequestBody)?;
-    let changed = cursor_openai_normalize::normalize_cursor_openai_request_value(&mut value)?;
+pub fn apply_global_chat_completions_wire_normalize(
+    body: Bytes,
+) -> Result<Bytes, ApiError> {
+    let mut value: Value = serde_json::from_slice(&body)
+        .map_err(InvalidRequestError::InvalidRequestBody)?;
+    let changed =
+        cursor_openai_normalize::normalize_cursor_openai_request_value(
+            &mut value,
+        )?;
     if !changed {
         return Ok(body);
     }
@@ -55,7 +60,8 @@ pub fn apply_ide_ingress_adjust(
     let profile_label = profile.as_otel_label();
     match profile {
         ClientProfile::CursorIde => {
-            let (body, applied) = cursor_ingress::adjust(source_endpoint, body)?;
+            let (body, applied) =
+                cursor_ingress::adjust(source_endpoint, body)?;
             Ok((
                 body,
                 IdeIngressAdjustMeta {
@@ -82,7 +88,8 @@ mod tests {
     use serde_json::json;
 
     use super::{
-        ClientProfile, apply_global_chat_completions_wire_normalize, apply_ide_ingress_adjust,
+        ClientProfile, apply_global_chat_completions_wire_normalize,
+        apply_ide_ingress_adjust,
     };
     use crate::endpoints::{ApiEndpoint, openai::OpenAI};
 
@@ -121,8 +128,13 @@ mod tests {
         let body = Bytes::from(raw);
         let ext = Extensions::new();
         let ep = ApiEndpoint::OpenAI(OpenAI::chat_completions());
-        let (out, meta) = apply_ide_ingress_adjust(ClientProfile::Unknown, &ep, body.clone(), &ext)
-            .expect("unknown profile should not parse or error");
+        let (out, meta) = apply_ide_ingress_adjust(
+            ClientProfile::Unknown,
+            &ep,
+            body.clone(),
+            &ext,
+        )
+        .expect("unknown profile should not parse or error");
         assert_eq!(out, body);
         assert!(!meta.applied);
     }
@@ -132,8 +144,13 @@ mod tests {
         let body = Bytes::from(r#"{"not":"chat"}"#);
         let ext = Extensions::new();
         let ep = ApiEndpoint::OpenAI(OpenAI::embeddings());
-        let (out, meta) = apply_ide_ingress_adjust(ClientProfile::Unknown, &ep, body.clone(), &ext)
-            .expect("unknown should be no-op");
+        let (out, meta) = apply_ide_ingress_adjust(
+            ClientProfile::Unknown,
+            &ep,
+            body.clone(),
+            &ext,
+        )
+        .expect("unknown should be no-op");
         assert_eq!(out, body);
         assert!(!meta.applied);
     }
@@ -149,9 +166,13 @@ mod tests {
         );
         let ext = Extensions::new();
         let ep = ApiEndpoint::OpenAI(OpenAI::chat_completions());
-        let (out, meta) =
-            apply_ide_ingress_adjust(ClientProfile::CursorIde, &ep, body.clone(), &ext)
-                .expect("minimal chat completion should deserialize");
+        let (out, meta) = apply_ide_ingress_adjust(
+            ClientProfile::CursorIde,
+            &ep,
+            body.clone(),
+            &ext,
+        )
+        .expect("minimal chat completion should deserialize");
         assert_eq!(out, body);
         assert!(meta.applied);
     }
@@ -161,9 +182,13 @@ mod tests {
         let body = Bytes::from("not-json-at-all");
         let ext = Extensions::new();
         let ep = ApiEndpoint::OpenAI(OpenAI::embeddings());
-        let (out, meta) =
-            apply_ide_ingress_adjust(ClientProfile::CursorIde, &ep, body.clone(), &ext)
-                .expect("non-chat path must not parse body");
+        let (out, meta) = apply_ide_ingress_adjust(
+            ClientProfile::CursorIde,
+            &ep,
+            body.clone(),
+            &ext,
+        )
+        .expect("non-chat path must not parse body");
         assert_eq!(out, body);
         assert!(!meta.applied);
     }

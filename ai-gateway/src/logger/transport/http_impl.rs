@@ -3,7 +3,9 @@ use reqwest::Client;
 use url::Url;
 
 use super::LogTransport;
-use crate::{error::logger::LoggerError, metrics::Metrics, types::logger::LogMessage};
+use crate::{
+    error::logger::LoggerError, metrics::Metrics, types::logger::LogMessage,
+};
 
 #[derive(Clone, Debug)]
 pub struct HttpLogTransport {
@@ -14,7 +16,11 @@ pub struct HttpLogTransport {
 
 impl HttpLogTransport {
     #[must_use]
-    pub fn new(client: Client, log_collector_url: Url, metrics: Metrics) -> Self {
+    pub fn new(
+        client: Client,
+        log_collector_url: Url,
+        metrics: Metrics,
+    ) -> Self {
         Self {
             client,
             log_collector_url,
@@ -32,9 +38,10 @@ impl HttpLogTransport {
     ) -> Result<(), LoggerError> {
         let log_url = self.log_collector_url.join("/v1/log/request")?;
         if record_send_counter {
-            self.metrics
-                .ingest_log_sends
-                .add(1, &[opentelemetry::KeyValue::new("transport_kind", "http")]);
+            self.metrics.ingest_log_sends.add(
+                1,
+                &[opentelemetry::KeyValue::new("transport_kind", "http")],
+            );
         }
         let body = serde_json::to_string(log_message)?;
         tracing::trace!(
@@ -54,9 +61,10 @@ impl HttpLogTransport {
             .await
             .map_err(|e| {
                 tracing::debug!(error = %e, "failed to send request to alephant logger");
-                self.metrics
-                    .ingest_log_errors
-                    .add(1, &[opentelemetry::KeyValue::new("transport_kind", "http")]);
+                self.metrics.ingest_log_errors.add(
+                    1,
+                    &[opentelemetry::KeyValue::new("transport_kind", "http")],
+                );
                 LoggerError::FailedToSendRequest(e)
             })?;
 
@@ -64,9 +72,10 @@ impl HttpLogTransport {
         let _body = log_response.text().await.unwrap_or_default();
         if let Some(e) = status_err {
             tracing::error!(error = %e, "failed to log request to alephant");
-            self.metrics
-                .ingest_log_errors
-                .add(1, &[opentelemetry::KeyValue::new("transport_kind", "http")]);
+            self.metrics.ingest_log_errors.add(
+                1,
+                &[opentelemetry::KeyValue::new("transport_kind", "http")],
+            );
             return Err(LoggerError::ResponseError(e));
         }
         Ok(())

@@ -50,7 +50,8 @@ impl<'a> RegionalRetryExecutor<'a> {
         &self,
         request: RegionalRetryRequest<'_>,
     ) -> Result<Option<SyncDispatchResponse>, ApiError> {
-        let Some(cn_retry_url) = request.target_endpoint.cn_retry_url.clone() else {
+        let Some(cn_retry_url) = request.target_endpoint.cn_retry_url.clone()
+        else {
             return Ok(None);
         };
         let auth_ctx = request.req_ctx.auth_context.as_ref();
@@ -68,7 +69,8 @@ impl<'a> RegionalRetryExecutor<'a> {
             .as_ref()
             .request(request.method.clone(), cn_retry_url.clone())
             .headers(request.headers.clone());
-        let request_builder = request_builder_with_effective_host(request_builder, &cn_retry_url);
+        let request_builder =
+            request_builder_with_effective_host(request_builder, &cn_retry_url);
         let request_builder = UpstreamAuthApplier::new(self.app_state)
             .apply(UpstreamAuthRequest {
                 client: self.client,
@@ -88,8 +90,12 @@ impl<'a> RegionalRetryExecutor<'a> {
         let status = response.0.status();
 
         if status.is_success() {
-            regional_endpoint::remember_region(self.app_state, master_key_id, EndpointRegion::Cn)
-                .await;
+            regional_endpoint::remember_region(
+                self.app_state,
+                master_key_id,
+                EndpointRegion::Cn,
+            )
+            .await;
             tracing::info!(
                 provider = %self.provider,
                 master_key_id = ?master_key_id,

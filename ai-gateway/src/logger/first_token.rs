@@ -11,7 +11,8 @@ pub fn chunk_has_first_model_token(bytes: &[u8]) -> bool {
 
     if let Some(choices) = v.get("choices").and_then(|c| c.as_array()) {
         for choice in choices {
-            let Some(delta) = choice.get("delta").and_then(|d| d.as_object()) else {
+            let Some(delta) = choice.get("delta").and_then(|d| d.as_object())
+            else {
                 continue;
             };
             for key in ["content", "reasoning_content"] {
@@ -68,8 +69,7 @@ mod tests {
 
     #[test]
     fn anthropic_text_delta_is_first_token() {
-        let j =
-            br#"{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"x"}}"#;
+        let j = br#"{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"x"}}"#;
         assert!(chunk_has_first_model_token(j));
     }
 

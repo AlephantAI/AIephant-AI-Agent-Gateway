@@ -14,13 +14,16 @@ use crate::{
 };
 
 #[derive(Debug, Clone, Eq, PartialEq, Deref, DerefMut, AsRef)]
-struct ProviderModels(HashMap<InferenceProvider, HashSet<ModelIdWithoutVersion>>);
+struct ProviderModels(
+    HashMap<InferenceProvider, HashSet<ModelIdWithoutVersion>>,
+);
 
 impl ProviderModels {
     fn new(app_state: &AppState) -> Self {
         let mut map = HashMap::default();
         for (provider, config) in app_state.get_providers_config().iter() {
-            let models = config.models.iter().map(|m| m.clone().into()).collect();
+            let models =
+                config.models.iter().map(|m| m.clone().into()).collect();
             map.insert(provider.clone(), models);
         }
         Self(map)
@@ -37,7 +40,10 @@ pub struct ModelMapper {
 
 impl ModelMapper {
     #[must_use]
-    pub fn new_for_router(app_state: AppState, router_config: Arc<RouterConfig>) -> Self {
+    pub fn new_for_router(
+        app_state: AppState,
+        router_config: Arc<RouterConfig>,
+    ) -> Self {
         let provider_models = ProviderModels::new(&app_state);
         Self {
             app_state,
@@ -87,7 +93,10 @@ impl ModelMapper {
     }
 
     #[must_use]
-    pub fn target_skips_model_catalog(&self, provider: &InferenceProvider) -> bool {
+    pub fn target_skips_model_catalog(
+        &self,
+        provider: &InferenceProvider,
+    ) -> bool {
         self.app_state
             .provider_skips_model_mapping_catalog(provider)
     }
@@ -116,15 +125,17 @@ impl ModelMapper {
         {
             return Ok(source_model.clone());
         }
-        let models_offered_by_target_provider = self
-            .provider_models
-            .0
-            .get(target_provider)
-            .ok_or_else(|| MapperError::NoProviderConfig(target_provider.clone()))?;
+        let models_offered_by_target_provider =
+            self.provider_models.0.get(target_provider).ok_or_else(|| {
+                MapperError::NoProviderConfig(target_provider.clone())
+            })?;
 
-        let source_model_w_out_version = ModelIdWithoutVersion::from(source_model.clone());
+        let source_model_w_out_version =
+            ModelIdWithoutVersion::from(source_model.clone());
 
-        if models_offered_by_target_provider.contains(&source_model_w_out_version) {
+        if models_offered_by_target_provider
+            .contains(&source_model_w_out_version)
+        {
             return Ok(source_model.clone());
         }
 

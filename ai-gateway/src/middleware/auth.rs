@@ -6,13 +6,16 @@ use tower_http::auth::AsyncAuthorizeRequest;
 use uuid::Uuid;
 
 use crate::{
+    agent::name::parse_agent_name_from_vk_label,
     app_state::AppState,
     error::{
-        api::ApiError, auth::AuthError, internal::InternalError, invalid_req::InvalidRequestError,
+        api::ApiError, auth::AuthError, internal::InternalError,
+        invalid_req::InvalidRequestError,
     },
     store::{
         enrichment_redis::{
-            CachedDepartmentEnrichment, ENRICHMENT_CACHE_TTL_SECS, enrichment_cache_key,
+            CachedDepartmentEnrichment, ENRICHMENT_CACHE_TTL_SECS,
+            enrichment_cache_key,
         },
         router::DbVirtualKey,
     },
@@ -32,16 +35,32 @@ pub struct AuthService {
     app_state: AppState,
 }
 
-/// After VK validation: load agent/member `department_id` when possible.
-/// Any failure or missing row → [`Uuid::nil()`]; does not affect auth success.
-async fn resolve_department_id_after_vk_auth(app_state: &AppState, vk_id: Uuid) -> Uuid {
+#[derive(Debug, Clone, Default)]
+struct RequestLogEnrichment {
+    workspace_type: Option<String>,
+    department_id: Uuid,
+}
+
+/// After VK validation: load request-log enrichment when possible.
+/// Any failure or missing row falls back to empty workspace type and
+/// [`Uuid::nil()`] department; auth success is unaffected.
+async fn resolve_request_log_enrichment_after_vk_auth(
+    app_state: &AppState,
+    vk_id: Uuid,
+) -> RequestLogEnrichment {
     let default = Uuid::nil();
     let cache_key = enrichment_cache_key(vk_id);
     if let Some(redis) = app_state.redis() {
         match redis.get_string(&cache_key).await {
             Ok(Some(raw)) => {
-                if let Ok(cached) = serde_json::from_str::<CachedDepartmentEnrichment>(&raw) {
-                    return cached.department_id.unwrap_or(default);
+                if let Ok(cached) =
+                    serde_json::from_str::<CachedDepartmentEnrichment>(&raw)
+                    && let Some(workspace_type) = cached.workspace_type
+                {
+                    return RequestLogEnrichment {
+                        workspace_type: Some(workspace_type),
+                        department_id: cached.department_id.unwrap_or(default),
+                    };
                 }
             }
             Ok(None) => {}
@@ -56,19 +75,27 @@ async fn resolve_department_id_after_vk_auth(app_state: &AppState, vk_id: Uuid) 
     }
 
     let Some(store) = app_state.router_store() else {
-        return default;
+        return RequestLogEnrichment::default();
     };
     match store.fetch_request_log_department_enrichment(vk_id).await {
         Ok(Some(row)) => {
-            let resolved = row.department_id.unwrap_or(default);
+            let resolved = RequestLogEnrichment {
+                workspace_type: Some(row.workspace_type.clone()),
+                department_id: row.department_id.unwrap_or(default),
+            };
             if let Some(redis) = app_state.redis() {
                 let payload = CachedDepartmentEnrichment {
+                    workspace_type: Some(row.workspace_type),
                     department_id: row.department_id,
                 };
                 match serde_json::to_string(&payload) {
                     Ok(json) => {
                         if let Err(e) = redis
-                            .set_ex(&cache_key, &json, ENRICHMENT_CACHE_TTL_SECS)
+                            .set_ex(
+                                &cache_key,
+                                &json,
+                                ENRICHMENT_CACHE_TTL_SECS,
+                            )
                             .await
                         {
                             tracing::warn!(
@@ -89,14 +116,14 @@ async fn resolve_department_id_after_vk_auth(app_state: &AppState, vk_id: Uuid) 
             }
             resolved
         }
-        Ok(None) => default,
+        Ok(None) => RequestLogEnrichment::default(),
         Err(e) => {
             tracing::warn!(
                 error = %e,
                 %vk_id,
-                "auth: department lookup failed; using default department_id"
+                "auth: request log enrichment lookup failed; using defaults"
             );
-            default
+            RequestLogEnrichment::default()
         }
     }
 }
@@ -121,7 +148,9 @@ impl AuthService {
         };
 
         // Look up the virtual key by hash (memory, then optional PG fallback).
-        let Some(vk) = app_state.resolve_virtual_key_for_auth(&computed_hash).await else {
+        let Some(vk) =
+            app_state.resolve_virtual_key_for_auth(&computed_hash).await
+        else {
             return Err(AuthError::InvalidCredentials.into());
         };
 
@@ -134,29 +163,34 @@ impl AuthService {
 
         // Resolve master_key base_url from the LRU cache (usually a fast
         // in-process lookup; `None` on cache miss or no custom URL).
-        let (master_key_base_url, is_custom_provider, master_key_allowed_providers) =
-            if let Some(cache) = app_state.0.master_key_cache.as_ref() {
-                match cache.get(vk.master_key_id).await {
-                    Ok(dk) => (
-                        dk.base_url,
-                        matches!(dk.provider, InferenceProvider::Custom),
-                        Some(vec![dk.provider.clone()]),
-                    ),
-                    Err(e) => {
-                        tracing::warn!(
-                            error = %e,
-                            master_key_id = %vk.master_key_id,
-                            "auth: could not resolve master_key"
-                        );
-                        (None, false, None)
-                    }
+        let (
+            master_key_base_url,
+            is_custom_provider,
+            master_key_allowed_providers,
+        ) = if let Some(cache) = app_state.0.master_key_cache.as_ref() {
+            match cache.get(vk.master_key_id).await {
+                Ok(dk) => (
+                    dk.base_url,
+                    matches!(dk.provider, InferenceProvider::Custom),
+                    Some(vec![dk.provider.clone()]),
+                ),
+                Err(e) => {
+                    tracing::warn!(
+                        error = %e,
+                        master_key_id = %vk.master_key_id,
+                        "auth: could not resolve master_key"
+                    );
+                    (None, false, None)
                 }
-            } else {
-                (None, false, None)
-            };
+            }
+        } else {
+            (None, false, None)
+        };
 
         if is_custom_provider && master_key_base_url.is_none() {
-            return Err(InvalidRequestError::CustomProviderMissingBaseUrl.into());
+            return Err(
+                InvalidRequestError::CustomProviderMissingBaseUrl.into()
+            );
         }
 
         let vk_policy = VkPolicy {
@@ -165,22 +199,31 @@ impl AuthService {
             blocked_models: vk.blocked_models.clone(),
         };
 
-        let (entity_type, entity_id, entity_name) = auth_entity_scope_from_vk(&vk);
-        let department_id = resolve_department_id_after_vk_auth(&app_state, vk.id).await;
-        let body_ttl_days = body_ttl_days_from_subscription_log_limit(vk.subscription_log_limit);
+        let (entity_type, entity_id, entity_name) =
+            auth_entity_scope_from_vk(&vk);
+        let registered_agent_name = parse_agent_name_from_vk_label(&vk.label);
+        let request_log_enrichment =
+            resolve_request_log_enrichment_after_vk_auth(&app_state, vk.id)
+                .await;
+        let body_ttl_days = body_ttl_days_from_subscription_log_limit(
+            vk.subscription_log_limit,
+        );
 
         match request_kind {
             RequestKind::Router => {
                 let Some(router_id) = router_id else {
-                    return Err(InternalError::ExtensionNotFound("RouterId").into());
+                    return Err(
+                        InternalError::ExtensionNotFound("RouterId").into()
+                    );
                 };
 
                 let Some(router_organization_id) =
                     app_state.get_router_organization(router_id).await
                 else {
-                    return Err(
-                        InvalidRequestError::NotFound("router not found".to_string()).into(),
-                    );
+                    return Err(InvalidRequestError::NotFound(
+                        "router not found".to_string(),
+                    )
+                    .into());
                 };
 
                 if router_organization_id == org_id {
@@ -189,14 +232,19 @@ impl AuthService {
                             api_key: Secret::from(api_key_without_bearer),
                             user_id: owner_id,
                             org_id,
+                            workspace_type: request_log_enrichment
+                                .workspace_type
+                                .clone(),
                             virtual_key_id: Some(vk.id),
                             virtual_key_prefix: vk.key_prefix.clone(),
                             master_key_id: Some(vk.master_key_id),
                             master_key_base_url,
-                            department_id,
+                            department_id: request_log_enrichment.department_id,
                             entity_type,
                             entity_id,
                             entity_name,
+                            registered_agent_name: registered_agent_name
+                                .clone(),
                             body_ttl_days,
                             is_custom_provider,
                             master_key_allowed_providers,
@@ -207,27 +255,31 @@ impl AuthService {
                     Err(AuthError::InvalidCredentials.into())
                 }
             }
-            RequestKind::UnifiedApi | RequestKind::DirectProxy | RequestKind::CustomProvider => {
-                Ok((
-                    AuthContext {
-                        api_key: Secret::from(api_key_without_bearer),
-                        user_id: owner_id,
-                        org_id,
-                        virtual_key_id: Some(vk.id),
-                        virtual_key_prefix: vk.key_prefix.clone(),
-                        master_key_id: Some(vk.master_key_id),
-                        master_key_base_url,
-                        department_id,
-                        entity_type,
-                        entity_id,
-                        entity_name,
-                        body_ttl_days,
-                        is_custom_provider,
-                        master_key_allowed_providers,
-                    },
-                    Some(vk_policy),
-                ))
-            }
+            RequestKind::UnifiedApi
+            | RequestKind::DirectProxy
+            | RequestKind::CustomProvider
+            | RequestKind::AgentEvents => Ok((
+                AuthContext {
+                    api_key: Secret::from(api_key_without_bearer),
+                    user_id: owner_id,
+                    org_id,
+                    workspace_type: request_log_enrichment.workspace_type,
+                    virtual_key_id: Some(vk.id),
+                    virtual_key_prefix: vk.key_prefix.clone(),
+                    master_key_id: Some(vk.master_key_id),
+                    master_key_base_url,
+                    department_id: request_log_enrichment.department_id,
+                    entity_type,
+                    entity_id,
+                    entity_name,
+                    registered_agent_name,
+                    body_ttl_days,
+                    is_custom_provider,
+                    master_key_allowed_providers,
+                },
+                Some(vk_policy),
+            )),
+            RequestKind::X402Agent => Err(InternalError::Internal.into()),
         }
     }
 }
@@ -239,7 +291,9 @@ fn strip_bearer_prefix(api_key: &str) -> &str {
 /// Maps `subscriptions.log_limit` into RMT `body_ttl_days` (1–730); otherwise
 /// default **90** (also used when the value is outside the allowed range).
 #[must_use]
-pub(crate) fn body_ttl_days_from_subscription_log_limit(subscription_log_limit: i32) -> u16 {
+pub(crate) fn body_ttl_days_from_subscription_log_limit(
+    subscription_log_limit: i32,
+) -> u16 {
     if (1..=730).contains(&subscription_log_limit) {
         u16::try_from(subscription_log_limit).unwrap_or(90)
     } else {
@@ -263,7 +317,10 @@ fn auth_entity_scope_from_vk(vk: &DbVirtualKey) -> (String, Uuid, String) {
     )
 }
 
-fn virtual_key_is_expired(vk: &DbVirtualKey, now: chrono::DateTime<Utc>) -> bool {
+fn virtual_key_is_expired(
+    vk: &DbVirtualKey,
+    now: chrono::DateTime<Utc>,
+) -> bool {
     vk.expires_at.is_some_and(|expires_at| now >= expires_at)
 }
 
@@ -273,7 +330,10 @@ where
 {
     type RequestBody = B;
     type ResponseBody = axum_core::body::Body;
-    type Future = BoxFuture<'static, Result<Request<B>, http::Response<Self::ResponseBody>>>;
+    type Future = BoxFuture<
+        'static,
+        Result<Request<B>, http::Response<Self::ResponseBody>>,
+    >;
 
     #[tracing::instrument(skip_all)]
     fn authorize(&mut self, mut request: Request<B>) -> Self::Future {
@@ -283,13 +343,24 @@ where
                 tracing::trace!("auth middleware: auth disabled");
                 return Ok(request);
             }
+            if matches!(
+                request.extensions().get::<RequestKind>(),
+                Some(RequestKind::X402Agent)
+            ) {
+                tracing::trace!(
+                    "auth middleware: bypassing auth for x402 agent route"
+                );
+                return Ok(request);
+            }
             tracing::trace!("auth middleware");
             let Some(api_key) = request
                 .headers()
                 .get("authorization")
                 .and_then(|h| h.to_str().ok())
             else {
-                return Err(AuthError::MissingAuthorizationHeader.into_response());
+                return Err(
+                    AuthError::MissingAuthorizationHeader.into_response()
+                );
             };
             app_state.0.metrics.auth_attempts.add(1, &[]);
 
@@ -313,7 +384,9 @@ where
                         "auth: authenticated, master_key info"
                     );
                     if auth_ctx.is_custom_provider {
-                        request.extensions_mut().insert(RequestKind::CustomProvider);
+                        request
+                            .extensions_mut()
+                            .insert(RequestKind::CustomProvider);
                     }
                     request.extensions_mut().insert(auth_ctx);
                     if let Some(policy) = vk_policy {
@@ -381,7 +454,8 @@ mod tests {
     fn auth_entity_scope_maps_virtual_key_row() {
         let entity = Uuid::new_v4();
         let vk = sample_vk(Some(entity), None);
-        let (entity_type, entity_id, entity_name) = super::auth_entity_scope_from_vk(&vk);
+        let (entity_type, entity_id, entity_name) =
+            super::auth_entity_scope_from_vk(&vk);
         assert_eq!(entity_type, "user");
         assert_eq!(entity_id, entity);
         assert_eq!(entity_name, "member:test");
@@ -442,6 +516,7 @@ mod tests {
         let key_hash = hash_key(raw_key);
         let mut vk = sample_vk(Some(Uuid::new_v4()), None);
         vk.key_hash = key_hash;
+        vk.label = "agent:Support Bot".to_string();
         vk.allowed_models = Some(vec!["openai/gpt-4o-mini".to_string()]);
         vk.blocked_models = Some(vec!["openai/gpt-4o".to_string()]);
 
@@ -466,11 +541,49 @@ mod tests {
         assert_eq!(auth_ctx.master_key_id, Some(vk.master_key_id));
         assert_eq!(auth_ctx.virtual_key_id, Some(vk.id));
         assert_eq!(auth_ctx.virtual_key_prefix, vk.key_prefix);
+        assert_eq!(
+            auth_ctx.registered_agent_name.as_deref(),
+            Some("Support Bot")
+        );
+        assert_eq!(auth_ctx.entity_name, "agent:Support Bot");
         assert_eq!(auth_ctx.body_ttl_days, 90);
 
         let policy = vk_policy.expect("vk policy should be attached");
         assert_eq!(policy.virtual_key_id, vk.id);
         assert_eq!(policy.allowed_models, vk.allowed_models);
         assert_eq!(policy.blocked_models, vk.blocked_models);
+    }
+
+    #[tokio::test]
+    async fn authenticate_inner_does_not_register_non_agent_labels() {
+        for label in ["member:Alice", "agent:", "plain label"] {
+            let app =
+                build_test_app(Config::default()).await.expect("build app");
+            let raw_key = format!("sk-auth-unit-test-{label}");
+            let key_hash = hash_key(&raw_key);
+            let mut vk = sample_vk(Some(Uuid::new_v4()), None);
+            vk.key_hash = key_hash;
+            vk.label = label.to_string();
+
+            {
+                let mut cache = app.state.0.virtual_keys_cache.write().await;
+                *cache = Some(rustc_hash::FxHashMap::default());
+                if let Some(keys) = cache.as_mut() {
+                    keys.insert(vk.key_hash.clone(), vk.clone());
+                }
+            }
+
+            let (auth_ctx, _) = AuthService::authenticate_request_inner(
+                app.state.clone(),
+                &format!("Bearer {raw_key}"),
+                Some(&RequestKind::UnifiedApi),
+                None,
+            )
+            .await
+            .expect("virtual key should authenticate");
+
+            assert_eq!(auth_ctx.registered_agent_name, None, "label={label}");
+            assert_eq!(auth_ctx.entity_name, label);
+        }
     }
 }

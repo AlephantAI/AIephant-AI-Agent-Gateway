@@ -1,6 +1,6 @@
 use async_openai::types::{
-    ChatChoice, ChatCompletionMessageToolCall, ChatCompletionResponseMessage, CompletionUsage,
-    CreateChatCompletionResponse, FinishReason, Role,
+    ChatChoice, ChatCompletionMessageToolCall, ChatCompletionResponseMessage,
+    CompletionUsage, CreateChatCompletionResponse, FinishReason, Role,
 };
 
 pub const OPENAI_CHAT_COMPLETION_OBJECT: &str = "chat.completion";
@@ -85,7 +85,8 @@ pub fn build_chat_response(
 #[cfg(test)]
 mod tests {
     use async_openai::types::{
-        ChatCompletionMessageToolCall, ChatCompletionToolType, FinishReason, FunctionCall,
+        ChatCompletionMessageToolCall, ChatCompletionToolType, FinishReason,
+        FunctionCall,
     };
 
     use super::{build_chat_response, build_usage, normalize_tool_calls};

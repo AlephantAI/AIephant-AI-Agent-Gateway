@@ -7,18 +7,19 @@ use crate::{
         capabilities::ProviderCapabilities,
         families::ProviderProtocolFamily,
         non_stream_profile::{
-            FinishReasonMappingMode, MessageContentMode, ResponseContentMode, ToolCallMappingMode,
-            UsageMappingMode,
+            FinishReasonMappingMode, MessageContentMode, ResponseContentMode,
+            ToolCallMappingMode, UsageMappingMode,
         },
         rules::{
-            MultimodalMode, ReasoningMode, ResponseFormatMode, StreamMode, SystemHandling,
-            ToolChoiceMode,
+            MultimodalMode, ReasoningMode, ResponseFormatMode, StreamMode,
+            SystemHandling, ToolChoiceMode,
         },
     },
     types::provider::InferenceProvider,
 };
 
-const MAPPER_PROFILES_YAML: &str = include_str!("../../config/embedded/mapper-profiles.yaml");
+const MAPPER_PROFILES_YAML: &str =
+    include_str!("../../config/embedded/mapper-profiles.yaml");
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
@@ -37,9 +38,13 @@ impl From<ProviderCapabilities> for MapperCapabilitiesPatch {
             openai_compatible: Some(value.openai_compatible),
             supports_response_format: Some(value.supports_response_format),
             supports_tool_choice: Some(value.supports_tool_choice),
-            supports_parallel_tool_calls: Some(value.supports_parallel_tool_calls),
+            supports_parallel_tool_calls: Some(
+                value.supports_parallel_tool_calls,
+            ),
             supports_thinking: Some(value.supports_thinking),
-            supports_streaming_reasoning: Some(value.supports_streaming_reasoning),
+            supports_streaming_reasoning: Some(
+                value.supports_streaming_reasoning,
+            ),
         }
     }
 }
@@ -83,14 +88,17 @@ pub struct MapperProfileCatalogEntry {
 #[derive(Debug, Clone, Deserialize, Serialize, AsRef, PartialEq, Eq)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct MapperProfilesConfig {
-    pub family_defaults: IndexMap<ProviderProtocolFamily, MapperProfileCatalogEntry>,
-    pub provider_defaults: IndexMap<InferenceProvider, MapperProfileCatalogEntry>,
+    pub family_defaults:
+        IndexMap<ProviderProtocolFamily, MapperProfileCatalogEntry>,
+    pub provider_defaults:
+        IndexMap<InferenceProvider, MapperProfileCatalogEntry>,
     pub model_overrides: IndexMap<String, MapperProfileCatalogEntry>,
 }
 
 impl Default for MapperProfilesConfig {
     fn default() -> Self {
-        serde_yml::from_str(MAPPER_PROFILES_YAML).expect("Always valid if tests pass")
+        serde_yml::from_str(MAPPER_PROFILES_YAML)
+            .expect("Always valid if tests pass")
     }
 }
 
@@ -165,8 +173,8 @@ model-overrides:
       reasoning-mode: passthrough
 ";
 
-        let config: MapperProfilesConfig =
-            serde_yml::from_str(yaml).expect("partial layered entries should deserialize");
+        let config: MapperProfilesConfig = serde_yml::from_str(yaml)
+            .expect("partial layered entries should deserialize");
 
         let provider_entry = config
             .provider_defaults
@@ -230,10 +238,9 @@ model-overrides:
             .request
             .as_ref()
             .expect("provider-defaults.openai should include request patch");
-        let capabilities = openai
-            .capabilities
-            .as_ref()
-            .expect("provider-defaults.openai should include capabilities patch");
+        let capabilities = openai.capabilities.as_ref().expect(
+            "provider-defaults.openai should include capabilities patch",
+        );
 
         assert_eq!(request.reasoning_mode, Some(ReasoningMode::Passthrough));
         assert_eq!(capabilities.supports_thinking, Some(true));

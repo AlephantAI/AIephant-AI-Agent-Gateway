@@ -20,7 +20,8 @@ use crate::{
 };
 
 /// Lowercase HTTP header name (required for `HeaderName::from_static`).
-pub static ALEPHANT_PROMPT_ID: HeaderName = HeaderName::from_static("alephant-prompt-id");
+pub static ALEPHANT_PROMPT_ID: HeaderName =
+    HeaderName::from_static("alephant-prompt-id");
 
 pub const PROMPT_CACHE_REDIS_PREFIX: &str = "prompt:cache:";
 
@@ -31,7 +32,10 @@ pub const MAX_PROMPT_ID_BYTES: usize = 256;
 #[must_use]
 pub fn prompt_cache_redis_key(workspace_id: &str, prompt_id: &str) -> String {
     let mut s = String::with_capacity(
-        PROMPT_CACHE_REDIS_PREFIX.len() + workspace_id.len() + 1 + prompt_id.len(),
+        PROMPT_CACHE_REDIS_PREFIX.len()
+            + workspace_id.len()
+            + 1
+            + prompt_id.len(),
     );
     s.push_str(PROMPT_CACHE_REDIS_PREFIX);
     s.push_str(workspace_id);
@@ -42,7 +46,9 @@ pub fn prompt_cache_redis_key(workspace_id: &str, prompt_id: &str) -> String {
 
 /// From a parsed Redis root `Value`, read `template.messages` (must be an
 /// array, may be empty).
-pub fn template_messages_from_prompt_cache_value(root: &Value) -> Result<Vec<Value>, String> {
+pub fn template_messages_from_prompt_cache_value(
+    root: &Value,
+) -> Result<Vec<Value>, String> {
     let Some(template) = root.get("template") else {
         return Err("`template` missing in prompt cache".to_string());
     };
@@ -57,16 +63,20 @@ pub fn template_messages_from_prompt_cache_value(root: &Value) -> Result<Vec<Val
 
 /// On Redis hit with non-empty string, parse and read
 /// `template.messages` (must be an array, may be empty).
-pub fn template_messages_from_prompt_cache_json(redis_value: &str) -> Result<Vec<Value>, String> {
-    let root: Value =
-        serde_json::from_str(redis_value).map_err(|_| "Invalid prompt cache JSON".to_string())?;
+pub fn template_messages_from_prompt_cache_json(
+    redis_value: &str,
+) -> Result<Vec<Value>, String> {
+    let root: Value = serde_json::from_str(redis_value)
+        .map_err(|_| "Invalid prompt cache JSON".to_string())?;
     template_messages_from_prompt_cache_value(&root)
 }
 
 /// Design `template.current_version`: non-empty string, or decimal string of a
 /// JSON number; else `None`.
 #[must_use]
-pub fn current_version_for_request_log_from_cache_root(root: &Value) -> Option<String> {
+pub fn current_version_for_request_log_from_cache_root(
+    root: &Value,
+) -> Option<String> {
     let current = root.get("template")?.get("current_version")?;
     if current.is_null() {
         return None;
@@ -84,7 +94,10 @@ pub fn current_version_for_request_log_from_cache_root(root: &Value) -> Option<S
 /// Prepend `prefix` onto `root["messages"]`; if `messages` is missing, set it
 /// to `prefix`. `prefix` must be non-empty (caller should skip when `prefix` is
 /// empty).
-pub fn prepend_messages_array(mut root: Value, prefix: Vec<Value>) -> Result<Value, String> {
+pub fn prepend_messages_array(
+    mut root: Value,
+    prefix: Vec<Value>,
+) -> Result<Value, String> {
     if prefix.is_empty() {
         return Ok(root);
     }
@@ -126,7 +139,9 @@ pub fn has_nonempty_alephant_prompt_id(headers: &http::HeaderMap) -> bool {
 }
 
 fn invalid_prompt_cache(message: String) -> ApiError {
-    ApiError::InvalidRequest(InvalidRequestError::PromptCacheInvalid { message })
+    ApiError::InvalidRequest(InvalidRequestError::PromptCacheInvalid {
+        message,
+    })
 }
 
 fn merge_prompt_cache_hit_into_body(
@@ -151,25 +166,28 @@ fn merge_prompt_cache_hit_into_body(
             return Ok((forward_body, None));
         }
     };
-    let template_messages = match template_messages_from_prompt_cache_value(&cache_root) {
-        Ok(m) => m,
-        Err(msg) => {
-            warn!(
-                key = %redis_key,
-                prompt_id = %prompt_id_raw,
-                reason = %msg,
-                "prompt cache invalid shape, fail-open"
-            );
-            vk_metrics
-                .policy_prompt_cache_messages
-                .add(1, &[KeyValue::new("outcome", "cache_invalid_skip")]);
-            return Ok((forward_body, None));
-        }
-    };
+    let template_messages =
+        match template_messages_from_prompt_cache_value(&cache_root) {
+            Ok(m) => m,
+            Err(msg) => {
+                warn!(
+                    key = %redis_key,
+                    prompt_id = %prompt_id_raw,
+                    reason = %msg,
+                    "prompt cache invalid shape, fail-open"
+                );
+                vk_metrics
+                    .policy_prompt_cache_messages
+                    .add(1, &[KeyValue::new("outcome", "cache_invalid_skip")]);
+                return Ok((forward_body, None));
+            }
+        };
 
     let header_log = PromptHeaderForRequestLog {
         prompt_id: prompt_id_raw.to_owned(),
-        prompt_version: current_version_for_request_log_from_cache_root(&cache_root),
+        prompt_version: current_version_for_request_log_from_cache_root(
+            &cache_root,
+        ),
     };
 
     if template_messages.is_empty() {
@@ -179,14 +197,16 @@ fn merge_prompt_cache_hit_into_body(
         return Ok((forward_body, Some(header_log.clone())));
     }
 
-    let mut body_root: Value = serde_json::from_slice(&forward_body).map_err(|_| {
-        vk_metrics
-            .policy_prompt_cache_messages
-            .add(1, &[KeyValue::new("outcome", "parse_or_shape_400")]);
-        invalid_prompt_cache(
-            "Request body must be valid JSON when using Alephant-Prompt-ID".to_string(),
-        )
-    })?;
+    let mut body_root: Value =
+        serde_json::from_slice(&forward_body).map_err(|_| {
+            vk_metrics
+                .policy_prompt_cache_messages
+                .add(1, &[KeyValue::new("outcome", "parse_or_shape_400")]);
+            invalid_prompt_cache(
+                "Request body must be valid JSON when using Alephant-Prompt-ID"
+                    .to_string(),
+            )
+        })?;
 
     body_root = match prepend_messages_array(body_root, template_messages) {
         Ok(v) => v,
@@ -307,7 +327,13 @@ pub async fn merge_prompt_cache_messages_into_body(
         return Ok((forward_body, None));
     }
 
-    merge_prompt_cache_hit_into_body(prompt_id_raw, &key, redis_str, forward_body, vk_metrics)
+    merge_prompt_cache_hit_into_body(
+        prompt_id_raw,
+        &key,
+        redis_str,
+        forward_body,
+        vk_metrics,
+    )
 }
 
 #[cfg(test)]
@@ -335,7 +361,8 @@ mod tests {
 
     #[test]
     fn template_messages_extracts_array() {
-        let got = template_messages_from_prompt_cache_json(SAMPLE_REDIS).unwrap();
+        let got =
+            template_messages_from_prompt_cache_json(SAMPLE_REDIS).unwrap();
         assert_eq!(got.len(), 2);
         assert_eq!(got[0]["role"], json!("system"));
         assert_eq!(got[1]["content"], json!("222222"));
@@ -349,14 +376,18 @@ mod tests {
 
     #[test]
     fn messages_missing_errors() {
-        let err = template_messages_from_prompt_cache_json(r#"{"template":{}}"#).unwrap_err();
+        let err =
+            template_messages_from_prompt_cache_json(r#"{"template":{}}"#)
+                .unwrap_err();
         assert!(err.contains("template.messages"));
     }
 
     #[test]
     fn messages_not_array_errors() {
-        let err = template_messages_from_prompt_cache_json(r#"{"template":{"messages":{}}}"#)
-            .unwrap_err();
+        let err = template_messages_from_prompt_cache_json(
+            r#"{"template":{"messages":{}}}"#,
+        )
+        .unwrap_err();
         assert!(err.contains("array"));
     }
 
@@ -391,8 +422,8 @@ mod tests {
         })];
 
         let merged = prepend_messages_array(body, template_messages).unwrap();
-        let out =
-            crate::middleware::prompts::templating::apply_prompt_inputs_to_body(merged).unwrap();
+        let out = crate::middleware::prompts::templating::apply_prompt_inputs_to_body(merged)
+            .unwrap();
 
         assert_eq!(out["messages"][0]["content"], "Name: legend");
         assert!(out.get("inputs").is_none());
@@ -408,7 +439,10 @@ mod tests {
     #[test]
     fn redis_key_format() {
         assert_eq!(
-            prompt_cache_redis_key("7f798905-540d-437e-a781-6c7a2e5fdb82", "test001212",),
+            prompt_cache_redis_key(
+                "7f798905-540d-437e-a781-6c7a2e5fdb82",
+                "test001212",
+            ),
             "prompt:cache:7f798905-540d-437e-a781-6c7a2e5fdb82:test001212"
         );
     }
@@ -441,9 +475,10 @@ mod tests {
 
     #[test]
     fn current_version_trims_string() {
-        let v: Value =
-            serde_json::from_str(r#"{"template":{"current_version":"  v1  ","messages":[]}}"#)
-                .expect("json");
+        let v: Value = serde_json::from_str(
+            r#"{"template":{"current_version":"  v1  ","messages":[]}}"#,
+        )
+        .expect("json");
         assert_eq!(
             current_version_for_request_log_from_cache_root(&v).as_deref(),
             Some("v1")
@@ -452,8 +487,10 @@ mod tests {
 
     #[test]
     fn current_version_from_integer_json() {
-        let v: Value = serde_json::from_str(r#"{"template":{"current_version":42,"messages":[]}}"#)
-            .expect("json");
+        let v: Value = serde_json::from_str(
+            r#"{"template":{"current_version":42,"messages":[]}}"#,
+        )
+        .expect("json");
         assert_eq!(
             current_version_for_request_log_from_cache_root(&v).as_deref(),
             Some("42")
@@ -526,7 +563,8 @@ mod tests {
         let mut headers = http::HeaderMap::new();
         headers.insert(
             ALEPHANT_PROMPT_ID.clone(),
-            HeaderValue::from_str(&"a".repeat(MAX_PROMPT_ID_BYTES + 1)).expect("header value"),
+            HeaderValue::from_str(&"a".repeat(MAX_PROMPT_ID_BYTES + 1))
+                .expect("header value"),
         );
 
         let err = merge_prompt_cache_messages_into_body(
@@ -540,9 +578,12 @@ mod tests {
         .expect_err("too long prompt id should return error");
 
         let response = match err {
-            ApiError::InvalidRequest(InvalidRequestError::PromptCacheInvalid { message }) => {
+            ApiError::InvalidRequest(
+                InvalidRequestError::PromptCacheInvalid { message },
+            ) => {
                 assert!(message.contains("exceeds maximum length"));
-                InvalidRequestError::PromptCacheInvalid { message }.into_response()
+                InvalidRequestError::PromptCacheInvalid { message }
+                    .into_response()
             }
             other => panic!("unexpected error variant: {other:?}"),
         };

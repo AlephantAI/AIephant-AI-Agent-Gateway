@@ -33,7 +33,10 @@ fn model_override_from_headers(headers: &HeaderMap) -> Option<String> {
 }
 
 #[must_use]
-fn model_id_for_catalog(provider: &InferenceProvider, model_str: &str) -> ModelId {
+fn model_id_for_catalog(
+    provider: &InferenceProvider,
+    model_str: &str,
+) -> ModelId {
     if model_str.contains('/') {
         return ModelId::from_str(model_str)
             .unwrap_or_else(|_| ModelId::Unknown(model_str.to_string()));
@@ -58,28 +61,34 @@ pub(crate) async fn fill_evaluate_request_estimates(
 
     let model_override = model_override_from_headers(headers);
 
-    let Ok(Some(payload)) = parse_chat_completions_payload(body.as_ref()) else {
+    let Ok(Some(payload)) = parse_chat_completions_payload(body.as_ref())
+    else {
         return;
     };
 
     let body_model = payload.model.as_deref();
-    let Some(primary_model) = resolve_primary_model(body_model, model_override.as_deref()) else {
+    let Some(primary_model) =
+        resolve_primary_model(body_model, model_override.as_deref())
+    else {
         return;
     };
 
-    let Some(estimated_tokens) = estimate_input_tokens(&payload, &primary_model, Some(provider))
+    let Some(estimated_tokens) =
+        estimate_input_tokens(&payload, &primary_model, Some(provider))
     else {
         return;
     };
 
     let model_id = model_id_for_catalog(provider, &primary_model);
-    let Some(info) = lookup_model_info(app_state, provider, &model_id).await else {
+    let Some(info) = lookup_model_info(app_state, provider, &model_id).await
+    else {
         grpc_req.estimated_input_tokens = estimated_tokens;
         return;
     };
 
     grpc_req.estimated_input_tokens = estimated_tokens;
-    grpc_req.estimated_input_usd = policy_estimated_input_micro_usd(estimated_tokens, &info);
+    grpc_req.estimated_input_usd =
+        policy_estimated_input_micro_usd(estimated_tokens, &info);
 }
 
 #[cfg(test)]

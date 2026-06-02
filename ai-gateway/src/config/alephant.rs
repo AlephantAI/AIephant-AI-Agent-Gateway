@@ -3,7 +3,9 @@ use url::Url;
 
 use crate::types::secret::Secret;
 
-#[derive(Default, Debug, Clone, Deserialize, Serialize, PartialEq, Eq, Hash)]
+#[derive(
+    Default, Debug, Clone, Deserialize, Serialize, PartialEq, Eq, Hash,
+)]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
 pub enum AlephantFeatures {
     /// No features enabled
@@ -34,6 +36,9 @@ pub struct AlephantConfig {
     /// logs (also used for prompt queries).
     #[serde(default = "default_log_collector_url")]
     pub log_collector_url: Url,
+    /// Bearer token used only for x402 payment-log HTTP fallback.
+    #[serde(default = "default_logs_collector_x402_http_auth_token")]
+    pub logs_collector_x402_http_auth_token: Secret<String>,
     /// The mode of Alephant features to enable.
     #[serde(default)]
     pub features: AlephantFeatures,
@@ -52,12 +57,14 @@ impl AlephantConfig {
 
     #[must_use]
     pub fn is_observability_enabled(&self) -> bool {
-        self.features == AlephantFeatures::All || self.features == AlephantFeatures::Observability
+        self.features == AlephantFeatures::All
+            || self.features == AlephantFeatures::Observability
     }
 
     #[must_use]
     pub fn is_prompts_enabled(&self) -> bool {
-        self.features == AlephantFeatures::All || self.features == AlephantFeatures::Prompts
+        self.features == AlephantFeatures::All
+            || self.features == AlephantFeatures::Prompts
     }
 }
 
@@ -66,6 +73,8 @@ impl Default for AlephantConfig {
         Self {
             api_key: default_api_key(),
             log_collector_url: default_log_collector_url(),
+            logs_collector_x402_http_auth_token:
+                default_logs_collector_x402_http_auth_token(),
             features: AlephantFeatures::None,
         }
     }
@@ -73,7 +82,8 @@ impl Default for AlephantConfig {
 
 fn default_api_key() -> Secret<String> {
     // ALEPHANT_CONTROL_PLANE_API_KEY takes priority.
-    const LEGACY_CONTROL_PLANE_API_KEY_ENV: &str = concat!("HELI", "CONE_CONTROL_PLANE_API_KEY");
+    const LEGACY_CONTROL_PLANE_API_KEY_ENV: &str =
+        concat!("HELI", "CONE_CONTROL_PLANE_API_KEY");
     let val = std::env::var("ALEPHANT_CONTROL_PLANE_API_KEY")
         .or_else(|_| std::env::var(LEGACY_CONTROL_PLANE_API_KEY_ENV))
         .unwrap_or_else(|_| "sk-alephant-...".to_string());
@@ -81,12 +91,22 @@ fn default_api_key() -> Secret<String> {
 }
 
 fn default_log_collector_url() -> Url {
-    const LOG_COLLECTOR_URL_ENV: &str = "AI_GATEWAY__ALEPHANT__LOG_COLLECTOR_URL";
+    const LOG_COLLECTOR_URL_ENV: &str =
+        "AI_GATEWAY__ALEPHANT__LOG_COLLECTOR_URL";
     const DEFAULT_LOG_COLLECTOR_URL: &str = "https://api.alephant.io";
     std::env::var(LOG_COLLECTOR_URL_ENV)
         .ok()
         .and_then(|s| s.parse().ok())
-        .unwrap_or_else(|| DEFAULT_LOG_COLLECTOR_URL.parse().expect("valid URL"))
+        .unwrap_or_else(|| {
+            DEFAULT_LOG_COLLECTOR_URL.parse().expect("valid URL")
+        })
+}
+
+fn default_logs_collector_x402_http_auth_token() -> Secret<String> {
+    Secret::from(
+        std::env::var("LOGS_COLLECTOR_X402_HTTP_AUTH_TOKEN")
+            .unwrap_or_else(|_| String::new()),
+    )
 }
 
 #[cfg(feature = "testing")]
@@ -96,6 +116,8 @@ impl crate::tests::TestDefault for AlephantConfig {
             log_collector_url: "http://localhost:8585".parse().unwrap(),
             features: AlephantFeatures::All,
             api_key: default_api_key(),
+            logs_collector_x402_http_auth_token:
+                default_logs_collector_x402_http_auth_token(),
         }
     }
 }
@@ -118,6 +140,8 @@ impl<'de> Deserialize<'de> for AlephantConfig {
         enum Field {
             ApiKey,
             LogCollectorUrl,
+            BaseUrl,
+            LogsCollectorX402HttpAuthToken,
             WebsocketUrl,
             Features,
             Authentication,
@@ -135,12 +159,17 @@ impl<'de> Deserialize<'de> for AlephantConfig {
                 formatter.write_str("struct AlephantConfig")
             }
 
-            fn visit_map<V>(self, mut map: V) -> Result<AlephantConfig, V::Error>
+            fn visit_map<V>(
+                self,
+                mut map: V,
+            ) -> Result<AlephantConfig, V::Error>
             where
                 V: MapAccess<'de>,
             {
                 let mut api_key = None;
                 let mut log_collector_url = None;
+                let mut legacy_base_url = None;
+                let mut logs_collector_x402_http_auth_token = None;
                 let mut features = None;
                 let mut authentication = None;
                 let mut observability = None;
@@ -150,15 +179,36 @@ impl<'de> Deserialize<'de> for AlephantConfig {
                     match key {
                         Field::ApiKey => {
                             if api_key.is_some() {
-                                return Err(de::Error::duplicate_field("api_key"));
+                                return Err(de::Error::duplicate_field(
+                                    "api_key",
+                                ));
                             }
                             api_key = Some(map.next_value()?);
                         }
                         Field::LogCollectorUrl => {
                             if log_collector_url.is_some() {
-                                return Err(de::Error::duplicate_field("log_collector_url"));
+                                return Err(de::Error::duplicate_field(
+                                    "log_collector_url",
+                                ));
                             }
                             log_collector_url = Some(map.next_value()?);
+                        }
+                        Field::BaseUrl => {
+                            if legacy_base_url.is_some() {
+                                return Err(de::Error::duplicate_field(
+                                    "base_url",
+                                ));
+                            }
+                            legacy_base_url = Some(map.next_value()?);
+                        }
+                        Field::LogsCollectorX402HttpAuthToken => {
+                            if logs_collector_x402_http_auth_token.is_some() {
+                                return Err(de::Error::duplicate_field(
+                                    "logs_collector_x402_http_auth_token",
+                                ));
+                            }
+                            logs_collector_x402_http_auth_token =
+                                Some(map.next_value()?);
                         }
                         Field::WebsocketUrl => {
                             // Accepted for backwards compat; value is ignored.
@@ -166,25 +216,33 @@ impl<'de> Deserialize<'de> for AlephantConfig {
                         }
                         Field::Features => {
                             if features.is_some() {
-                                return Err(de::Error::duplicate_field("features"));
+                                return Err(de::Error::duplicate_field(
+                                    "features",
+                                ));
                             }
                             features = Some(map.next_value()?);
                         }
                         Field::Authentication => {
                             if authentication.is_some() {
-                                return Err(de::Error::duplicate_field("authentication"));
+                                return Err(de::Error::duplicate_field(
+                                    "authentication",
+                                ));
                             }
                             authentication = Some(map.next_value()?);
                         }
                         Field::Observability => {
                             if observability.is_some() {
-                                return Err(de::Error::duplicate_field("observability"));
+                                return Err(de::Error::duplicate_field(
+                                    "observability",
+                                ));
                             }
                             observability = Some(map.next_value()?);
                         }
                         Field::Prompts => {
                             if prompts.is_some() {
-                                return Err(de::Error::duplicate_field("prompts"));
+                                return Err(de::Error::duplicate_field(
+                                    "prompts",
+                                ));
                             }
                             prompts = Some(map.next_value()?);
                         }
@@ -202,18 +260,30 @@ impl<'de> Deserialize<'de> for AlephantConfig {
                 } else {
                     match (authentication, observability, prompts) {
                         (_, Some(true), Some(true)) => AlephantFeatures::All,
-                        (_, Some(true), Some(false) | None) => AlephantFeatures::Observability,
-                        (_, Some(false) | None, Some(true)) => AlephantFeatures::Prompts,
-                        (Some(true), Some(false) | None, Some(false) | None) => {
-                            AlephantFeatures::Auth
+                        (_, Some(true), Some(false) | None) => {
+                            AlephantFeatures::Observability
                         }
+                        (_, Some(false) | None, Some(true)) => {
+                            AlephantFeatures::Prompts
+                        }
+                        (
+                            Some(true),
+                            Some(false) | None,
+                            Some(false) | None,
+                        ) => AlephantFeatures::Auth,
                         _ => AlephantFeatures::None,
                     }
                 };
 
                 Ok(AlephantConfig {
                     api_key: api_key.unwrap_or_else(default_api_key),
-                    log_collector_url: log_collector_url.unwrap_or_else(default_log_collector_url),
+                    log_collector_url: log_collector_url
+                        .or(legacy_base_url)
+                        .unwrap_or_else(default_log_collector_url),
+                    logs_collector_x402_http_auth_token:
+                        logs_collector_x402_http_auth_token.unwrap_or_else(
+                            default_logs_collector_x402_http_auth_token,
+                        ),
                     features,
                 })
             }
@@ -222,13 +292,19 @@ impl<'de> Deserialize<'de> for AlephantConfig {
         const FIELDS: &[&str] = &[
             "api_key",
             "log_collector_url",
+            "base_url",
+            "logs_collector_x402_http_auth_token",
             "websocket_url",
             "features",
             "authentication",
             "observability",
             "__prompts",
         ];
-        deserializer.deserialize_struct("AlephantConfig", FIELDS, AlephantConfigVisitor)
+        deserializer.deserialize_struct(
+            "AlephantConfig",
+            FIELDS,
+            AlephantConfigVisitor,
+        )
     }
 }
 
@@ -268,6 +344,30 @@ mod tests {
     }
 
     #[test]
+    fn logs_collector_x402_http_auth_token_defaults_from_flat_env() {
+        let _guard = log_collector_url_env_lock()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let key = "LOGS_COLLECTOR_X402_HTTP_AUTH_TOKEN";
+        let previous = std::env::var(key).ok();
+        unsafe {
+            std::env::set_var(key, "x402-token");
+        }
+
+        let yaml = r#"api-key: "sk-test""#;
+        let config: AlephantConfig = serde_yml::from_str(yaml).unwrap();
+        assert_eq!(
+            config.logs_collector_x402_http_auth_token.expose(),
+            "x402-token"
+        );
+
+        match previous {
+            Some(value) => unsafe { std::env::set_var(key, value) },
+            None => unsafe { std::env::remove_var(key) },
+        }
+    }
+
+    #[test]
     fn test_deserialize_features_field_only() {
         let yaml = r#"
 api-key: "sk-test-key"
@@ -278,6 +378,39 @@ features: "all"
 
         let config: AlephantConfig = serde_yml::from_str(yaml).unwrap();
         assert_eq!(config.features, AlephantFeatures::All);
+    }
+
+    #[test]
+    fn base_url_deserializes_as_legacy_log_collector_url_alias() {
+        let yaml = r#"
+api-key: "sk-test-key"
+base-url: "https://legacy.example.com"
+features: "all"
+"#;
+
+        let config: AlephantConfig = serde_yml::from_str(yaml).unwrap();
+
+        assert_eq!(
+            config.log_collector_url,
+            "https://legacy.example.com".parse().unwrap()
+        );
+    }
+
+    #[test]
+    fn log_collector_url_takes_precedence_over_legacy_base_url() {
+        let yaml = r#"
+api-key: "sk-test-key"
+base-url: "https://legacy.example.com"
+log-collector-url: "https://logs.example.com"
+features: "all"
+"#;
+
+        let config: AlephantConfig = serde_yml::from_str(yaml).unwrap();
+
+        assert_eq!(
+            config.log_collector_url,
+            "https://logs.example.com".parse().unwrap()
+        );
     }
 
     #[test]

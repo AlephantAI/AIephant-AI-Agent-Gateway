@@ -4,7 +4,9 @@ use std::{collections::HashMap, net::TcpListener};
 
 use ai_gateway::{
     app::AppResponse,
-    config::{Config, alephant::AlephantFeatures, providers::GlobalProviderConfig},
+    config::{
+        Config, alephant::AlephantFeatures, providers::GlobalProviderConfig,
+    },
     crypto::master_key,
     tests::{TestDefault, harness::Harness, mock::MockArgs},
     types::{provider::InferenceProvider, secret::Secret},
@@ -24,8 +26,10 @@ use tower::Service;
 use uuid::Uuid;
 
 const MASTER_KEY_ENCRYPTION_KEY_ENV: &str = "MASTER_KEY_ENCRYPTION_KEY";
-const TEST_MASTER_KEY_ENCRYPTION_KEY_B64: &str = "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=";
-const DEFAULT_TEST_DB_URL: &str = "postgres://postgres:postgres@localhost:54322/postgres";
+const TEST_MASTER_KEY_ENCRYPTION_KEY_B64: &str =
+    "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=";
+const DEFAULT_TEST_DB_URL: &str =
+    "postgres://postgres:postgres@localhost:54322/postgres";
 const TEST_WORKSPACE_ID: &str = "f9e87d88-39f3-42ef-b485-4991737db6cf";
 const TEST_WORKSPACE_OWNER_ID: &str = "538b199a-b286-4a23-9f46-b57f02075341";
 const REQUEST_URI: &str = "http://router.alephant.test/v1/chat/completions";
@@ -370,7 +374,9 @@ async fn harness_shutdown_closes_router_store_pool() {
 
     let harness = Harness::builder()
         .with_config(config)
-        .with_mock_args(MockArgs::builder().openai_port(port).verify(false).build())
+        .with_mock_args(
+            MockArgs::builder().openai_port(port).verify(false).build(),
+        )
         .with_mock_auth()
         .build()
         .await;
@@ -437,7 +443,10 @@ impl AwsCredsGuard {
         let previous_secret_key = std::env::var(AWS_SECRET_ACCESS_KEY_ENV).ok();
         unsafe {
             std::env::set_var(AWS_ACCESS_KEY_ID_ENV, TEST_BEDROCK_ACCESS_KEY);
-            std::env::set_var(AWS_SECRET_ACCESS_KEY_ENV, TEST_BEDROCK_SECRET_KEY);
+            std::env::set_var(
+                AWS_SECRET_ACCESS_KEY_ENV,
+                TEST_BEDROCK_SECRET_KEY,
+            );
         }
         Self {
             previous_access_key,
@@ -528,16 +537,15 @@ fn ensure_mock_provider_configs(config: &mut Config) {
             "http://127.0.0.1:1/",
         ),
     ] {
-        config
-            .providers
-            .entry(provider.clone())
-            .or_insert_with(|| GlobalProviderConfig {
+        config.providers.entry(provider.clone()).or_insert_with(|| {
+            GlobalProviderConfig {
                 models: IndexSet::new(),
                 base_url: base_url.parse().expect("valid mock base url"),
                 cn_base_url: None,
                 version: None,
                 upstream_auth: Default::default(),
-            });
+            }
+        });
     }
 }
 
@@ -691,8 +699,9 @@ async fn upsert_master_key(
 ) -> Result<Uuid, sqlx::Error> {
     let master_key_id = parse_uuid(case.master_key_id);
     let enc_key = master_key_encryption_key();
-    let (ciphertext, nonce) = master_key::encrypt(case.master_key_plaintext.as_bytes(), &enc_key)
-        .expect("encrypt master key");
+    let (ciphertext, nonce) =
+        master_key::encrypt(case.master_key_plaintext.as_bytes(), &enc_key)
+            .expect("encrypt master key");
 
     sqlx::query(
         r"INSERT INTO master_keys
@@ -852,15 +861,25 @@ fn mock_args_for(case: &UnifiedApiCase, port: u16) -> MockArgs {
     ]);
 
     match case.mock_target {
-        MockTarget::OpenAICompatible => MockArgs::builder().openai_port(port).stubs(stubs).build(),
+        MockTarget::OpenAICompatible => {
+            MockArgs::builder().openai_port(port).stubs(stubs).build()
+        }
         MockTarget::Anthropic => MockArgs::builder()
             .anthropic_port(port)
             .stubs(stubs)
             .build(),
-        MockTarget::Gemini => MockArgs::builder().google_port(port).stubs(stubs).build(),
-        MockTarget::Ollama => MockArgs::builder().ollama_port(port).stubs(stubs).build(),
-        MockTarget::Bedrock => MockArgs::builder().bedrock_port(port).stubs(stubs).build(),
-        MockTarget::Mistral => MockArgs::builder().mistral_port(port).stubs(stubs).build(),
+        MockTarget::Gemini => {
+            MockArgs::builder().google_port(port).stubs(stubs).build()
+        }
+        MockTarget::Ollama => {
+            MockArgs::builder().ollama_port(port).stubs(stubs).build()
+        }
+        MockTarget::Bedrock => {
+            MockArgs::builder().bedrock_port(port).stubs(stubs).build()
+        }
+        MockTarget::Mistral => {
+            MockArgs::builder().mistral_port(port).stubs(stubs).build()
+        }
     }
 }
 
@@ -870,7 +889,9 @@ async fn response_parts(response: AppResponse) -> (StatusCode, String) {
     (status, String::from_utf8_lossy(&body).into_owned())
 }
 
-async fn run_unified_case(case: &UnifiedApiCase) -> Result<(StatusCode, String), String> {
+async fn run_unified_case(
+    case: &UnifiedApiCase,
+) -> Result<(StatusCode, String), String> {
     let _master_key_guard = MasterKeyGuard::set();
     let port = reserve_port();
     let base_url = format!("http://127.0.0.1:{port}/");
@@ -953,9 +974,10 @@ async fn assert_openai_like_stream_case_ok(case: &UnifiedApiCase) {
         ]
     });
 
-    let (headers, body, requests) = run_openai_like_stream_case(case, request_payload)
-        .await
-        .unwrap_or_else(|e| panic!("{e}"));
+    let (headers, body, requests) =
+        run_openai_like_stream_case(case, request_payload)
+            .await
+            .unwrap_or_else(|e| panic!("{e}"));
 
     let raw_model = case.raw_model_id();
     assert_eq!(
@@ -1013,10 +1035,13 @@ async fn assert_openai_like_nonstream_case_ok(case: &UnifiedApiCase) {
         }
     });
 
-    let (status, body, requests) =
-        run_openai_like_nonstream_runtime_case(case, request_payload, response_payload)
-            .await
-            .unwrap_or_else(|e| panic!("{e}"));
+    let (status, body, requests) = run_openai_like_nonstream_runtime_case(
+        case,
+        request_payload,
+        response_payload,
+    )
+    .await
+    .unwrap_or_else(|e| panic!("{e}"));
 
     assert_eq!(status, StatusCode::OK, "response body: {body}");
     assert_openai_chat_completion_shape(&body);
@@ -1094,10 +1119,13 @@ async fn assert_openai_like_capability_fields_case_ok(case: &UnifiedApiCase) {
         }
     });
 
-    let (status, body, requests) =
-        run_openai_like_nonstream_runtime_case(case, request_payload, response_payload)
-            .await
-            .unwrap_or_else(|e| panic!("{e}"));
+    let (status, body, requests) = run_openai_like_nonstream_runtime_case(
+        case,
+        request_payload,
+        response_payload,
+    )
+    .await
+    .unwrap_or_else(|e| panic!("{e}"));
 
     assert_eq!(status, StatusCode::OK, "response body: {body}");
     assert_eq!(
@@ -1178,10 +1206,13 @@ async fn assert_openai_like_tool_calls_case_ok(case: &UnifiedApiCase) {
         }
     });
 
-    let (status, body, requests) =
-        run_openai_like_nonstream_runtime_case(case, request_payload, response_payload)
-            .await
-            .unwrap_or_else(|e| panic!("{e}"));
+    let (status, body, requests) = run_openai_like_nonstream_runtime_case(
+        case,
+        request_payload,
+        response_payload,
+    )
+    .await
+    .unwrap_or_else(|e| panic!("{e}"));
 
     assert_eq!(status, StatusCode::OK, "response body: {body}");
     let payload: Value = serde_json::from_str(&body).expect("valid json");
@@ -1207,7 +1238,8 @@ async fn assert_openai_like_tool_calls_case_ok(case: &UnifiedApiCase) {
 }
 
 async fn assert_openai_like_multimodal_case_ok(case: &UnifiedApiCase) {
-    let data_uri = "data:image/png;base64,\
+    let data_uri =
+        "data:image/png;base64,\
          iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/\
          x8AAwMCAO+/a1sAAAAASUVORK5CYII=";
     let request_payload = json!({
@@ -1253,10 +1285,13 @@ async fn assert_openai_like_multimodal_case_ok(case: &UnifiedApiCase) {
         }
     });
 
-    let (status, body, requests) =
-        run_openai_like_nonstream_runtime_case(case, request_payload, response_payload)
-            .await
-            .unwrap_or_else(|e| panic!("{e}"));
+    let (status, body, requests) = run_openai_like_nonstream_runtime_case(
+        case,
+        request_payload,
+        response_payload,
+    )
+    .await
+    .unwrap_or_else(|e| panic!("{e}"));
 
     assert_eq!(status, StatusCode::OK, "response body: {body}");
     assert_openai_chat_completion_shape(&body);
@@ -1436,7 +1471,9 @@ async fn run_anthropic_nonstream_runtime_case(
         .await;
     Mock::given(method("POST"))
         .and(path("/v1/messages"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(response_payload))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(response_payload),
+        )
         .with_priority(1)
         .expect(1)
         .named("success:anthropic:messages_runtime")
@@ -1444,8 +1481,9 @@ async fn run_anthropic_nonstream_runtime_case(
         .await;
 
     let run_result = async {
-        let request_body =
-            axum_core::body::Body::from(serde_json::to_vec(&request_payload).unwrap());
+        let request_body = axum_core::body::Body::from(
+            serde_json::to_vec(&request_payload).unwrap(),
+        );
 
         let request = Request::builder()
             .method(Method::POST)
@@ -1517,15 +1555,18 @@ async fn run_gemini_nonstream_runtime_case(
         .await;
     Mock::given(method("POST"))
         .and(path("/v1beta/openai/chat/completions"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(response_payload))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(response_payload),
+        )
         .with_priority(1)
         .named("success:gemini:generate_content_runtime")
         .mount(&harness.mock.google_mock.http_server)
         .await;
 
     let run_result = async {
-        let request_body =
-            axum_core::body::Body::from(serde_json::to_vec(&request_payload).unwrap());
+        let request_body = axum_core::body::Body::from(
+            serde_json::to_vec(&request_payload).unwrap(),
+        );
 
         let request = Request::builder()
             .method(Method::POST)
@@ -1574,7 +1615,8 @@ async fn run_bedrock_nonstream_runtime_case(
     let seed = seed_case(&pool, &BEDROCK_CASE, &base_url)
         .await
         .map_err(|e| format!("seed failed for bedrock runtime case: {e}"))?;
-    let upstream_path = "/model/anthropic.claude-3-5-sonnet-20240620-v1:0/converse";
+    let upstream_path =
+        "/model/anthropic.claude-3-5-sonnet-20240620-v1:0/converse";
 
     let mut config = Config::test_default();
     config.alephant.features = AlephantFeatures::All;
@@ -1596,15 +1638,18 @@ async fn run_bedrock_nonstream_runtime_case(
         .await;
     Mock::given(method("POST"))
         .and(path(upstream_path))
-        .respond_with(ResponseTemplate::new(200).set_body_json(response_payload))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(response_payload),
+        )
         .with_priority(1)
         .named("success:bedrock:converse_runtime")
         .mount(&harness.mock.bedrock_mock.http_server)
         .await;
 
     let run_result = async {
-        let request_body =
-            axum_core::body::Body::from(serde_json::to_vec(&request_payload).unwrap());
+        let request_body = axum_core::body::Body::from(
+            serde_json::to_vec(&request_payload).unwrap(),
+        );
 
         let request = Request::builder()
             .method(Method::POST)
@@ -1669,9 +1714,9 @@ async fn run_openai_like_nonstream_runtime_case_with_options(
     let port = reserve_port();
     let base_url = format!("http://127.0.0.1:{port}/");
     let pool = db_pool().await;
-    let seed = seed_case(&pool, case, &base_url)
-        .await
-        .map_err(|e| format!("seed failed for {} runtime case: {e}", case.provider_code))?;
+    let seed = seed_case(&pool, case, &base_url).await.map_err(|e| {
+        format!("seed failed for {} runtime case: {e}", case.provider_code)
+    })?;
     if allowed_models.is_some() || blocked_models.is_some() {
         sqlx::query(
             r"UPDATE virtual_keys
@@ -1685,7 +1730,9 @@ async fn run_openai_like_nonstream_runtime_case_with_options(
         .bind(blocked_models)
         .execute(&pool)
         .await
-        .map_err(|e| format!("failed to update virtual key model policy: {e}"))?;
+        .map_err(|e| {
+            format!("failed to update virtual key model policy: {e}")
+        })?;
     }
 
     let mut config = Config::test_default();
@@ -1694,14 +1741,16 @@ async fn run_openai_like_nonstream_runtime_case_with_options(
     config.alephant.features = AlephantFeatures::All;
 
     let mock_args = match case.mock_target {
-        MockTarget::OpenAICompatible | MockTarget::Mistral => MockArgs::builder()
-            .openai_port(port)
-            .verify(false)
-            .stubs(HashMap::from([
-                (case.stub_id, 0.into()),
-                ("success:s3:upload_request", 0.into()),
-            ]))
-            .build(),
+        MockTarget::OpenAICompatible | MockTarget::Mistral => {
+            MockArgs::builder()
+                .openai_port(port)
+                .verify(false)
+                .stubs(HashMap::from([
+                    (case.stub_id, 0.into()),
+                    ("success:s3:upload_request", 0.into()),
+                ]))
+                .build()
+        }
         MockTarget::Ollama => MockArgs::builder()
             .ollama_port(port)
             .verify(false)
@@ -1729,7 +1778,9 @@ async fn run_openai_like_nonstream_runtime_case_with_options(
         MockTarget::OpenAICompatible | MockTarget::Mistral => {
             Mock::given(method("POST"))
                 .and(path(upstream_path))
-                .respond_with(ResponseTemplate::new(200).set_body_json(response_payload))
+                .respond_with(
+                    ResponseTemplate::new(200).set_body_json(response_payload),
+                )
                 .with_priority(1)
                 .named("success:openai_like_runtime")
                 .mount(&harness.mock.openai_mock.http_server)
@@ -1738,7 +1789,9 @@ async fn run_openai_like_nonstream_runtime_case_with_options(
         MockTarget::Ollama => {
             Mock::given(method("POST"))
                 .and(path(upstream_path))
-                .respond_with(ResponseTemplate::new(200).set_body_json(response_payload))
+                .respond_with(
+                    ResponseTemplate::new(200).set_body_json(response_payload),
+                )
                 .with_priority(1)
                 .named("success:openai_like_runtime")
                 .mount(&harness.mock.ollama_mock.http_server)
@@ -1748,8 +1801,9 @@ async fn run_openai_like_nonstream_runtime_case_with_options(
     }
 
     let run_result = async {
-        let request_body =
-            axum_core::body::Body::from(serde_json::to_vec(&request_payload).unwrap());
+        let request_body = axum_core::body::Body::from(
+            serde_json::to_vec(&request_payload).unwrap(),
+        );
 
         let mut request = Request::builder()
             .method(Method::POST)
@@ -1893,15 +1947,23 @@ async fn run_openai_large_context_runtime_case(
     let port = reserve_port();
     let base_url = format!("http://127.0.0.1:{port}/");
     let pool = db_pool().await;
-    let seed = seed_case(&pool, &OPENAI_CASE, &base_url)
-        .await
-        .map_err(|e| format!("seed failed for large context runtime case: {e}"))?;
+    let seed =
+        seed_case(&pool, &OPENAI_CASE, &base_url)
+            .await
+            .map_err(|e| {
+                format!("seed failed for large context runtime case: {e}")
+            })?;
 
     let mut extra_snapshots = Vec::new();
     for model_id in extra_models {
-        let snapshot = upsert_provider_model_id(&pool, seed.provider.id, model_id)
-            .await
-            .map_err(|e| format!("seed extra provider model failed for {model_id}: {e}"))?;
+        let snapshot =
+            upsert_provider_model_id(&pool, seed.provider.id, model_id)
+                .await
+                .map_err(|e| {
+                    format!(
+                        "seed extra provider model failed for {model_id}: {e}"
+                    )
+                })?;
         extra_snapshots.push(((*model_id).to_string(), snapshot));
     }
 
@@ -1926,15 +1988,18 @@ async fn run_openai_large_context_runtime_case(
     let upstream_path = "/v1/chat/completions";
     Mock::given(method("POST"))
         .and(path(upstream_path))
-        .respond_with(ResponseTemplate::new(200).set_body_json(response_payload))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(response_payload),
+        )
         .with_priority(1)
         .named("success:openai:large_context_runtime")
         .mount(&harness.mock.openai_mock.http_server)
         .await;
 
     let run_result = async {
-        let request_body =
-            axum_core::body::Body::from(serde_json::to_vec(&request_payload).unwrap());
+        let request_body = axum_core::body::Body::from(
+            serde_json::to_vec(&request_payload).unwrap(),
+        );
 
         let mut request = Request::builder()
             .method(Method::POST)
@@ -1970,7 +2035,11 @@ async fn run_openai_large_context_runtime_case(
     for (model_id, snapshot) in extra_snapshots.into_iter().rev() {
         cleanup_provider_model_id(&pool, seed.provider.id, &model_id, snapshot)
             .await
-            .map_err(|e| format!("cleanup extra provider model failed for {model_id}: {e}"))?;
+            .map_err(|e| {
+                format!(
+                    "cleanup extra provider model failed for {model_id}: {e}"
+                )
+            })?;
     }
 
     let cleanup_result = cleanup_case(&pool, &OPENAI_CASE, seed).await;
@@ -2002,15 +2071,23 @@ async fn run_openai_large_context_runtime_case_with_logs(
     let port = reserve_port();
     let base_url = format!("http://127.0.0.1:{port}/");
     let pool = db_pool().await;
-    let seed = seed_case(&pool, &OPENAI_CASE, &base_url)
-        .await
-        .map_err(|e| format!("seed failed for large context runtime case: {e}"))?;
+    let seed =
+        seed_case(&pool, &OPENAI_CASE, &base_url)
+            .await
+            .map_err(|e| {
+                format!("seed failed for large context runtime case: {e}")
+            })?;
 
     let mut extra_snapshots = Vec::new();
     for model_id in extra_models {
-        let snapshot = upsert_provider_model_id(&pool, seed.provider.id, model_id)
-            .await
-            .map_err(|e| format!("seed extra provider model failed for {model_id}: {e}"))?;
+        let snapshot =
+            upsert_provider_model_id(&pool, seed.provider.id, model_id)
+                .await
+                .map_err(|e| {
+                    format!(
+                        "seed extra provider model failed for {model_id}: {e}"
+                    )
+                })?;
         extra_snapshots.push(((*model_id).to_string(), snapshot));
     }
 
@@ -2035,15 +2112,18 @@ async fn run_openai_large_context_runtime_case_with_logs(
     let upstream_path = "/v1/chat/completions";
     Mock::given(method("POST"))
         .and(path(upstream_path))
-        .respond_with(ResponseTemplate::new(200).set_body_json(response_payload))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(response_payload),
+        )
         .with_priority(1)
         .named("success:openai:large_context_runtime_with_logs")
         .mount(&harness.mock.openai_mock.http_server)
         .await;
 
     let run_result = async {
-        let request_body =
-            axum_core::body::Body::from(serde_json::to_vec(&request_payload).unwrap());
+        let request_body = axum_core::body::Body::from(
+            serde_json::to_vec(&request_payload).unwrap(),
+        );
 
         let mut request = Request::builder()
             .method(Method::POST)
@@ -2089,7 +2169,11 @@ async fn run_openai_large_context_runtime_case_with_logs(
     for (model_id, snapshot) in extra_snapshots.into_iter().rev() {
         cleanup_provider_model_id(&pool, seed.provider.id, &model_id, snapshot)
             .await
-            .map_err(|e| format!("cleanup extra provider model failed for {model_id}: {e}"))?;
+            .map_err(|e| {
+                format!(
+                    "cleanup extra provider model failed for {model_id}: {e}"
+                )
+            })?;
     }
 
     let cleanup_result = cleanup_case(&pool, &OPENAI_CASE, seed).await;
@@ -2104,32 +2188,36 @@ async fn run_openai_large_context_runtime_case_with_logs(
 }
 
 fn large_context_text(chars: usize) -> String {
-    "large-context ".repeat(chars.div_ceil("large-context ".len()))[..chars].to_string()
+    "large-context ".repeat(chars.div_ceil("large-context ".len()))[..chars]
+        .to_string()
 }
 async fn run_openai_like_stream_case(
     case: &UnifiedApiCase,
     request_payload: Value,
-) -> Result<(http::HeaderMap, String, Vec<stubr::wiremock_rs::Request>), String> {
+) -> Result<(http::HeaderMap, String, Vec<stubr::wiremock_rs::Request>), String>
+{
     let _master_key_guard = MasterKeyGuard::set();
     let port = reserve_port();
     let base_url = format!("http://127.0.0.1:{port}/");
     let pool = db_pool().await;
-    let seed = seed_case(&pool, case, &base_url)
-        .await
-        .map_err(|e| format!("seed failed for {} stream case: {e}", case.provider_code))?;
+    let seed = seed_case(&pool, case, &base_url).await.map_err(|e| {
+        format!("seed failed for {} stream case: {e}", case.provider_code)
+    })?;
 
     let mut config = Config::test_default();
     config.alephant.features = AlephantFeatures::All;
 
     let mock_args = match case.mock_target {
-        MockTarget::OpenAICompatible | MockTarget::Mistral => MockArgs::builder()
-            .openai_port(port)
-            .stubs(HashMap::from([
-                (case.stub_id, 0.into()),
-                ("success:s3:upload_request", 0.into()),
-                ("success:alephant:log_request", 0.into()),
-            ]))
-            .build(),
+        MockTarget::OpenAICompatible | MockTarget::Mistral => {
+            MockArgs::builder()
+                .openai_port(port)
+                .stubs(HashMap::from([
+                    (case.stub_id, 0.into()),
+                    ("success:s3:upload_request", 0.into()),
+                    ("success:alephant:log_request", 0.into()),
+                ]))
+                .build()
+        }
         MockTarget::Ollama => MockArgs::builder()
             .ollama_port(port)
             .stubs(HashMap::from([
@@ -2159,10 +2247,10 @@ async fn run_openai_like_stream_case(
             Mock::given(method("POST"))
                 .and(path(upstream_path))
                 .and(header("accept", "text/event-stream"))
-                .respond_with(
-                    ResponseTemplate::new(200)
-                        .set_body_raw(OPENAI_STREAM_RESPONSE_BODY, "text/event-stream"),
-                )
+                .respond_with(ResponseTemplate::new(200).set_body_raw(
+                    OPENAI_STREAM_RESPONSE_BODY,
+                    "text/event-stream",
+                ))
                 .with_priority(1)
                 .named("success:openai_like_stream_runtime")
                 .mount(&harness.mock.openai_mock.http_server)
@@ -2172,10 +2260,10 @@ async fn run_openai_like_stream_case(
             Mock::given(method("POST"))
                 .and(path(upstream_path))
                 .and(header("accept", "text/event-stream"))
-                .respond_with(
-                    ResponseTemplate::new(200)
-                        .set_body_raw(OPENAI_STREAM_RESPONSE_BODY, "text/event-stream"),
-                )
+                .respond_with(ResponseTemplate::new(200).set_body_raw(
+                    OPENAI_STREAM_RESPONSE_BODY,
+                    "text/event-stream",
+                ))
                 .with_priority(1)
                 .named("success:openai_like_stream_runtime")
                 .mount(&harness.mock.ollama_mock.http_server)
@@ -2185,8 +2273,9 @@ async fn run_openai_like_stream_case(
     }
 
     let run_result = async {
-        let request_body =
-            axum_core::body::Body::from(serde_json::to_vec(&request_payload).unwrap());
+        let request_body = axum_core::body::Body::from(
+            serde_json::to_vec(&request_payload).unwrap(),
+        );
 
         let request = Request::builder()
             .method(Method::POST)
@@ -2243,7 +2332,8 @@ async fn run_openai_like_stream_case(
 
 async fn run_gemini_stream_case(
     request_payload: Value,
-) -> Result<(http::HeaderMap, String, Vec<stubr::wiremock_rs::Request>), String> {
+) -> Result<(http::HeaderMap, String, Vec<stubr::wiremock_rs::Request>), String>
+{
     let _master_key_guard = MasterKeyGuard::set();
     let port = reserve_port();
     let base_url = format!("http://127.0.0.1:{port}/");
@@ -2283,8 +2373,9 @@ async fn run_gemini_stream_case(
         .await;
 
     let run_result = async {
-        let request_body =
-            axum_core::body::Body::from(serde_json::to_vec(&request_payload).unwrap());
+        let request_body = axum_core::body::Body::from(
+            serde_json::to_vec(&request_payload).unwrap(),
+        );
 
         let request = Request::builder()
             .method(Method::POST)
@@ -2328,7 +2419,8 @@ async fn run_gemini_stream_case(
 
 async fn run_anthropic_stream_case(
     request_payload: Value,
-) -> Result<(http::HeaderMap, String, Vec<stubr::wiremock_rs::Request>), String> {
+) -> Result<(http::HeaderMap, String, Vec<stubr::wiremock_rs::Request>), String>
+{
     let _master_key_guard = MasterKeyGuard::set();
     let port = reserve_port();
     let base_url = format!("http://127.0.0.1:{port}/");
@@ -2359,8 +2451,10 @@ async fn run_anthropic_stream_case(
         .and(path("/v1/messages"))
         .and(header("accept", "text/event-stream"))
         .respond_with(
-            ResponseTemplate::new(200)
-                .set_body_raw(ANTHROPIC_STREAM_RESPONSE_BODY, "text/event-stream"),
+            ResponseTemplate::new(200).set_body_raw(
+                ANTHROPIC_STREAM_RESPONSE_BODY,
+                "text/event-stream",
+            ),
         )
         .with_priority(1)
         .expect(1)
@@ -2369,8 +2463,9 @@ async fn run_anthropic_stream_case(
         .await;
 
     let run_result = async {
-        let request_body =
-            axum_core::body::Body::from(serde_json::to_vec(&request_payload).unwrap());
+        let request_body = axum_core::body::Body::from(
+            serde_json::to_vec(&request_payload).unwrap(),
+        );
 
         let request = Request::builder()
             .method(Method::POST)
@@ -2416,7 +2511,8 @@ async fn run_anthropic_stream_case(
 }
 
 fn assert_openai_chat_completion_shape(body: &str) {
-    let payload: Value = serde_json::from_str(body).expect("response should be valid json");
+    let payload: Value =
+        serde_json::from_str(body).expect("response should be valid json");
     assert_eq!(payload["object"], "chat.completion");
     assert_eq!(payload["choices"][0]["message"]["role"], "assistant");
     assert_eq!(payload["choices"][0]["finish_reason"], "stop");
@@ -2435,7 +2531,8 @@ fn assert_openai_chat_completion_shape(body: &str) {
 }
 
 fn assert_anthropic_openai_chat_completion_shape(body: &str) {
-    let payload: Value = serde_json::from_str(body).expect("response should be valid json");
+    let payload: Value =
+        serde_json::from_str(body).expect("response should be valid json");
     assert_eq!(payload["object"], "chat.completion");
     assert_eq!(payload["choices"][0]["message"]["role"], "assistant");
     assert_eq!(payload["choices"][0]["finish_reason"], "stop");
@@ -2551,10 +2648,13 @@ async fn openai_unified_api_tool_calls() {
         }
     });
 
-    let (status, body, requests) =
-        run_openai_like_nonstream_runtime_case(&OPENAI_CASE, request_payload, response_payload)
-            .await
-            .unwrap_or_else(|e| panic!("{e}"));
+    let (status, body, requests) = run_openai_like_nonstream_runtime_case(
+        &OPENAI_CASE,
+        request_payload,
+        response_payload,
+    )
+    .await
+    .unwrap_or_else(|e| panic!("{e}"));
 
     assert_eq!(status, StatusCode::OK, "response body: {body}");
     let payload: Value = serde_json::from_str(&body).expect("valid json");
@@ -2593,28 +2693,29 @@ async fn unified_api_strips_internal_headers_before_upstream() {
         }]
     });
 
-    let (status, body, requests) = run_openai_like_nonstream_runtime_case_with_options(
-        &OPENAI_CASE,
-        request_payload,
-        response_payload,
-        &[
-            ("alephant-api-key", "internal-gateway-key"),
-            ("Alephant-Session-Id", "session-123"),
-            ("Alephant-Session-Path", "workflow/unified"),
-            ("Alephant-Session-Name", "Unified Planner"),
-            ("Alephant-Embeddings-Key", "sk-embedding"),
-            ("Alephant-Embeddings-Model", "openai/text-embedding-3-small"),
-            ("Alephant-Cache-Semantic-Threshold", "0.95"),
-            ("Alephant-Cache-Ttl", "60"),
-            ("alephant-debug-headers", "true"),
-            ("alephant-debug-body", "true"),
-            ("x-keep-me", "alive"),
-        ],
-        None,
-        None,
-    )
-    .await
-    .unwrap_or_else(|e| panic!("{e}"));
+    let (status, body, requests) =
+        run_openai_like_nonstream_runtime_case_with_options(
+            &OPENAI_CASE,
+            request_payload,
+            response_payload,
+            &[
+                ("alephant-api-key", "internal-gateway-key"),
+                ("Alephant-Session-Id", "session-123"),
+                ("Alephant-Session-Path", "workflow/unified"),
+                ("Alephant-Session-Name", "Unified Planner"),
+                ("Alephant-Embeddings-Key", "sk-embedding"),
+                ("Alephant-Embeddings-Model", "openai/text-embedding-3-small"),
+                ("Alephant-Cache-Semantic-Threshold", "0.95"),
+                ("Alephant-Cache-Ttl", "60"),
+                ("alephant-debug-headers", "true"),
+                ("alephant-debug-body", "true"),
+                ("x-keep-me", "alive"),
+            ],
+            None,
+            None,
+        )
+        .await
+        .unwrap_or_else(|e| panic!("{e}"));
 
     assert_eq!(status, StatusCode::OK, "response body: {body}");
     assert_eq!(requests.len(), 1, "expected one upstream openai request");
@@ -2655,7 +2756,8 @@ async fn unified_api_strips_internal_headers_before_upstream() {
 
 #[tokio::test]
 #[serial_test::serial(default_mock)]
-async fn unified_api_explicit_unknown_model_reaches_openai_compatible_upstream() {
+async fn unified_api_explicit_unknown_model_reaches_openai_compatible_upstream()
+{
     let request_payload = json!({
         "model": "claude-sonnet-4.6",
         "messages": [
@@ -2687,10 +2789,13 @@ async fn unified_api_explicit_unknown_model_reaches_openai_compatible_upstream()
         }
     });
 
-    let (status, body, requests) =
-        run_openai_like_nonstream_runtime_case(&OPENAI_CASE, request_payload, response_payload)
-            .await
-            .unwrap_or_else(|e| panic!("{e}"));
+    let (status, body, requests) = run_openai_like_nonstream_runtime_case(
+        &OPENAI_CASE,
+        request_payload,
+        response_payload,
+    )
+    .await
+    .unwrap_or_else(|e| panic!("{e}"));
 
     assert_eq!(status, StatusCode::OK, "response body: {body}");
     assert_eq!(requests.len(), 1, "expected one upstream request");
@@ -2729,16 +2834,17 @@ async fn unified_api_blocked_explicit_model_is_denied_before_upstream() {
         ]
     });
 
-    let (status, body, requests) = run_openai_like_nonstream_runtime_case_with_options(
-        &OPENAI_CASE,
-        request_payload,
-        response_payload,
-        &[],
-        None,
-        Some(vec!["claude-sonnet-4.6".to_string()]),
-    )
-    .await
-    .unwrap_or_else(|e| panic!("{e}"));
+    let (status, body, requests) =
+        run_openai_like_nonstream_runtime_case_with_options(
+            &OPENAI_CASE,
+            request_payload,
+            response_payload,
+            &[],
+            None,
+            Some(vec!["claude-sonnet-4.6".to_string()]),
+        )
+        .await
+        .unwrap_or_else(|e| panic!("{e}"));
 
     assert_eq!(status, StatusCode::BAD_REQUEST, "response body: {body}");
     assert!(
@@ -2755,7 +2861,8 @@ async fn unified_api_blocked_explicit_model_is_denied_before_upstream() {
 
 #[tokio::test]
 #[serial_test::serial(default_mock)]
-async fn unified_api_async_openai_claude_dash_model_is_normalized_before_upstream() {
+async fn unified_api_async_openai_claude_dash_model_is_normalized_before_upstream()
+ {
     let request_payload = json!({
         "model": "claude-sonnet-4-6",
         "messages": [
@@ -2787,16 +2894,17 @@ async fn unified_api_async_openai_claude_dash_model_is_normalized_before_upstrea
         }
     });
 
-    let (status, body, requests) = run_openai_like_nonstream_runtime_case_with_options(
-        &OPENAI_CASE,
-        request_payload,
-        response_payload,
-        &[("user-agent", "AsyncOpenAI/0.29.0")],
-        None,
-        None,
-    )
-    .await
-    .unwrap_or_else(|e| panic!("{e}"));
+    let (status, body, requests) =
+        run_openai_like_nonstream_runtime_case_with_options(
+            &OPENAI_CASE,
+            request_payload,
+            response_payload,
+            &[("user-agent", "AsyncOpenAI/0.29.0")],
+            None,
+            None,
+        )
+        .await
+        .unwrap_or_else(|e| panic!("{e}"));
 
     assert_eq!(status, StatusCode::OK, "response body: {body}");
     assert_eq!(requests.len(), 1, "expected one upstream request");
@@ -2809,7 +2917,8 @@ async fn unified_api_async_openai_claude_dash_model_is_normalized_before_upstrea
 #[tokio::test]
 #[serial_test::serial(default_mock)]
 async fn openai_unified_api_multimodal_request() {
-    let data_uri = "data:image/png;base64,\
+    let data_uri =
+        "data:image/png;base64,\
          iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/\
          x8AAwMCAO+/a1sAAAAASUVORK5CYII=";
     let request_payload = json!({
@@ -2854,10 +2963,13 @@ async fn openai_unified_api_multimodal_request() {
         }
     });
 
-    let (status, body, requests) =
-        run_openai_like_nonstream_runtime_case(&OPENAI_CASE, request_payload, response_payload)
-            .await
-            .unwrap_or_else(|e| panic!("{e}"));
+    let (status, body, requests) = run_openai_like_nonstream_runtime_case(
+        &OPENAI_CASE,
+        request_payload,
+        response_payload,
+    )
+    .await
+    .unwrap_or_else(|e| panic!("{e}"));
 
     assert_eq!(status, StatusCode::OK, "response body: {body}");
     assert_openai_chat_completion_shape(&body);
@@ -2992,10 +3104,12 @@ async fn anthropic_unified_api_tool_calls() {
         payload["choices"][0]["message"]["tool_calls"][0]["function"]["name"],
         "lookup_weather"
     );
-    let arguments = payload["choices"][0]["message"]["tool_calls"][0]["function"]["arguments"]
+    let arguments = payload["choices"][0]["message"]["tool_calls"][0]
+        ["function"]["arguments"]
         .as_str()
         .expect("tool arguments should be a string");
-    let arguments: Value = serde_json::from_str(arguments).expect("tool arguments should be json");
+    let arguments: Value =
+        serde_json::from_str(arguments).expect("tool arguments should be json");
     assert_eq!(arguments["city"], "Paris");
 
     assert_eq!(requests.len(), 1, "expected one upstream anthropic request");
@@ -3334,7 +3448,8 @@ async fn gemini_unified_api_tool_calls() {
 #[tokio::test]
 #[serial_test::serial(default_mock)]
 async fn gemini_unified_api_multimodal_request() {
-    let data_uri = "data:image/png;base64,\
+    let data_uri =
+        "data:image/png;base64,\
          iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/\
          x8AAwMCAO+/a1sAAAAASUVORK5CYII=";
     let request_payload = json!({
@@ -3441,10 +3556,13 @@ async fn ollama_unified_api() {
         }
     });
 
-    let (status, body, requests) =
-        run_openai_like_nonstream_runtime_case(&OLLAMA_CASE, request_payload, response_payload)
-            .await
-            .unwrap_or_else(|e| panic!("{e}"));
+    let (status, body, requests) = run_openai_like_nonstream_runtime_case(
+        &OLLAMA_CASE,
+        request_payload,
+        response_payload,
+    )
+    .await
+    .unwrap_or_else(|e| panic!("{e}"));
 
     assert_eq!(status, StatusCode::OK, "response body: {body}");
     assert_openai_chat_completion_shape(&body);
@@ -3477,9 +3595,10 @@ async fn ollama_unified_api_stream() {
         ]
     });
 
-    let (headers, body, requests) = run_openai_like_stream_case(&OLLAMA_CASE, request_payload)
-        .await
-        .unwrap_or_else(|e| panic!("{e}"));
+    let (headers, body, requests) =
+        run_openai_like_stream_case(&OLLAMA_CASE, request_payload)
+            .await
+            .unwrap_or_else(|e| panic!("{e}"));
 
     assert_eq!(
         headers
@@ -3558,10 +3677,13 @@ async fn ollama_unified_api_tool_calls() {
         }
     });
 
-    let (status, body, requests) =
-        run_openai_like_nonstream_runtime_case(&OLLAMA_CASE, request_payload, response_payload)
-            .await
-            .unwrap_or_else(|e| panic!("{e}"));
+    let (status, body, requests) = run_openai_like_nonstream_runtime_case(
+        &OLLAMA_CASE,
+        request_payload,
+        response_payload,
+    )
+    .await
+    .unwrap_or_else(|e| panic!("{e}"));
 
     assert_eq!(status, StatusCode::OK, "response body: {body}");
     let payload: Value = serde_json::from_str(&body).expect("valid json");
@@ -3584,7 +3706,8 @@ async fn ollama_unified_api_tool_calls() {
 #[tokio::test]
 #[serial_test::serial(default_mock)]
 async fn ollama_unified_api_multimodal_request() {
-    let data_uri = "data:image/png;base64,\
+    let data_uri =
+        "data:image/png;base64,\
          iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/\
          x8AAwMCAO+/a1sAAAAASUVORK5CYII=";
     let request_payload = json!({
@@ -3629,10 +3752,13 @@ async fn ollama_unified_api_multimodal_request() {
         }
     });
 
-    let (status, body, requests) =
-        run_openai_like_nonstream_runtime_case(&OLLAMA_CASE, request_payload, response_payload)
-            .await
-            .unwrap_or_else(|e| panic!("{e}"));
+    let (status, body, requests) = run_openai_like_nonstream_runtime_case(
+        &OLLAMA_CASE,
+        request_payload,
+        response_payload,
+    )
+    .await
+    .unwrap_or_else(|e| panic!("{e}"));
 
     assert_eq!(status, StatusCode::OK, "response body: {body}");
     assert_openai_chat_completion_shape(&body);
@@ -3817,7 +3943,8 @@ async fn bedrock_unified_api_reasoning_effort() {
         .body_json()
         .expect("upstream bedrock body should be valid json");
     assert_eq!(
-        upstream_body["additionalModelRequestFields"]["object"]["thinking"]["object"]["type"]["string"],
+        upstream_body["additionalModelRequestFields"]["object"]["thinking"]
+            ["object"]["type"]["string"],
         "enabled",
         "upstream bedrock body: {upstream_body}"
     );
@@ -3834,7 +3961,8 @@ async fn bedrock_unified_api_reasoning_effort() {
 #[tokio::test]
 #[serial_test::serial(default_mock)]
 async fn bedrock_unified_api_multimodal_request() {
-    let data_uri = "data:image/png;base64,\
+    let data_uri =
+        "data:image/png;base64,\
          iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/\
          x8AAwMCAO+/a1sAAAAASUVORK5CYII=";
     let request_payload = json!({
@@ -3902,19 +4030,23 @@ async fn bedrock_unified_api_multimodal_request() {
         "png"
     );
     assert_eq!(
-        upstream_body["messages"][0]["content"][1]["image"]["source"]["bytes"]["inner"][0],
+        upstream_body["messages"][0]["content"][1]["image"]["source"]["bytes"]
+            ["inner"][0],
         137
     );
     assert_eq!(
-        upstream_body["messages"][0]["content"][1]["image"]["source"]["bytes"]["inner"][1],
+        upstream_body["messages"][0]["content"][1]["image"]["source"]["bytes"]
+            ["inner"][1],
         80
     );
     assert_eq!(
-        upstream_body["messages"][0]["content"][1]["image"]["source"]["bytes"]["inner"][2],
+        upstream_body["messages"][0]["content"][1]["image"]["source"]["bytes"]
+            ["inner"][2],
         78
     );
     assert_eq!(
-        upstream_body["messages"][0]["content"][1]["image"]["source"]["bytes"]["inner"][3],
+        upstream_body["messages"][0]["content"][1]["image"]["source"]["bytes"]
+            ["inner"][3],
         71
     );
 }
@@ -3953,10 +4085,13 @@ async fn deepseek_unified_api() {
         }
     });
 
-    let (status, body, requests) =
-        run_openai_like_nonstream_runtime_case(&DEEPSEEK_CASE, request_payload, response_payload)
-            .await
-            .unwrap_or_else(|e| panic!("{e}"));
+    let (status, body, requests) = run_openai_like_nonstream_runtime_case(
+        &DEEPSEEK_CASE,
+        request_payload,
+        response_payload,
+    )
+    .await
+    .unwrap_or_else(|e| panic!("{e}"));
 
     assert_eq!(status, StatusCode::OK, "response body: {body}");
     assert_openai_chat_completion_shape(&body);
@@ -4028,9 +4163,10 @@ async fn deepseek_unified_api_stream() {
         ]
     });
 
-    let (headers, body, requests) = run_openai_like_stream_case(&DEEPSEEK_CASE, request_payload)
-        .await
-        .unwrap_or_else(|e| panic!("{e}"));
+    let (headers, body, requests) =
+        run_openai_like_stream_case(&DEEPSEEK_CASE, request_payload)
+            .await
+            .unwrap_or_else(|e| panic!("{e}"));
 
     assert_eq!(
         headers
@@ -4109,10 +4245,13 @@ async fn deepseek_unified_api_tool_calls() {
         }
     });
 
-    let (status, body, requests) =
-        run_openai_like_nonstream_runtime_case(&DEEPSEEK_CASE, request_payload, response_payload)
-            .await
-            .unwrap_or_else(|e| panic!("{e}"));
+    let (status, body, requests) = run_openai_like_nonstream_runtime_case(
+        &DEEPSEEK_CASE,
+        request_payload,
+        response_payload,
+    )
+    .await
+    .unwrap_or_else(|e| panic!("{e}"));
 
     assert_eq!(status, StatusCode::OK, "response body: {body}");
     let payload: Value = serde_json::from_str(&body).expect("valid json");
@@ -4135,7 +4274,8 @@ async fn deepseek_unified_api_tool_calls() {
 #[tokio::test]
 #[serial_test::serial(default_mock)]
 async fn deepseek_unified_api_multimodal_request() {
-    let data_uri = "data:image/png;base64,\
+    let data_uri =
+        "data:image/png;base64,\
          iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/\
          x8AAwMCAO+/a1sAAAAASUVORK5CYII=";
     let request_payload = json!({
@@ -4180,10 +4320,13 @@ async fn deepseek_unified_api_multimodal_request() {
         }
     });
 
-    let (status, body, requests) =
-        run_openai_like_nonstream_runtime_case(&DEEPSEEK_CASE, request_payload, response_payload)
-            .await
-            .unwrap_or_else(|e| panic!("{e}"));
+    let (status, body, requests) = run_openai_like_nonstream_runtime_case(
+        &DEEPSEEK_CASE,
+        request_payload,
+        response_payload,
+    )
+    .await
+    .unwrap_or_else(|e| panic!("{e}"));
 
     assert_eq!(status, StatusCode::OK, "response body: {body}");
     assert_openai_chat_completion_shape(&body);
@@ -4228,10 +4371,14 @@ async fn unified_api_large_context_without_handler_passthroughs_body() {
         ]
     });
 
-    let (status, body, requests) =
-        run_openai_large_context_runtime_case(request_payload.clone(), response_payload, &[], &[])
-            .await
-            .unwrap_or_else(|e| panic!("{e}"));
+    let (status, body, requests) = run_openai_large_context_runtime_case(
+        request_payload.clone(),
+        response_payload,
+        &[],
+        &[],
+    )
+    .await
+    .unwrap_or_else(|e| panic!("{e}"));
 
     assert_eq!(status, StatusCode::OK, "response body: {body}");
     assert_eq!(requests.len(), 1, "expected one upstream openai request");
@@ -4333,7 +4480,8 @@ async fn unified_api_large_context_missing_model_returns_bad_request() {
 
     assert_eq!(status, StatusCode::BAD_REQUEST, "response body: {body}");
     assert!(
-        body.contains("missing field `model`") || body.contains("missing field \\\"model\\\""),
+        body.contains("missing field `model`")
+            || body.contains("missing field \\\"model\\\""),
         "response body: {body}"
     );
     assert!(
@@ -4384,7 +4532,8 @@ async fn unified_api_large_context_ignores_legacy_override_headers() {
 
     assert_eq!(status, StatusCode::BAD_REQUEST, "response body: {body}");
     assert!(
-        body.contains("missing field `model`") || body.contains("missing field \\\"model\\\""),
+        body.contains("missing field `model`")
+            || body.contains("missing field \\\"model\\\""),
         "response body: {body}"
     );
     assert!(
@@ -4551,18 +4700,19 @@ async fn unified_api_strips_session_headers_before_upstream() {
         ]
     });
 
-    let (status, body, upstream_requests) = run_openai_large_context_runtime_case(
-        request_payload,
-        response_payload,
-        &[
-            ("Alephant-Session-Id", "session-123"),
-            ("Alephant-Session-Path", "workflow/step-1"),
-            ("Alephant-Session-Name", "Planner"),
-        ],
-        &[],
-    )
-    .await
-    .unwrap_or_else(|e| panic!("{e}"));
+    let (status, body, upstream_requests) =
+        run_openai_large_context_runtime_case(
+            request_payload,
+            response_payload,
+            &[
+                ("Alephant-Session-Id", "session-123"),
+                ("Alephant-Session-Path", "workflow/step-1"),
+                ("Alephant-Session-Name", "Planner"),
+            ],
+            &[],
+        )
+        .await
+        .unwrap_or_else(|e| panic!("{e}"));
 
     assert_eq!(status, StatusCode::OK, "response body: {body}");
     assert_eq!(
@@ -4677,7 +4827,8 @@ async fn unified_api_writes_alephant_session_headers_to_logs() {
 
 #[tokio::test]
 #[serial_test::serial(default_mock)]
-async fn unified_api_large_context_fallback_without_second_candidate_keeps_model() {
+async fn unified_api_large_context_fallback_without_second_candidate_keeps_model()
+ {
     let request_payload = json!({
         "model": OPENAI_CASE.model,
         "messages": [

@@ -50,7 +50,9 @@ const CLIENT_PROFILE_HEADER: &str = "alephant-client-profile";
 /// heuristic from `User-Agent` and Cursor fingerprint headers; on
 /// disagreement logs `warn` and keeps explicit.
 #[must_use]
-pub fn resolve_client_profile(headers: &http::HeaderMap) -> ClientProfileResolution {
+pub fn resolve_client_profile(
+    headers: &http::HeaderMap,
+) -> ClientProfileResolution {
     let explicit = headers
         .get(CLIENT_PROFILE_HEADER)
         .and_then(|v| v.to_str().ok())
@@ -180,7 +182,10 @@ pub fn native_semantic_passthrough(
     }
 }
 
-pub(crate) fn endpoints_same_wire_family(source: &ApiEndpoint, target: &ApiEndpoint) -> bool {
+pub(crate) fn endpoints_same_wire_family(
+    source: &ApiEndpoint,
+    target: &ApiEndpoint,
+) -> bool {
     matches!(
         (source, target),
         (
@@ -294,7 +299,9 @@ mod tests {
         let mut headers = http::HeaderMap::new();
         headers.insert(
             http::header::USER_AGENT,
-            http::HeaderValue::from_static("codex_vscode/0.131.0-alpha.9 (Ubuntu 22.4.0; x86_64)"),
+            http::HeaderValue::from_static(
+                "codex_vscode/0.131.0-alpha.9 (Ubuntu 22.4.0; x86_64)",
+            ),
         );
         let r = resolve_client_profile(&headers);
         assert_eq!(r.profile, ClientProfile::CodexCli);

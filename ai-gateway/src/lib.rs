@@ -7,6 +7,7 @@
     clippy::default_trait_access
 )]
 
+pub mod agent;
 pub mod app;
 pub mod app_redis;
 pub mod app_state;
@@ -16,6 +17,20 @@ pub mod content_filter;
 pub mod default_model;
 pub mod policy_proto {
     tonic::include_proto!("policy.v1");
+}
+pub mod payment_proto {
+    tonic::include_proto!("payment.v1");
+}
+pub mod google {
+    pub mod protobuf {
+        #[derive(Clone, PartialEq, ::prost::Message)]
+        pub struct Timestamp {
+            #[prost(int64, tag = "1")]
+            pub seconds: i64,
+            #[prost(int32, tag = "2")]
+            pub nanos: i32,
+        }
+    }
 }
 pub mod crypto;
 pub mod discover;
@@ -37,6 +52,7 @@ pub mod tests;
 pub mod types;
 pub mod utils;
 pub mod virtual_key;
+pub mod x402;
 
 #[cfg(test)]
 mod gate_archival;

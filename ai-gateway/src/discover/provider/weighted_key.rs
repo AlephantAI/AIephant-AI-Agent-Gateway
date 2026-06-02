@@ -33,7 +33,11 @@ pub struct WeightedKey {
 
 impl WeightedKey {
     #[must_use]
-    pub fn new(provider: InferenceProvider, endpoint_type: EndpointType, weight: Weight) -> Self {
+    pub fn new(
+        provider: InferenceProvider,
+        endpoint_type: EndpointType,
+        weight: Weight,
+    ) -> Self {
         Self {
             provider,
             endpoint_type,
@@ -50,7 +54,9 @@ impl DispatcherDiscovery<WeightedKey> {
         rx: Receiver<Change<WeightedKey, DispatcherService>>,
     ) -> Result<Self, InitError> {
         let mut service_map = HashMap::new();
-        for (endpoint_type, balance_config) in router_config.load_balance.as_ref() {
+        for (endpoint_type, balance_config) in
+            router_config.load_balance.as_ref()
+        {
             let weighted_balance_targets = match balance_config {
                 BalanceConfigInner::ProviderWeighted { providers } => providers,
                 BalanceConfigInner::ModelWeighted { .. } => {
@@ -62,7 +68,8 @@ impl DispatcherDiscovery<WeightedKey> {
                 }
                 BalanceConfigInner::BalancedLatency { .. } => {
                     return Err(InitError::InvalidBalancer(
-                        "P2C balancer not supported for weighted discovery".to_string(),
+                        "P2C balancer not supported for weighted discovery"
+                            .to_string(),
                     ));
                 }
                 BalanceConfigInner::ModelLatency { .. } => {
@@ -74,13 +81,15 @@ impl DispatcherDiscovery<WeightedKey> {
                 }
             };
             for target in weighted_balance_targets {
-                let weight = Weight::from(
-                    target
-                        .weight
-                        .to_f64()
-                        .ok_or_else(|| InitError::InvalidWeight(target.provider.clone()))?,
+                let weight =
+                    Weight::from(target.weight.to_f64().ok_or_else(|| {
+                        InitError::InvalidWeight(target.provider.clone())
+                    })?);
+                let key = WeightedKey::new(
+                    target.provider.clone(),
+                    *endpoint_type,
+                    weight,
                 );
-                let key = WeightedKey::new(target.provider.clone(), *endpoint_type, weight);
                 let dispatcher = Dispatcher::new(
                     app_state.clone(),
                     router_id,
@@ -106,16 +115,24 @@ impl HasWeight for WeightedKey {
     }
 }
 
-impl Service<Receiver<Change<WeightedKey, DispatcherService>>> for DispatcherDiscoverFactory {
+impl Service<Receiver<Change<WeightedKey, DispatcherService>>>
+    for DispatcherDiscoverFactory
+{
     type Response = WeightedDiscover<DispatcherDiscovery<WeightedKey>>;
     type Error = InitError;
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
-    fn poll_ready(&mut self, _: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+    fn poll_ready(
+        &mut self,
+        _: &mut Context<'_>,
+    ) -> Poll<Result<(), Self::Error>> {
         Poll::Ready(Ok(()))
     }
 
-    fn call(&mut self, rx: Receiver<Change<WeightedKey, DispatcherService>>) -> Self::Future {
+    fn call(
+        &mut self,
+        rx: Receiver<Change<WeightedKey, DispatcherService>>,
+    ) -> Self::Future {
         let app_state = self.app_state.clone();
         let router_id = self.router_id.clone();
         let router_config = self.router_config.clone();

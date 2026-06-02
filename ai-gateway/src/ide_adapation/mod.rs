@@ -15,5 +15,6 @@ pub(crate) mod unified_chat_routing;
 pub(crate) mod unified_responses_chat_compat;
 
 pub(crate) use unified_chat_routing::{
-    apply_chat_completions_body_redirect_if_needed, unified_chat_completions_routing_model,
+    apply_chat_completions_body_redirect_if_needed,
+    unified_chat_completions_routing_model,
 };

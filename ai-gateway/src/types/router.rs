@@ -45,12 +45,14 @@ mod tests {
     fn router_id_round_trip() {
         let id = RouterId::Named(CompactString::new("test_name"));
         let serialized = serde_json::to_string(&id).unwrap();
-        let deserialized = serde_json::from_str::<RouterId>(&serialized).unwrap();
+        let deserialized =
+            serde_json::from_str::<RouterId>(&serialized).unwrap();
         assert_eq!(id, deserialized);
 
         let id = RouterId::Named(CompactString::new("my-router"));
         let serialized = serde_json::to_string(&id).unwrap();
-        let deserialized = serde_json::from_str::<RouterId>(&serialized).unwrap();
+        let deserialized =
+            serde_json::from_str::<RouterId>(&serialized).unwrap();
         assert_eq!(id, deserialized);
     }
 }

@@ -1,6 +1,8 @@
 use crate::{
     endpoints::{ApiEndpoint, openai::OpenAI},
-    ide_adapation::client_profile::{ClientProfile, endpoints_same_wire_family},
+    ide_adapation::client_profile::{
+        ClientProfile, endpoints_same_wire_family,
+    },
     types::provider::InferenceProvider,
 };
 
@@ -25,15 +27,16 @@ pub fn responses_upstream_strategy(
         return ResponsesUpstreamStrategy::NativePassthrough;
     }
 
-    let bridge = matches!(profile, ClientProfile::CodexCli | ClientProfile::CursorIde)
-        && matches!(source, ApiEndpoint::OpenAI(OpenAI::Responses(_)))
-        && matches!(
-            target,
-            ApiEndpoint::OpenAICompatible {
-                openai_endpoint: OpenAI::Responses(_),
-                ..
-            }
-        );
+    let bridge =
+        matches!(profile, ClientProfile::CodexCli | ClientProfile::CursorIde)
+            && matches!(source, ApiEndpoint::OpenAI(OpenAI::Responses(_)))
+            && matches!(
+                target,
+                ApiEndpoint::OpenAICompatible {
+                    openai_endpoint: OpenAI::Responses(_),
+                    ..
+                }
+            );
     if bridge {
         return ResponsesUpstreamStrategy::BridgeToChat;
     }

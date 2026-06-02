@@ -10,6 +10,7 @@ pub const ENRICHMENT_CACHE_TTL_SECS: u64 = 86400 * 7;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CachedDepartmentEnrichment {
+    pub workspace_type: Option<String>,
     pub department_id: Option<Uuid>,
 }
 

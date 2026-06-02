@@ -1,10 +1,11 @@
 use http::response::Parts;
 
 use super::{
-    TryConvertStreamData, capabilities::ProviderCapabilities, families::ProviderProtocolFamily,
-    model::ModelMapper, non_stream_profile::NonStreamFormatProfile,
-    non_stream_profile_data::default_non_stream_profile, params::OpenAiRequestParams,
-    rules::ProviderRuleSet,
+    TryConvertStreamData, capabilities::ProviderCapabilities,
+    families::ProviderProtocolFamily, model::ModelMapper,
+    non_stream_profile::NonStreamFormatProfile,
+    non_stream_profile_data::default_non_stream_profile,
+    params::OpenAiRequestParams, rules::ProviderRuleSet,
 };
 use crate::{
     endpoints::openai::OpenAICompatibleChatCompletionRequest,
@@ -25,19 +26,28 @@ impl GoogleConverter {
     ) -> NonStreamFormatProfile {
         let mut non_stream_profile = default_non_stream_profile(provider);
         non_stream_profile.family = rules.family;
-        non_stream_profile.request.system_handling = rules.request.system_handling;
-        non_stream_profile.request.tool_choice_mode = rules.request.tool_choice_mode;
-        non_stream_profile.request.response_format_mode = rules.request.response_format_mode;
-        non_stream_profile.request.reasoning_mode = rules.request.reasoning_mode;
-        non_stream_profile.request.multimodal_mode = rules.request.multimodal_mode;
+        non_stream_profile.request.system_handling =
+            rules.request.system_handling;
+        non_stream_profile.request.tool_choice_mode =
+            rules.request.tool_choice_mode;
+        non_stream_profile.request.response_format_mode =
+            rules.request.response_format_mode;
+        non_stream_profile.request.reasoning_mode =
+            rules.request.reasoning_mode;
+        non_stream_profile.request.multimodal_mode =
+            rules.request.multimodal_mode;
         non_stream_profile
     }
 
     #[allow(dead_code)]
     #[must_use]
     pub fn new(model_mapper: ModelMapper) -> Self {
-        let capabilities = ProviderCapabilities::for_provider(&InferenceProvider::GoogleGemini);
-        let rules = super::rule_data::default_provider_rules(&InferenceProvider::GoogleGemini);
+        let capabilities = ProviderCapabilities::for_provider(
+            &InferenceProvider::GoogleGemini,
+        );
+        let rules = super::rule_data::default_provider_rules(
+            &InferenceProvider::GoogleGemini,
+        );
         Self::new_with_metadata(capabilities, rules, model_mapper)
     }
 
@@ -97,7 +107,9 @@ impl
     ) -> Result<OpenAICompatibleChatCompletionRequest, Self::Error> {
         let source_model = OpenAiRequestParams::from_request(&value)
             .source_model
-            .ok_or_else(|| MapperError::InvalidModelName(value.model.clone()))?;
+            .ok_or_else(|| {
+                MapperError::InvalidModelName(value.model.clone())
+            })?;
         let target_model = self
             .model_mapper
             .map_model(&source_model, &InferenceProvider::GoogleGemini)?;
@@ -132,7 +144,8 @@ impl
     fn try_convert(
         &self,
         value: async_openai::types::CreateChatCompletionResponse,
-    ) -> Result<async_openai::types::CreateChatCompletionResponse, Self::Error> {
+    ) -> Result<async_openai::types::CreateChatCompletionResponse, Self::Error>
+    {
         Ok(value)
     }
 }
@@ -147,7 +160,8 @@ impl
         &self,
         resp_parts: &Parts,
         value: async_openai::types::CreateChatCompletionResponse,
-    ) -> Result<async_openai::types::CreateChatCompletionResponse, Self::Error> {
+    ) -> Result<async_openai::types::CreateChatCompletionResponse, Self::Error>
+    {
         super::non_stream_response_interpreter::apply_non_stream_response_profile_from_parts(
             resp_parts,
             &self.non_stream_profile,
@@ -167,14 +181,22 @@ impl
     fn try_convert_chunk(
         &self,
         value: async_openai::types::CreateChatCompletionStreamResponse,
-        _anthropic_openai_usage: Option<&crate::types::extensions::AnthropicOpenAiUsageCell>,
-    ) -> Result<Option<async_openai::types::CreateChatCompletionStreamResponse>, Self::Error> {
+        _anthropic_openai_usage: Option<
+            &crate::types::extensions::AnthropicOpenAiUsageCell,
+        >,
+    ) -> Result<
+        Option<async_openai::types::CreateChatCompletionStreamResponse>,
+        Self::Error,
+    > {
         Ok(Some(value))
     }
 }
 
-impl TryConvertError<async_openai::error::WrappedError, async_openai::error::WrappedError>
-    for GoogleConverter
+impl
+    TryConvertError<
+        async_openai::error::WrappedError,
+        async_openai::error::WrappedError,
+    > for GoogleConverter
 {
     type Error = MapperError;
 
@@ -198,7 +220,10 @@ mod tests {
             model::ModelMapper,
             non_stream_profile_data::default_non_stream_profile,
             rule_data::default_provider_rules,
-            rules::{MultimodalMode, ReasoningMode, ResponseFormatMode, ToolChoiceMode},
+            rules::{
+                MultimodalMode, ReasoningMode, ResponseFormatMode,
+                ToolChoiceMode,
+            },
         },
         types::provider::InferenceProvider,
     };
@@ -247,37 +272,43 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn google_converter_does_not_reapply_non_stream_profile_to_tool_fields() {
-        let mut non_stream_profile = default_non_stream_profile(&InferenceProvider::GoogleGemini);
-        non_stream_profile.request.tool_choice_mode = ToolChoiceMode::Unsupported;
+    async fn google_converter_does_not_reapply_non_stream_profile_to_tool_fields()
+     {
+        let mut non_stream_profile =
+            default_non_stream_profile(&InferenceProvider::GoogleGemini);
+        non_stream_profile.request.tool_choice_mode =
+            ToolChoiceMode::Unsupported;
         let converter = super::GoogleConverter::new_with_profile(
             non_stream_profile,
             sample_model_mapper().await,
         );
-        let request: CreateChatCompletionRequest = serde_json::from_value(json!({
-            "model": "gemini/gemini-2.0-flash",
-            "messages": [
-                {
-                    "role": "user",
-                    "content": "hello"
-                }
-            ],
-            "tools": [
-                {
-                    "type": "function",
-                    "function": {
-                        "name": "lookup_weather",
-                        "description": "lookup weather"
+        let request: CreateChatCompletionRequest =
+            serde_json::from_value(json!({
+                "model": "gemini/gemini-2.0-flash",
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": "hello"
                     }
-                }
-            ],
-            "tool_choice": "auto",
-            "parallel_tool_calls": true
-        }))
-        .expect("request should deserialize");
+                ],
+                "tools": [
+                    {
+                        "type": "function",
+                        "function": {
+                            "name": "lookup_weather",
+                            "description": "lookup weather"
+                        }
+                    }
+                ],
+                "tool_choice": "auto",
+                "parallel_tool_calls": true
+            }))
+            .expect("request should deserialize");
 
-        let converted = crate::middleware::mapper::TryConvert::try_convert(&converter, request)
-            .expect("conversion should succeed");
+        let converted = crate::middleware::mapper::TryConvert::try_convert(
+            &converter, request,
+        )
+        .expect("conversion should succeed");
 
         assert!(converted.inner.tools.is_some());
         assert_eq!(
@@ -288,18 +319,23 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn google_converter_does_not_reapply_non_stream_profile_to_reasoning_effort() {
-        let mut non_stream_profile = default_non_stream_profile(&InferenceProvider::GoogleGemini);
+    async fn google_converter_does_not_reapply_non_stream_profile_to_reasoning_effort()
+     {
+        let mut non_stream_profile =
+            default_non_stream_profile(&InferenceProvider::GoogleGemini);
         non_stream_profile.request.reasoning_mode = ReasoningMode::Unsupported;
         let converter = super::GoogleConverter::new_with_profile(
             non_stream_profile,
             sample_model_mapper().await,
         );
         let mut request = sample_request();
-        request.reasoning_effort = Some(async_openai::types::ReasoningEffort::High);
+        request.reasoning_effort =
+            Some(async_openai::types::ReasoningEffort::High);
 
-        let converted = crate::middleware::mapper::TryConvert::try_convert(&converter, request)
-            .expect("conversion should succeed");
+        let converted = crate::middleware::mapper::TryConvert::try_convert(
+            &converter, request,
+        )
+        .expect("conversion should succeed");
 
         assert_eq!(
             converted.inner.reasoning_effort,
@@ -308,9 +344,12 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn google_converter_does_not_reject_multimodal_without_request_engine() {
-        let mut non_stream_profile = default_non_stream_profile(&InferenceProvider::GoogleGemini);
-        non_stream_profile.request.multimodal_mode = MultimodalMode::Unsupported;
+    async fn google_converter_does_not_reject_multimodal_without_request_engine()
+     {
+        let mut non_stream_profile =
+            default_non_stream_profile(&InferenceProvider::GoogleGemini);
+        non_stream_profile.request.multimodal_mode =
+            MultimodalMode::Unsupported;
         let converter = super::GoogleConverter::new_with_profile(
             non_stream_profile,
             sample_model_mapper().await,
@@ -326,29 +365,35 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn google_converter_does_not_reapply_non_stream_profile_to_response_format() {
-        let mut non_stream_profile = default_non_stream_profile(&InferenceProvider::GoogleGemini);
-        non_stream_profile.request.response_format_mode = ResponseFormatMode::Unsupported;
+    async fn google_converter_does_not_reapply_non_stream_profile_to_response_format()
+     {
+        let mut non_stream_profile =
+            default_non_stream_profile(&InferenceProvider::GoogleGemini);
+        non_stream_profile.request.response_format_mode =
+            ResponseFormatMode::Unsupported;
         let converter = super::GoogleConverter::new_with_profile(
             non_stream_profile,
             sample_model_mapper().await,
         );
-        let request: CreateChatCompletionRequest = serde_json::from_value(json!({
-            "model": "gemini/gemini-2.0-flash",
-            "messages": [
-                {
-                    "role": "user",
-                    "content": "hello"
+        let request: CreateChatCompletionRequest =
+            serde_json::from_value(json!({
+                "model": "gemini/gemini-2.0-flash",
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": "hello"
+                    }
+                ],
+                "response_format": {
+                    "type": "json_object"
                 }
-            ],
-            "response_format": {
-                "type": "json_object"
-            }
-        }))
-        .expect("request should deserialize");
+            }))
+            .expect("request should deserialize");
 
-        let converted = crate::middleware::mapper::TryConvert::try_convert(&converter, request)
-            .expect("conversion should succeed");
+        let converted = crate::middleware::mapper::TryConvert::try_convert(
+            &converter, request,
+        )
+        .expect("conversion should succeed");
 
         assert_eq!(
             converted
@@ -362,37 +407,44 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn google_converter_can_be_built_from_metadata_rules_without_reapplying_them() {
-        let capabilities = ProviderCapabilities::for_provider(&InferenceProvider::GoogleGemini);
-        let mut rules = default_provider_rules(&InferenceProvider::GoogleGemini);
+    async fn google_converter_can_be_built_from_metadata_rules_without_reapplying_them()
+     {
+        let capabilities = ProviderCapabilities::for_provider(
+            &InferenceProvider::GoogleGemini,
+        );
+        let mut rules =
+            default_provider_rules(&InferenceProvider::GoogleGemini);
         rules.request.tool_choice_mode = ToolChoiceMode::Unsupported;
         let converter = super::GoogleConverter::new_with_metadata(
             capabilities,
             rules,
             sample_model_mapper().await,
         );
-        let request: CreateChatCompletionRequest = serde_json::from_value(json!({
-            "model": "gemini/gemini-2.0-flash",
-            "messages": [
-                {
-                    "role": "user",
-                    "content": "hello"
-                }
-            ],
-            "tools": [
-                {
-                    "type": "function",
-                    "function": {
-                        "name": "lookup_weather"
+        let request: CreateChatCompletionRequest =
+            serde_json::from_value(json!({
+                "model": "gemini/gemini-2.0-flash",
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": "hello"
                     }
-                }
-            ],
-            "tool_choice": "auto"
-        }))
-        .expect("request should deserialize");
+                ],
+                "tools": [
+                    {
+                        "type": "function",
+                        "function": {
+                            "name": "lookup_weather"
+                        }
+                    }
+                ],
+                "tool_choice": "auto"
+            }))
+            .expect("request should deserialize");
 
-        let converted = crate::middleware::mapper::TryConvert::try_convert(&converter, request)
-            .expect("conversion should succeed");
+        let converted = crate::middleware::mapper::TryConvert::try_convert(
+            &converter, request,
+        )
+        .expect("conversion should succeed");
 
         assert!(converted.inner.tools.is_some());
         assert_eq!(

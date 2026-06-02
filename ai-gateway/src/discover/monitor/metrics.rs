@@ -10,11 +10,15 @@ use crate::{
     metrics::RollingCounter, types::provider::InferenceProvider,
 };
 
-static CUSTOM_ENDPOINT_METRICS_DISCARD: OnceLock<Arc<EndpointMetrics>> = OnceLock::new();
+static CUSTOM_ENDPOINT_METRICS_DISCARD: OnceLock<Arc<EndpointMetrics>> =
+    OnceLock::new();
 
 #[inline]
 fn custom_endpoint_metrics_discard() -> Arc<EndpointMetrics> {
-    Arc::clone(CUSTOM_ENDPOINT_METRICS_DISCARD.get_or_init(|| Arc::new(EndpointMetrics::default())))
+    Arc::clone(
+        CUSTOM_ENDPOINT_METRICS_DISCARD
+            .get_or_init(|| Arc::new(EndpointMetrics::default())),
+    )
 }
 
 /// We use this to track metrics for monitoring provider health.
@@ -24,7 +28,8 @@ fn custom_endpoint_metrics_discard() -> Arc<EndpointMetrics> {
 /// the rolling window this way.
 #[derive(Debug, Clone)]
 pub struct EndpointMetricsRegistry {
-    endpoint_health_metrics: Arc<RwLock<HashMap<ApiEndpoint, Arc<EndpointMetrics>>>>,
+    endpoint_health_metrics:
+        Arc<RwLock<HashMap<ApiEndpoint, Arc<EndpointMetrics>>>>,
 }
 
 impl EndpointMetricsRegistry {
@@ -84,11 +89,14 @@ impl EndpointMetricsRegistry {
                 "Initializing endpoint metrics for provider"
             );
             for endpoint in provider.endpoints() {
-                endpoint_health_metrics.insert(endpoint, Arc::new(EndpointMetrics::default()));
+                endpoint_health_metrics
+                    .insert(endpoint, Arc::new(EndpointMetrics::default()));
             }
         }
         Self {
-            endpoint_health_metrics: Arc::new(RwLock::new(endpoint_health_metrics)),
+            endpoint_health_metrics: Arc::new(RwLock::new(
+                endpoint_health_metrics,
+            )),
         }
     }
 }
@@ -118,7 +126,10 @@ impl EndpointMetrics {
         self.remote_internal_error_count.incr();
     }
 
-    pub fn incr_for_stream_error(&self, stream_error: &reqwest_eventsource::Error) {
+    pub fn incr_for_stream_error(
+        &self,
+        stream_error: &reqwest_eventsource::Error,
+    ) {
         match stream_error {
             reqwest_eventsource::Error::StreamEnded => {
                 // happens in valid stream end cases, so we dont
@@ -161,7 +172,8 @@ mod tests {
 
     #[test]
     fn health_metrics_openai_compatible_custom_ok_when_registry_empty() {
-        let providers: ProvidersConfig = serde_yml::from_str("{}").expect("empty providers map");
+        let providers: ProvidersConfig =
+            serde_yml::from_str("{}").expect("empty providers map");
         let config = Config {
             providers,
             ..Default::default()
@@ -183,7 +195,8 @@ mod tests {
 
     #[test]
     fn health_metrics_openai_compatible_named_ok_when_provider_is_db_only() {
-        let providers: ProvidersConfig = serde_yml::from_str("{}").expect("empty providers map");
+        let providers: ProvidersConfig =
+            serde_yml::from_str("{}").expect("empty providers map");
         let config = Config {
             providers,
             ..Default::default()

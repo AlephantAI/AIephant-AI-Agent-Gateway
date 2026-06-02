@@ -6,7 +6,9 @@ use ai_gateway::{
     config::{
         Config,
         alephant::AlephantFeatures,
-        client_ip_rate_limit::{ClientIpRateLimitBackend, ClientIpRateLimitConfig},
+        client_ip_rate_limit::{
+            ClientIpRateLimitBackend, ClientIpRateLimitConfig,
+        },
     },
     tests::{TestDefault, harness::Harness, mock::MockArgs},
     types::request::Request,

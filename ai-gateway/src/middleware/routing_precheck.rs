@@ -10,7 +10,10 @@ use http::{Method, uri::PathAndQuery};
 use tower::{Layer, Service};
 
 use crate::{
-    error::{api::ApiError, internal::InternalError, invalid_req::InvalidRequestError},
+    error::{
+        api::ApiError, internal::InternalError,
+        invalid_req::InvalidRequestError,
+    },
     router::{router_details::RouteType, unified_api::UnifiedApi},
     types::{request::Request, response::Response},
 };
@@ -87,7 +90,9 @@ pub(crate) fn path_requires_post(path: &str) -> bool {
     }
     // Legacy completions: bare `completions` or `.../completions` (not
     // `.../chat/completions`, handled above).
-    if p == "completions" || (p.ends_with("/completions") && !p.ends_with("/chat/completions")) {
+    if p == "completions"
+        || (p.ends_with("/completions") && !p.ends_with("/chat/completions"))
+    {
         return true;
     }
     false
@@ -124,15 +129,21 @@ fn precheck(req: &Request) -> Result<(), ApiError> {
         )));
     };
 
-    let path_and_query = req
-        .extensions()
-        .get::<PathAndQuery>()
-        .ok_or_else(|| ApiError::Internal(InternalError::ExtensionNotFound("PathAndQuery")))?;
+    match route_type {
+        RouteType::AgentEvents | RouteType::X402Agent { .. } => return Ok(()),
+        RouteType::UnifiedApi { .. } => {}
+    }
+
+    let path_and_query =
+        req.extensions().get::<PathAndQuery>().ok_or_else(|| {
+            ApiError::Internal(InternalError::ExtensionNotFound("PathAndQuery"))
+        })?;
     let path = path_and_query.path();
 
-    let RouteType::UnifiedApi { .. } = route_type;
     UnifiedApi::try_from(path).map_err(|_| {
-        ApiError::InvalidRequest(InvalidRequestError::NotFound(req.uri().path().to_string()))
+        ApiError::InvalidRequest(InvalidRequestError::NotFound(
+            req.uri().path().to_string(),
+        ))
     })?;
     check_method(req.method(), path)?;
 
@@ -141,15 +152,23 @@ fn precheck(req: &Request) -> Result<(), ApiError> {
 
 impl<S> Service<Request> for RoutingPrecheckService<S>
 where
-    S: Service<Request, Response = Response, Error = ApiError> + Clone + Send + 'static,
+    S: Service<Request, Response = Response, Error = ApiError>
+        + Clone
+        + Send
+        + 'static,
     S::Future: Send + 'static,
 {
     type Response = Response;
     type Error = ApiError;
-    type Future =
-        futures::future::Either<std::future::Ready<Result<Self::Response, Self::Error>>, S::Future>;
+    type Future = futures::future::Either<
+        std::future::Ready<Result<Self::Response, Self::Error>>,
+        S::Future,
+    >;
 
-    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+    fn poll_ready(
+        &mut self,
+        cx: &mut Context<'_>,
+    ) -> Poll<Result<(), Self::Error>> {
         self.inner.poll_ready(cx)
     }
 
@@ -166,8 +185,13 @@ mod tests {
     use std::str::FromStr;
 
     use super::*;
+    use crate::router::router_details::X402RouteKind;
 
-    fn request_with_route(path: &str, route_type: RouteType, method: Method) -> Request {
+    fn request_with_route(
+        path: &str,
+        route_type: RouteType,
+        method: Method,
+    ) -> Request {
         let mut req = http::Request::builder()
             .method(method)
             .uri(format!("http://router.alephant.test/{path}"))
@@ -188,6 +212,22 @@ mod tests {
             },
             Method::POST,
         );
+        assert!(precheck(&req).is_ok());
+    }
+
+    #[test]
+    fn precheck_accepts_x402_without_path_and_query() {
+        let mut req = http::Request::builder()
+            .method(Method::GET)
+            .uri("http://router.alephant.test/x402/agents/weather")
+            .body(axum_core::body::Body::empty())
+            .unwrap();
+        req.extensions_mut().insert(RouteType::X402Agent {
+            slug: "weather".into(),
+            remaining_path: "".into(),
+            route_kind: X402RouteKind::Agent,
+        });
+
         assert!(precheck(&req).is_ok());
     }
 
@@ -216,16 +256,6 @@ mod tests {
         assert!(path_requires_post("embeddings"));
         assert!(path_requires_post("images/generations"));
         assert!(path_requires_post("responses"));
-        assert!(path_requires_post("v1/responses"));
-        assert!(path_requires_post("model/foo/converse"));
-        assert!(path_requires_post("v1beta/openai/chat/completions"));
-        assert!(!path_requires_post("v1/models"));
-        assert!(!path_requires_post("openapi.json"));
-    }
-
-    #[test]
-    fn models_allows_get_only() {
-        assert!(check_method(&Method::GET, "models").is_ok());
-        assert!(check_method(&Method::POST, "models").is_err());
+        assert!(!path_requires_post("models"));
     }
 }

@@ -6,16 +6,21 @@ use serde_json::Value;
 use crate::error::{api::ApiError, invalid_req::InvalidRequestError};
 
 fn invalid_prompt_inputs(message: impl Into<String>) -> ApiError {
-    ApiError::InvalidRequest(InvalidRequestError::InvalidPromptInputs(message.into()))
+    ApiError::InvalidRequest(InvalidRequestError::InvalidPromptInputs(
+        message.into(),
+    ))
 }
 
-pub(crate) fn apply_prompt_inputs_to_body(mut body: Value) -> Result<Value, ApiError> {
+pub(crate) fn apply_prompt_inputs_to_body(
+    mut body: Value,
+) -> Result<Value, ApiError> {
     let typed_variable_regex = Regex::new(
         r"\{\{\s*hc\s*:\s*([a-zA-Z_-][a-zA-Z0-9_-]*)\s*:\s*([a-zA-Z_-][a-zA-Z0-9_-]*)\s*\}\}",
     )
     .expect("typed prompt variable regex must compile");
-    let legacy_variable_regex = Regex::new(r"\{\{\s*([a-zA-Z_-][a-zA-Z0-9_-]*)\s*\}\}")
-        .expect("legacy prompt variable regex must compile");
+    let legacy_variable_regex =
+        Regex::new(r"\{\{\s*([a-zA-Z_-][a-zA-Z0-9_-]*)\s*\}\}")
+            .expect("legacy prompt variable regex must compile");
 
     let Some(body_obj) = body.as_object_mut() else {
         return Ok(body);
@@ -34,7 +39,11 @@ pub(crate) fn apply_prompt_inputs_to_body(mut body: Value) -> Result<Value, ApiE
         .into_iter()
         .filter_map(|key| body_obj.get(key))
         .any(|value| {
-            contains_prompt_variables(value, &typed_variable_regex, &legacy_variable_regex)
+            contains_prompt_variables(
+                value,
+                &typed_variable_regex,
+                &legacy_variable_regex,
+            )
         });
 
     if has_template_variables && inputs.is_none() {
@@ -86,15 +95,24 @@ fn contains_prompt_variables(
 ) -> bool {
     match value {
         Value::String(text) => {
-            typed_variable_regex.is_match(text) || legacy_variable_regex.is_match(text)
+            typed_variable_regex.is_match(text)
+                || legacy_variable_regex.is_match(text)
         }
         Value::Array(values) => values.iter().any(|value| {
-            contains_prompt_variables(value, typed_variable_regex, legacy_variable_regex)
+            contains_prompt_variables(
+                value,
+                typed_variable_regex,
+                legacy_variable_regex,
+            )
         }),
         Value::Object(map) => map.iter().any(|(key, value)| {
             typed_variable_regex.is_match(key)
                 || legacy_variable_regex.is_match(key)
-                || contains_prompt_variables(value, typed_variable_regex, legacy_variable_regex)
+                || contains_prompt_variables(
+                    value,
+                    typed_variable_regex,
+                    legacy_variable_regex,
+                )
         }),
         _ => false,
     }
@@ -136,18 +154,25 @@ fn process_prompt_schema(
             if let Some((variable_name, variable_type)) =
                 extract_whole_typed_variable(&text, typed_variable_regex)
             {
-                let input_value = inputs.get(&variable_name).ok_or_else(|| {
-                    invalid_prompt_inputs(format!("Missing prompt input: {variable_name}"))
-                })?;
+                let input_value =
+                    inputs.get(&variable_name).ok_or_else(|| {
+                        invalid_prompt_inputs(format!(
+                            "Missing prompt input: {variable_name}"
+                        ))
+                    })?;
                 validate_variable_type(input_value, &variable_type)?;
                 return Ok(input_value.clone());
             }
 
-            if let Some(variable_name) = extract_whole_legacy_variable(&text, legacy_variable_regex)
+            if let Some(variable_name) =
+                extract_whole_legacy_variable(&text, legacy_variable_regex)
             {
-                let input_value = inputs.get(&variable_name).ok_or_else(|| {
-                    invalid_prompt_inputs(format!("Missing prompt input: {variable_name}"))
-                })?;
+                let input_value =
+                    inputs.get(&variable_name).ok_or_else(|| {
+                        invalid_prompt_inputs(format!(
+                            "Missing prompt input: {variable_name}"
+                        ))
+                    })?;
                 return Ok(input_value.clone());
             }
 
@@ -175,42 +200,56 @@ fn process_prompt_schema(
         Value::Object(obj) => {
             let mut processed_object = serde_json::Map::new();
             for (key, val) in obj {
-                let processed_key = if let Some((variable_name, variable_type)) =
-                    extract_whole_typed_variable(&key, typed_variable_regex)
-                {
-                    let input_value = inputs.get(&variable_name).ok_or_else(|| {
-                        invalid_prompt_inputs(format!("Missing prompt input: {variable_name}"))
-                    })?;
-                    validate_variable_type(input_value, &variable_type)?;
-                    input_value.as_str().map(str::to_string).ok_or_else(|| {
-                        invalid_prompt_inputs(format!(
-                            "Variable '{variable_name}' in object \
+                let processed_key =
+                    if let Some((variable_name, variable_type)) =
+                        extract_whole_typed_variable(&key, typed_variable_regex)
+                    {
+                        let input_value =
+                            inputs.get(&variable_name).ok_or_else(|| {
+                                invalid_prompt_inputs(format!(
+                                    "Missing prompt input: {variable_name}"
+                                ))
+                            })?;
+                        validate_variable_type(input_value, &variable_type)?;
+                        input_value.as_str().map(str::to_string).ok_or_else(
+                            || {
+                                invalid_prompt_inputs(format!(
+                                    "Variable '{variable_name}' in object \
                                      schema key must be a string, got: \
                                      {input_value}"
-                        ))
-                    })?
-                } else if let Some(variable_name) =
-                    extract_whole_legacy_variable(&key, legacy_variable_regex)
-                {
-                    let input_value = inputs.get(&variable_name).ok_or_else(|| {
-                        invalid_prompt_inputs(format!("Missing prompt input: {variable_name}"))
-                    })?;
-                    input_value.as_str().map(str::to_string).ok_or_else(|| {
-                        invalid_prompt_inputs(format!(
-                            "Variable '{variable_name}' in object \
+                                ))
+                            },
+                        )?
+                    } else if let Some(variable_name) =
+                        extract_whole_legacy_variable(
+                            &key,
+                            legacy_variable_regex,
+                        )
+                    {
+                        let input_value =
+                            inputs.get(&variable_name).ok_or_else(|| {
+                                invalid_prompt_inputs(format!(
+                                    "Missing prompt input: {variable_name}"
+                                ))
+                            })?;
+                        input_value.as_str().map(str::to_string).ok_or_else(
+                            || {
+                                invalid_prompt_inputs(format!(
+                                    "Variable '{variable_name}' in object \
                                      schema key must be a string, got: \
                                      {input_value}"
-                        ))
-                    })?
-                } else {
-                    replace_variables(
-                        &key,
-                        inputs,
-                        typed_variable_regex,
-                        legacy_variable_regex,
-                        &mut HashSet::new(),
-                    )?
-                };
+                                ))
+                            },
+                        )?
+                    } else {
+                        replace_variables(
+                            &key,
+                            inputs,
+                            typed_variable_regex,
+                            legacy_variable_regex,
+                            &mut HashSet::new(),
+                        )?
+                    };
 
                 let processed_value = process_prompt_schema(
                     val,
@@ -242,7 +281,10 @@ fn extract_whole_typed_variable(
     ))
 }
 
-fn extract_whole_legacy_variable(text: &str, legacy_variable_regex: &Regex) -> Option<String> {
+fn extract_whole_legacy_variable(
+    text: &str,
+    legacy_variable_regex: &Regex,
+) -> Option<String> {
     let captures = legacy_variable_regex.captures(text)?;
     let full_match = captures.get(0)?;
     if full_match.as_str() != text {
@@ -314,7 +356,10 @@ fn replace_variables(
         }
 
         let value = inputs.get(variable_name.as_str()).ok_or_else(|| {
-            invalid_prompt_inputs(format!("Missing prompt input: {}", variable_name.as_str()))
+            invalid_prompt_inputs(format!(
+                "Missing prompt input: {}",
+                variable_name.as_str()
+            ))
         })?;
 
         validate_variable_type(value, variable_type.as_str())?;
@@ -337,13 +382,14 @@ fn replace_variables(
         }
     }
 
-    let typed_processed = typed_variable_regex.replace_all(text, |captures: &regex::Captures| {
-        let variable_name = &captures[1];
-        inputs.get(variable_name).map_or_else(
-            || captures.get(0).unwrap().as_str().to_string(),
-            Value::to_string,
-        )
-    });
+    let typed_processed =
+        typed_variable_regex.replace_all(text, |captures: &regex::Captures| {
+            let variable_name = &captures[1];
+            inputs.get(variable_name).map_or_else(
+                || captures.get(0).unwrap().as_str().to_string(),
+                Value::to_string,
+            )
+        });
 
     let legacy_processed = legacy_variable_regex.replace_all(
         typed_processed.as_ref(),
@@ -370,7 +416,10 @@ fn legacy_value_to_string(value: &Value) -> String {
     }
 }
 
-fn validate_variable_type(value: &Value, expected_type: &str) -> Result<String, ApiError> {
+fn validate_variable_type(
+    value: &Value,
+    expected_type: &str,
+) -> Result<String, ApiError> {
     let value_string = value.to_string();
 
     match expected_type {
@@ -414,7 +463,8 @@ mod tests {
     use super::apply_prompt_inputs_to_body;
 
     #[test]
-    fn apply_prompt_inputs_errors_when_template_variables_exist_but_inputs_missing() {
+    fn apply_prompt_inputs_errors_when_template_variables_exist_but_inputs_missing()
+     {
         let body = json!({
             "messages": [
                 {"role": "system", "content": "hello {{hc:name:string}}"}
@@ -527,7 +577,8 @@ mod tests {
     }
 
     #[test]
-    fn apply_prompt_inputs_strips_inputs_when_present_but_no_template_variables() {
+    fn apply_prompt_inputs_strips_inputs_when_present_but_no_template_variables()
+     {
         let body = json!({
             "inputs": {"name": "x"},
             "messages": [{"role": "user", "content": "plain"}]
