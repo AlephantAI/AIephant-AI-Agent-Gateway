@@ -43,7 +43,7 @@
   <a href="#screenshots">截图</a> ·
   <a href="#comparison">对比</a> ·
   <a href="#community">社区</a> ·
-  <a href="https://api.alephant.io/">文档</a>
+  <a href="https://developers.alephant.io/">文档</a>
 </p>
 
 <p align="center">
@@ -367,7 +367,7 @@ Alephant 的差异化在于组合：托管 SaaS、自托管 Rust 网关、Agent 
 alephant-ai-gateway/
 ├── ai-gateway/                 # 网关服务 crate
 ├── crates/                     # 共享库与 harness
-├── docs/                       # 仓库内说明；精选文档见 https://api.alephant.io/
+├── docs/                       # 仓库内说明；精选文档见 https://developers.alephant.io/
 ├── scripts/                    # CI 与本地自动化
 ├── infrastructure/             # 部署与可观测性基础设施
 ├── test/                       # 集成与运行时测试辅助
@@ -381,7 +381,7 @@ alephant-ai-gateway/
 ## 社区
 
 - 官网：[alephant.io](https://alephant.io/)
-- 文档：[api.alephant.io](https://api.alephant.io/)
+- 文档：[developers.alephant.io](https://developers.alephant.io/)
 - Discord：[discord.gg/tRQghcXhaH](https://discord.gg/tRQghcXhaH)
 - Telegram：[t.me/alephantai](https://t.me/alephantai)
 - X：[x.com/alephantai](https://x.com/alephantai)

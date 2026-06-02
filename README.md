@@ -43,7 +43,7 @@
   <a href="#screenshots">Screenshots</a> ·
   <a href="#comparison">Comparison</a> ·
   <a href="#community">Community</a> ·
-  <a href="https://api.alephant.io/">Docs</a>
+  <a href="https://developers.alephant.io/">Docs</a>
 </p>
 
 <p align="center">
@@ -367,7 +367,7 @@ Alephant's differentiator is the combination: hosted SaaS, self-hosted Rust gate
 alephant-ai-gateway/
 ├── ai-gateway/                 # Gateway service crate
 ├── crates/                     # Shared libraries and harnesses
-├── docs/                       # In-repo notes; curated docs at https://api.alephant.io/
+├── docs/                       # In-repo notes; curated docs at https://developers.alephant.io/
 ├── scripts/                    # CI and local automation
 ├── infrastructure/             # Deployment and observability infra
 ├── test/                       # Integration and runtime test helpers
@@ -381,7 +381,7 @@ alephant-ai-gateway/
 ## Community
 
 - Website: [alephant.io](https://alephant.io/)
-- Docs: [api.alephant.io](https://api.alephant.io/)
+- Docs: [developers.alephant.io](https://developers.alephant.io/)
 - Discord: [discord.gg/tRQghcXhaH](https://discord.gg/tRQghcXhaH)
 - Telegram: [t.me/alephantai](https://t.me/alephantai)
 - X: [x.com/alephantai](https://x.com/alephantai)
