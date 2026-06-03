@@ -400,9 +400,6 @@ Helpful contribution areas:
 
 For substantial changes, include reproducible validation steps and feature-flag context (`external` or `internal`).
 
-## Change logs
-[Change log](./Change_log.md)
-
 ## License
 
 Licensed under the [GPL License 3.0](LICENSE).
