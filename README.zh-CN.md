@@ -42,6 +42,7 @@
   <a href="#architecture">架构</a> ·
   <a href="#screenshots">截图</a> ·
   <a href="#comparison">对比</a> ·
+  <a href="CHANGELOG.md">更新日志</a> ·
   <a href="#community">社区</a> ·
   <a href="https://developers.alephant.io/">文档</a>
 </p>

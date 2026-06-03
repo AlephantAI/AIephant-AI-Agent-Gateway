@@ -42,6 +42,7 @@
   <a href="#architecture">Architecture</a> ·
   <a href="#screenshots">Screenshots</a> ·
   <a href="#comparison">Comparison</a> ·
+  <a href="CHANGELOG.md">Changelog</a> ·
   <a href="#community">Community</a> ·
   <a href="https://developers.alephant.io/">Docs</a>
 </p>
