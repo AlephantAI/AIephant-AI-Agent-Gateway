@@ -400,7 +400,7 @@ Helpful contribution areas:
 For substantial changes, include reproducible validation steps and feature-flag context (`external` or `internal`).
 
 ## Change logs
-[Change log](./change_log.md)
+[Change log](./Change_log.md)
 
 ## License
 
