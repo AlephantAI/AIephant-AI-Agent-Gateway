@@ -54,7 +54,7 @@ pub fn endpoint_snapshot_redis_key(slug: &str, method: &str) -> String {
     format!(
         "x402:endpoint:snapshot:{}:{}",
         slug.to_ascii_lowercase(),
-        method.to_ascii_lowercase()
+        method.to_ascii_uppercase()
     )
 }
 
@@ -221,7 +221,7 @@ mod tests {
     fn redis_key_lowercases_slug_and_method() {
         assert_eq!(
             endpoint_snapshot_redis_key("Test-Agent", "POST"),
-            "x402:endpoint:snapshot:test-agent:post"
+            "x402:endpoint:snapshot:test-agent:POST"
         );
     }
 

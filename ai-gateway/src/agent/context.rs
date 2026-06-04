@@ -394,6 +394,7 @@ pub enum AgentEventSourceTrust {
     #[default]
     SelfReported,
     AdapterDetected,
+    GatewayObserved,
     Registered,
 }
 
@@ -403,6 +404,7 @@ impl AgentEventSourceTrust {
         match self {
             Self::SelfReported => "self_reported",
             Self::AdapterDetected => "adapter_detected",
+            Self::GatewayObserved => "gateway_observed",
             Self::Registered => "registered",
         }
     }
@@ -420,6 +422,7 @@ impl FromStr for AgentEventSourceTrust {
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         Ok(match value.trim().to_ascii_lowercase().as_str() {
             "adapter_detected" | "adapter-detected" => Self::AdapterDetected,
+            "gateway_observed" | "gateway-observed" => Self::GatewayObserved,
             "registered" => Self::Registered,
             _ => Self::SelfReported,
         })
@@ -553,6 +556,10 @@ mod tests {
         assert_eq!(
             "adapter-detected".parse::<AgentEventSourceTrust>().unwrap(),
             AgentEventSourceTrust::AdapterDetected
+        );
+        assert_eq!(
+            "gateway_observed".parse::<AgentEventSourceTrust>().unwrap(),
+            AgentEventSourceTrust::GatewayObserved
         );
         assert_eq!(
             "registered".parse::<AgentEventSourceTrust>().unwrap(),

@@ -114,9 +114,29 @@ pub struct AnthropicStreamOpenAiUsageState {
 pub type AnthropicOpenAiUsageCell =
     std::sync::Arc<std::sync::Mutex<AnthropicStreamOpenAiUsageState>>;
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum ClientResponseSemantic {
+    #[default]
+    Other,
+    ChatCompletions,
+    Responses,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum LoggerResponseWireSemantic {
+    #[default]
+    Other,
+    ChatCompletionsJson,
+    ChatCompletionsSse,
+    ResponsesJson,
+    ResponsesSse,
+}
+
 #[derive(Debug, Clone)]
 pub struct MapperContext {
     pub is_stream: bool,
+    pub client_response_semantic: ClientResponseSemantic,
+    pub logger_response_wire_semantic: LoggerResponseWireSemantic,
     /// If `None`, the request was for an endpoint without
     /// first class support for mapping between different provider
     /// models.

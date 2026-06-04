@@ -1998,6 +1998,9 @@ mod tests {
             .expect("request");
         req.extensions_mut().insert(MapperContext {
             is_stream: false,
+            client_response_semantic: crate::types::extensions::ClientResponseSemantic::Other,
+            logger_response_wire_semantic:
+                crate::types::extensions::LoggerResponseWireSemantic::Other,
             model: None,
             anthropic_openai_usage: None,
             unified_responses_bridge_chat_completions_sse: false,

@@ -10,3 +10,4 @@ pub mod redaction;
 pub mod service;
 pub mod sink;
 pub mod step_state;
+pub mod tool_observer;

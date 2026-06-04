@@ -43,12 +43,35 @@ use crate::{
         mapper::MapperError,
     },
     types::{
-        extensions::{AnthropicOpenAiUsageCell, MapperContext},
+        extensions::{
+            AnthropicOpenAiUsageCell, ClientResponseSemantic, LoggerResponseWireSemantic,
+            MapperContext,
+        },
         model_id::ModelId,
     },
 };
 
 pub(crate) const DEFAULT_MAX_TOKENS: u32 = 2000;
+
+fn client_response_semantic_for_source_endpoint<S: Endpoint>() -> ClientResponseSemantic {
+    match S::PATH {
+        "v1/chat/completions" => ClientResponseSemantic::ChatCompletions,
+        "v1/responses" => ClientResponseSemantic::Responses,
+        _ => ClientResponseSemantic::Other,
+    }
+}
+
+fn logger_response_wire_semantic_for_target_endpoint<T: Endpoint>(
+    is_stream: bool,
+) -> LoggerResponseWireSemantic {
+    match (T::PATH, is_stream) {
+        ("v1/chat/completions", true) => LoggerResponseWireSemantic::ChatCompletionsSse,
+        ("v1/chat/completions", false) => LoggerResponseWireSemantic::ChatCompletionsJson,
+        ("v1/responses", true) => LoggerResponseWireSemantic::ResponsesSse,
+        ("v1/responses", false) => LoggerResponseWireSemantic::ResponsesJson,
+        _ => LoggerResponseWireSemantic::Other,
+    }
+}
 
 /// `TryFrom` but allows us to implement it for foreign types, so we can
 /// maintain boundaries between our business logic and the provider types.
@@ -66,6 +89,13 @@ pub trait TryConvert<Source, Target>: Sized {
 
     fn passthrough_model_for_mapper_context(&self, _target: &Target) -> Option<String> {
         None
+    }
+
+    fn postprocess_converted_req_body(
+        &self,
+        bytes: Bytes,
+    ) -> std::result::Result<Bytes, Self::Error> {
+        Ok(bytes)
     }
 }
 
@@ -222,6 +252,10 @@ where
         });
         let mapper_ctx = MapperContext {
             is_stream,
+            client_response_semantic: client_response_semantic_for_source_endpoint::<S>(),
+            logger_response_wire_semantic: logger_response_wire_semantic_for_target_endpoint::<T>(
+                is_stream,
+            ),
             model: Some(model),
             anthropic_openai_usage,
             unified_responses_bridge_chat_completions_sse: false,
@@ -236,6 +270,16 @@ where
                 error: e,
             }
         })?);
+        let target_bytes =
+            <C as TryConvert<S::RequestBody, T::RequestBody>>::postprocess_converted_req_body(
+                &self.converter,
+                target_bytes,
+            )
+            .map_err(
+                |e: <C as TryConvert<S::RequestBody, T::RequestBody>>::Error| {
+                    InternalError::MapperError(e.into())
+                },
+            )?;
 
         Ok((target_bytes, mapper_ctx))
     }

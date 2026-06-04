@@ -89,7 +89,9 @@ mod tests {
     use bytes::Bytes;
 
     use super::*;
-    use crate::types::extensions::MapperContext;
+    use crate::types::extensions::{
+        ClientResponseSemantic, LoggerResponseWireSemantic, MapperContext,
+    };
 
     fn test_settings() -> alephant_llm_kv_cache::CacheSettings {
         alephant_llm_kv_cache::CacheSettings {
@@ -104,6 +106,8 @@ mod tests {
     fn mapper_ctx(is_stream: bool) -> MapperContext {
         MapperContext {
             is_stream,
+            client_response_semantic: ClientResponseSemantic::Other,
+            logger_response_wire_semantic: LoggerResponseWireSemantic::Other,
             model: None,
             anthropic_openai_usage: None,
             unified_responses_bridge_chat_completions_sse: false,

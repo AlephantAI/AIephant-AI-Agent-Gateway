@@ -150,7 +150,7 @@ fn should_strip_header(
     connection_tokens: &HashSet<HeaderName>,
 ) -> bool {
     let name_str = name.as_str();
-    if !allowed_headers.contains(name) {
+    if !name_str.eq_ignore_ascii_case("content-type") && !allowed_headers.contains(name) {
         return true;
     }
 
@@ -368,6 +368,24 @@ mod tests {
         assert!(!filtered.contains_key("authorization"));
         assert!(!filtered.contains_key("x-alephant-trace-id"));
         assert!(!filtered.contains_key("x-alephant-request-id"));
+    }
+
+    #[test]
+    fn header_filter_keeps_content_type_without_policy_allowlist() {
+        let mut inbound = HeaderMap::new();
+        inbound.insert(
+            header::CONTENT_TYPE,
+            HeaderValue::from_static("application/json"),
+        );
+        inbound.insert("x-drop", HeaderValue::from_static("drop"));
+
+        let filtered = filtered_upstream_headers(&inbound, &[]);
+
+        assert_eq!(
+            filtered.get(header::CONTENT_TYPE).unwrap(),
+            "application/json"
+        );
+        assert!(!filtered.contains_key("x-drop"));
     }
 
     #[test]

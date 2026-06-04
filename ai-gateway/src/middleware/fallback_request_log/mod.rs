@@ -17,7 +17,10 @@ use crate::{
     logger::service::LoggerService,
     types::{
         body::{BodyReader, TfftTrigger},
-        extensions::{AuthContext, MapperContext, RequestLogEmitted},
+        extensions::{
+            AuthContext, ClientResponseSemantic, LoggerResponseWireSemantic, MapperContext,
+            RequestLogEmitted,
+        },
         provider::InferenceProvider,
         request::Request,
         response::Response,
@@ -178,6 +181,8 @@ fn emit_fallback_log(
 
     let mapper_ctx = MapperContext {
         is_stream: false,
+        client_response_semantic: ClientResponseSemantic::Other,
+        logger_response_wire_semantic: LoggerResponseWireSemantic::Other,
         model: None,
         anthropic_openai_usage: None,
         unified_responses_bridge_chat_completions_sse: false,

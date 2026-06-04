@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{agent::context::AgentPolicyMode, types::secret::Secret};
+use crate::agent::context::AgentPolicyMode;
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(default, deny_unknown_fields, rename_all = "kebab-case")]
@@ -11,10 +11,6 @@ pub struct AgentConfig {
     /// Absolute URL, or a path joined to `alephant.log_collector_url`.
     pub event_log_http_endpoint: String,
     pub event_log_http_timeout_ms: u64,
-    /// Header used for HTTP fallback auth. `authorization` values are sent
-    /// with a Bearer prefix by the transport layer.
-    pub event_log_http_auth_header: String,
-    pub event_log_http_auth_token: Secret<String>,
     pub allow_header_context: bool,
     pub validate_agent_registry: bool,
     pub context_conflict_action: AgentConflictAction,
@@ -38,8 +34,6 @@ impl Default for AgentConfig {
             event_log_http_fallback_enabled: true,
             event_log_http_endpoint: "/v1/log/agent-event".to_string(),
             event_log_http_timeout_ms: 1000,
-            event_log_http_auth_header: "authorization".to_string(),
-            event_log_http_auth_token: Secret::from(String::new()),
             allow_header_context: true,
             validate_agent_registry: false,
             context_conflict_action: AgentConflictAction::Warn,
@@ -87,8 +81,6 @@ mod tests {
         assert!(cfg.event_log_http_fallback_enabled);
         assert_eq!(cfg.event_log_http_endpoint, "/v1/log/agent-event");
         assert_eq!(cfg.event_log_http_timeout_ms, 1000);
-        assert_eq!(cfg.event_log_http_auth_header, "authorization");
-        assert_eq!(cfg.event_log_http_auth_token.expose(), "");
         assert!(cfg.allow_header_context);
         assert!(!cfg.validate_agent_registry);
         assert_eq!(cfg.context_conflict_action, AgentConflictAction::Warn);
@@ -112,8 +104,6 @@ event-stream-key: custom:agent
 event-log-http-fallback-enabled: false
 event-log-http-endpoint: "http://collector.local/v1/log/agent-event"
 event-log-http-timeout-ms: 750
-event-log-http-auth-header: "x-alephant-internal-token"
-event-log-http-auth-token: "agent-token"
 allow-header-context: false
 validate-agent-registry: true
 context-conflict-action: strict
@@ -138,13 +128,8 @@ policy-mode: enforce
             "http://collector.local/v1/log/agent-event"
         );
         assert_eq!(cfg.event_log_http_timeout_ms, 750);
-        assert_eq!(cfg.event_log_http_auth_header, "x-alephant-internal-token");
-        assert_eq!(cfg.event_log_http_auth_token.expose(), "agent-token");
-        let debug = format!("{cfg:?}");
-        assert!(!debug.contains("agent-token"));
         let serialized = serde_yml::to_string(&cfg).unwrap();
-        assert!(!serialized.contains("agent-token"));
-        assert!(serialized.contains("event-log-http-auth-token: '*****'"));
+        assert!(!serialized.contains("event-log-http-auth"));
         assert!(!cfg.allow_header_context);
         assert!(cfg.validate_agent_registry);
         assert_eq!(cfg.context_conflict_action, AgentConflictAction::Strict);

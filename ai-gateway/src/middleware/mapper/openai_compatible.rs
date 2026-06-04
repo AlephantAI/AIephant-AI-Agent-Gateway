@@ -1,6 +1,8 @@
 use std::str::FromStr;
 
+use bytes::Bytes;
 use http::response::Parts;
+use serde_json::Value;
 
 use super::{
     TryConvertStreamData, capabilities::ProviderCapabilities, model::ModelMapper,
@@ -130,6 +132,61 @@ impl OpenAICompatibleConverter {
             model_mapper,
         })
     }
+}
+
+fn is_openrouter_provider(provider: &InferenceProvider) -> bool {
+    matches!(
+        provider,
+        InferenceProvider::Named(name) if name.as_str() == "openrouter"
+    )
+}
+
+fn responses_has_function_tool(root: &Value, tool_name: &str) -> bool {
+    root.get("tools")
+        .and_then(Value::as_array)
+        .is_some_and(|tools| {
+            tools.iter().any(|tool| {
+                tool.get("type").and_then(Value::as_str) == Some("function")
+                    && tool.get("name").and_then(Value::as_str) == Some(tool_name)
+            })
+        })
+}
+
+fn patch_openrouter_responses_tool_choice(bytes: Bytes) -> Result<Bytes, MapperError> {
+    let mut root: Value = serde_json::from_slice(&bytes).map_err(MapperError::SerdeError)?;
+
+    let Some(tool_choice) = root.get("tool_choice") else {
+        return Ok(bytes);
+    };
+    if !tool_choice.is_object() {
+        return Ok(bytes);
+    }
+    if tool_choice.get("type").is_some() {
+        return Ok(bytes);
+    }
+
+    let Some(tool_name) = tool_choice
+        .get("name")
+        .and_then(Value::as_str)
+        .filter(|s| !s.is_empty())
+    else {
+        return Ok(bytes);
+    };
+    if !responses_has_function_tool(&root, tool_name) {
+        return Ok(bytes);
+    }
+
+    let Some(tool_choice) = root.get_mut("tool_choice") else {
+        return Ok(bytes);
+    };
+    let Some(obj) = tool_choice.as_object_mut() else {
+        return Ok(bytes);
+    };
+    obj.insert("type".to_string(), Value::String("function".to_string()));
+
+    serde_json::to_vec(&root)
+        .map(Bytes::from)
+        .map_err(MapperError::SerdeError)
 }
 
 impl
@@ -393,6 +450,14 @@ impl
     ) -> Result<async_openai::types::responses::CreateResponse, Self::Error> {
         Ok(value)
     }
+
+    fn postprocess_converted_req_body(&self, bytes: Bytes) -> Result<Bytes, Self::Error> {
+        if is_openrouter_provider(&self.provider) {
+            patch_openrouter_responses_tool_choice(bytes)
+        } else {
+            Ok(bytes)
+        }
+    }
 }
 
 impl TryConvert<async_openai::types::responses::Response, async_openai::types::responses::Response>
@@ -496,6 +561,23 @@ mod tests {
             "input": "hello"
         }))
         .expect("embedding request should deserialize")
+    }
+
+    fn convert_responses_body(
+        converter: super::OpenAICompatibleConverter,
+        body: serde_json::Value,
+    ) -> serde_json::Value {
+        let bytes =
+            bytes::Bytes::from(serde_json::to_vec(&body).expect("request body should serialize"));
+        let typed = crate::middleware::mapper::TypedEndpointConverter::<
+            crate::endpoints::openai::Responses,
+            crate::endpoints::openai::Responses,
+            super::OpenAICompatibleConverter,
+        >::new(converter);
+        let (converted, _ctx) =
+            crate::middleware::mapper::EndpointConverter::convert_req_body(&typed, bytes)
+                .expect("request should convert");
+        serde_json::from_slice(&converted).expect("converted body should be JSON")
     }
 
     fn sample_multimodal_request() -> CreateChatCompletionRequest {
@@ -1191,6 +1273,275 @@ mod tests {
             .expect("conversion should succeed");
 
         assert_eq!(converted.model, "gpt-5.4");
+    }
+
+    #[tokio::test]
+    async fn openrouter_responses_preserves_function_tool_choice_type() {
+        let config = crate::config::Config::default();
+        let app = crate::app::build_test_app(config).await.expect("build app");
+        let mut flags = FxHashMap::default();
+        flags.insert("openrouter".to_string(), true);
+        app.state.set_provider_is_router_flags(flags);
+
+        let openrouter = InferenceProvider::Named("openrouter".into());
+        let model_mapper = ModelMapper::new(app.state.clone());
+        let capabilities = ProviderCapabilities::for_provider(&openrouter);
+        let rules = default_provider_rules(&openrouter);
+        let converter = super::OpenAICompatibleConverter::new_with_metadata(
+            openrouter,
+            capabilities,
+            rules,
+            model_mapper,
+        );
+
+        let converted = convert_responses_body(
+            converter,
+            json!({
+                "model": "openai/o4-mini",
+                "input": "Use the lookup_ticket tool.",
+                "tools": [{
+                    "type": "function",
+                    "name": "lookup_ticket",
+                    "description": "Lookup a support ticket",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "ticket_id": { "type": "string" }
+                        },
+                        "required": ["ticket_id"]
+                    }
+                }],
+                "tool_choice": {
+                    "type": "function",
+                    "name": "lookup_ticket"
+                }
+            }),
+        );
+
+        assert_eq!(converted["tool_choice"]["type"], "function");
+        assert_eq!(converted["tool_choice"]["name"], "lookup_ticket");
+    }
+
+    #[tokio::test]
+    async fn openrouter_responses_keeps_tool_choice_auto_mode() {
+        let config = crate::config::Config::default();
+        let app = crate::app::build_test_app(config).await.expect("build app");
+        let mut flags = FxHashMap::default();
+        flags.insert("openrouter".to_string(), true);
+        app.state.set_provider_is_router_flags(flags);
+
+        let openrouter = InferenceProvider::Named("openrouter".into());
+        let model_mapper = ModelMapper::new(app.state.clone());
+        let capabilities = ProviderCapabilities::for_provider(&openrouter);
+        let rules = default_provider_rules(&openrouter);
+        let converter = super::OpenAICompatibleConverter::new_with_metadata(
+            openrouter,
+            capabilities,
+            rules,
+            model_mapper,
+        );
+
+        let converted = convert_responses_body(
+            converter,
+            json!({
+                "model": "openai/o4-mini",
+                "input": "hello",
+                "tools": [{
+                    "type": "function",
+                    "name": "lookup_ticket",
+                    "parameters": { "type": "object" }
+                }],
+                "tool_choice": "auto"
+            }),
+        );
+
+        assert_eq!(converted["tool_choice"], "auto");
+    }
+
+    #[tokio::test]
+    async fn openrouter_responses_keeps_tool_choice_none_mode() {
+        let config = crate::config::Config::default();
+        let app = crate::app::build_test_app(config).await.expect("build app");
+        let mut flags = FxHashMap::default();
+        flags.insert("openrouter".to_string(), true);
+        app.state.set_provider_is_router_flags(flags);
+
+        let openrouter = InferenceProvider::Named("openrouter".into());
+        let model_mapper = ModelMapper::new(app.state.clone());
+        let capabilities = ProviderCapabilities::for_provider(&openrouter);
+        let rules = default_provider_rules(&openrouter);
+        let converter = super::OpenAICompatibleConverter::new_with_metadata(
+            openrouter,
+            capabilities,
+            rules,
+            model_mapper,
+        );
+
+        let converted = convert_responses_body(
+            converter,
+            json!({
+                "model": "openai/o4-mini",
+                "input": "hello",
+                "tools": [{
+                    "type": "function",
+                    "name": "lookup_ticket",
+                    "parameters": { "type": "object" }
+                }],
+                "tool_choice": "none"
+            }),
+        );
+
+        assert_eq!(converted["tool_choice"], "none");
+    }
+
+    #[tokio::test]
+    async fn openrouter_responses_keeps_tool_choice_required_mode() {
+        let config = crate::config::Config::default();
+        let app = crate::app::build_test_app(config).await.expect("build app");
+        let mut flags = FxHashMap::default();
+        flags.insert("openrouter".to_string(), true);
+        app.state.set_provider_is_router_flags(flags);
+
+        let openrouter = InferenceProvider::Named("openrouter".into());
+        let model_mapper = ModelMapper::new(app.state.clone());
+        let capabilities = ProviderCapabilities::for_provider(&openrouter);
+        let rules = default_provider_rules(&openrouter);
+        let converter = super::OpenAICompatibleConverter::new_with_metadata(
+            openrouter,
+            capabilities,
+            rules,
+            model_mapper,
+        );
+
+        let converted = convert_responses_body(
+            converter,
+            json!({
+                "model": "openai/o4-mini",
+                "input": "hello",
+                "tools": [{
+                    "type": "function",
+                    "name": "lookup_ticket",
+                    "parameters": { "type": "object" }
+                }],
+                "tool_choice": "required"
+            }),
+        );
+
+        assert_eq!(converted["tool_choice"], "required");
+    }
+
+    #[tokio::test]
+    async fn openrouter_responses_without_tool_choice_stays_unchanged() {
+        let config = crate::config::Config::default();
+        let app = crate::app::build_test_app(config).await.expect("build app");
+        let mut flags = FxHashMap::default();
+        flags.insert("openrouter".to_string(), true);
+        app.state.set_provider_is_router_flags(flags);
+
+        let openrouter = InferenceProvider::Named("openrouter".into());
+        let model_mapper = ModelMapper::new(app.state.clone());
+        let capabilities = ProviderCapabilities::for_provider(&openrouter);
+        let rules = default_provider_rules(&openrouter);
+        let converter = super::OpenAICompatibleConverter::new_with_metadata(
+            openrouter,
+            capabilities,
+            rules,
+            model_mapper,
+        );
+
+        let converted = convert_responses_body(
+            converter,
+            json!({
+                "model": "openai/o4-mini",
+                "input": "hello",
+                "tools": [{
+                    "type": "function",
+                    "name": "lookup_ticket",
+                    "parameters": { "type": "object" }
+                }]
+            }),
+        );
+
+        assert!(converted.get("tool_choice").is_none());
+    }
+
+    #[tokio::test]
+    async fn non_openrouter_responses_does_not_apply_tool_choice_patch() {
+        let mut config = crate::config::Config::default();
+        let provider = InferenceProvider::Named("custom-openai".into());
+        config
+            .providers
+            .insert(provider.clone(), named_provider_config());
+        let app = crate::app::build_test_app(config).await.expect("build app");
+        let model_mapper = ModelMapper::new(app.state.clone());
+        let capabilities = ProviderCapabilities::for_provider(&provider);
+        let rules = default_provider_rules(&provider);
+        let converter = super::OpenAICompatibleConverter::new_with_metadata(
+            provider,
+            capabilities,
+            rules,
+            model_mapper,
+        );
+
+        let converted = convert_responses_body(
+            converter,
+            json!({
+                "model": "custom-openai/gpt-4o-mini",
+                "input": "Use the lookup_ticket tool.",
+                "tools": [{
+                    "type": "function",
+                    "name": "lookup_ticket",
+                    "parameters": { "type": "object" }
+                }],
+                "tool_choice": {
+                    "type": "function",
+                    "name": "lookup_ticket"
+                }
+            }),
+        );
+
+        assert!(converted["tool_choice"].get("type").is_none());
+        assert_eq!(converted["tool_choice"]["name"], "lookup_ticket");
+    }
+
+    #[tokio::test]
+    async fn openrouter_responses_does_not_patch_unknown_function_tool_choice() {
+        let config = crate::config::Config::default();
+        let app = crate::app::build_test_app(config).await.expect("build app");
+        let mut flags = FxHashMap::default();
+        flags.insert("openrouter".to_string(), true);
+        app.state.set_provider_is_router_flags(flags);
+
+        let openrouter = InferenceProvider::Named("openrouter".into());
+        let model_mapper = ModelMapper::new(app.state.clone());
+        let capabilities = ProviderCapabilities::for_provider(&openrouter);
+        let rules = default_provider_rules(&openrouter);
+        let converter = super::OpenAICompatibleConverter::new_with_metadata(
+            openrouter,
+            capabilities,
+            rules,
+            model_mapper,
+        );
+
+        let converted = convert_responses_body(
+            converter,
+            json!({
+                "model": "openai/o4-mini",
+                "input": "Use a tool.",
+                "tools": [{
+                    "type": "function",
+                    "name": "lookup_customer",
+                    "parameters": { "type": "object" }
+                }],
+                "tool_choice": {
+                    "type": "function",
+                    "name": "lookup_ticket"
+                }
+            }),
+        );
+
+        assert!(converted["tool_choice"].get("type").is_none());
+        assert_eq!(converted["tool_choice"]["name"], "lookup_ticket");
     }
 
     #[tokio::test]

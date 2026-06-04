@@ -48,7 +48,10 @@ mod tests {
         dispatcher::extensions::ExtensionsCopier,
         middleware::mapper::non_stream_profile_data::default_non_stream_profile,
         types::{
-            extensions::{MapperContext, MapperProfileContext},
+            extensions::{
+                ClientResponseSemantic, LoggerResponseWireSemantic, MapperContext,
+                MapperProfileContext,
+            },
             provider::InferenceProvider,
         },
     };
@@ -69,6 +72,8 @@ mod tests {
             .provider_request_id(None)
             .mapper_ctx(MapperContext {
                 is_stream: false,
+                client_response_semantic: ClientResponseSemantic::Other,
+                logger_response_wire_semantic: LoggerResponseWireSemantic::Other,
                 model: None,
                 anthropic_openai_usage: None,
                 unified_responses_bridge_chat_completions_sse: false,

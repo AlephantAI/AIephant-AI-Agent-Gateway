@@ -467,7 +467,7 @@ impl RouterStore {
                 e.price_amount::text AS price_amount,
                 e.asset::text AS asset,
                 e.network::text AS network,
-                w.address AS receive_wallet_address,
+                ''::text AS receive_wallet_address,
                 COALESCE(e.body_schema, 'null'::jsonb) AS body_schema,
                 e.target_kind::text AS target_kind,
                 e.original_target_url,
@@ -490,13 +490,11 @@ impl RouterStore {
                 e.updated_at
             FROM x402_endpoints e
             JOIN x402_endpoint_policies p ON p.id = e.policy_id
-            JOIN x402_receive_wallets w ON w.id = e.receive_wallet_id
             WHERE lower(e.slug) = lower($1)
               AND lower(e.method::text) = lower($2)
               AND e.status::text = 'active'
               AND e.deleted_at IS NULL
               AND p.deleted_at IS NULL
-              AND w.deleted_at IS NULL
             LIMIT 1
             ",
         )

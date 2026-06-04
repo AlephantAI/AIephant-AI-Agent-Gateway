@@ -31,7 +31,11 @@ use crate::{
         mapper::MapperError, stream::StreamError,
     },
     ide_adapation::responses_ingress_normalize,
-    types::{extensions::MapperContext, model_id::ModelId, response::Response},
+    types::{
+        extensions::{ClientResponseSemantic, LoggerResponseWireSemantic, MapperContext},
+        model_id::ModelId,
+        response::Response,
+    },
 };
 
 fn put_sse_data_record(buf: &mut BytesMut, payload: &[u8]) {
@@ -969,6 +973,12 @@ pub(crate) fn try_map_responses_to_compatible_chat(
     mc.model = Some(model);
     mc.is_stream = is_stream;
     mc.client_expects_responses_wire = profile == P::CodexCli;
+    mc.client_response_semantic = ClientResponseSemantic::Responses;
+    mc.logger_response_wire_semantic = if is_stream {
+        LoggerResponseWireSemantic::ChatCompletionsSse
+    } else {
+        LoggerResponseWireSemantic::ChatCompletionsJson
+    };
     Ok(Some((body_out, mc, upstream)))
 }
 
@@ -985,7 +995,11 @@ mod bridge_mapping_tests {
         endpoints::{ApiEndpoint, openai::OpenAI},
         ide_adapation::client_profile::ClientProfile,
         middleware::mapper::{model::ModelMapper, registry::EndpointConverterRegistry},
-        types::{model_id::ModelId, provider::InferenceProvider},
+        types::{
+            extensions::{ClientResponseSemantic, LoggerResponseWireSemantic},
+            model_id::ModelId,
+            provider::InferenceProvider,
+        },
     };
 
     async fn registry() -> EndpointConverterRegistry {
@@ -1019,6 +1033,17 @@ mod bridge_mapping_tests {
         )
     }
 
+    fn responses_stream_body(model: &str) -> Bytes {
+        Bytes::from(
+            serde_json::to_vec(&json!({
+                "model": model,
+                "input": "hello",
+                "stream": true
+            }))
+            .expect("body serializes"),
+        )
+    }
+
     fn json_body(body: &Bytes) -> Value {
         serde_json::from_slice(body).expect("body is json")
     }
@@ -1033,7 +1058,7 @@ mod bridge_mapping_tests {
             ClientProfile::CursorIde,
             &source,
             &target,
-            &responses_body("future-openrouter-responses-model"),
+            &responses_stream_body("future-openrouter-responses-model"),
             true,
         )
         .expect("bridge should not reject unknown model")
@@ -1053,6 +1078,14 @@ mod bridge_mapping_tests {
         assert!(ctx.cursor_responses_via_chat_completions);
         assert!(!ctx.client_expects_responses_wire);
         assert_eq!(
+            ctx.client_response_semantic,
+            ClientResponseSemantic::Responses
+        );
+        assert_eq!(
+            ctx.logger_response_wire_semantic,
+            LoggerResponseWireSemantic::ChatCompletionsSse
+        );
+        assert_eq!(
             ctx.model,
             Some(ModelId::Unknown(
                 "future-openrouter-responses-model".to_string()
@@ -1071,7 +1104,7 @@ mod bridge_mapping_tests {
             ClientProfile::CodexCli,
             &source,
             &target,
-            &responses_body("future-openrouter-responses-model"),
+            &responses_stream_body("future-openrouter-responses-model"),
             true,
         )
         .expect("bridge should not reject unknown model")
@@ -1082,6 +1115,14 @@ mod bridge_mapping_tests {
         assert_eq!(body["model"], "future-openrouter-responses-model");
         assert!(ctx.cursor_responses_via_chat_completions);
         assert!(ctx.client_expects_responses_wire);
+        assert_eq!(
+            ctx.client_response_semantic,
+            ClientResponseSemantic::Responses
+        );
+        assert_eq!(
+            ctx.logger_response_wire_semantic,
+            LoggerResponseWireSemantic::ChatCompletionsSse
+        );
         assert_eq!(
             ctx.model,
             Some(ModelId::Unknown(

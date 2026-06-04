@@ -29,8 +29,7 @@ pub async fn emit_agent_event(
         cfg.event_log_http_fallback_enabled,
         endpoint,
         Duration::from_millis(cfg.event_log_http_timeout_ms),
-        cfg.event_log_http_auth_header.clone(),
-        cfg.event_log_http_auth_token.expose().to_string(),
+        auth_ctx.api_key.expose().to_string(),
         reqwest::Client::new(),
     );
     let payload = AgentEventLogPayload::from_envelope_with_auth(event, auth_ctx);

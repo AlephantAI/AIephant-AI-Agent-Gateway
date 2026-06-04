@@ -14,7 +14,21 @@ use uuid::Uuid;
 
 use super::model_info::ModelInfo;
 use crate::{
-    agent::{context::AgentContext, name::resolve_agent_name},
+    agent::{
+        context::{
+            AgentConfidence, AgentContext, AgentEventPhase, AgentEventSourceTrust, AgentPolicyMode,
+            AgentPolicyStage, AgentStepKind, AgentStepSource,
+        },
+        event::{AgentEventEnvelope, AgentEventSource},
+        name::resolve_agent_name,
+        sink::emit_agent_event,
+        tool_observer::{
+            ObservedChatCompletionStreamToolCall, ObservedResponsesItem, ObservedResponsesItemKind,
+            ObservedResponsesStreamItem, ObservedResponsesStreamItemKind, ObservedToolCall,
+            observe_chat_completion_stream_tool_calls, observe_chat_completion_tool_calls,
+            observe_responses_nonstream_agent_items, observe_responses_stream_agent_items,
+        },
+    },
     app_state::AppState,
     config::deployment_target::DeploymentTarget,
     error::{init::InitError, logger::LoggerError},
@@ -24,8 +38,8 @@ use crate::{
     types::{
         body::BodyReader,
         extensions::{
-            AuthContext, LargeContextDecision, MapperContext, PromptCompressionTokenPair,
-            PromptContext, PromptHeaderForRequestLog,
+            AuthContext, ClientResponseSemantic, LargeContextDecision, LoggerResponseWireSemantic,
+            MapperContext, PromptCompressionTokenPair, PromptContext, PromptHeaderForRequestLog,
         },
         logger::{
             AiGatewayBodyMapping, AlephantLogMetadata, Log, LogMessage, RequestLog, ResponseLog,
@@ -58,6 +72,417 @@ fn parse_ai_gateway_body_mapping(raw: Option<&String>) -> Option<AiGatewayBodyMa
         "RESPONSES" => Some(AiGatewayBodyMapping::Responses),
         _ => None,
     }
+}
+
+fn should_observe_agent_response(
+    agent_enabled: bool,
+    is_stream: bool,
+    agent_ctx: Option<&AgentContext>,
+) -> bool {
+    if !agent_enabled || is_stream {
+        return false;
+    }
+    let Some(ctx) = agent_ctx else {
+        return false;
+    };
+    ctx.agent_id_external.is_some() || ctx.agent_uid.is_some() || ctx.run_id.is_some()
+}
+
+fn should_observe_chat_completion_tool_calls(
+    agent_enabled: bool,
+    is_stream: bool,
+    response_semantic: ClientResponseSemantic,
+    agent_ctx: Option<&AgentContext>,
+) -> bool {
+    response_semantic == ClientResponseSemantic::ChatCompletions
+        && should_observe_agent_response(agent_enabled, is_stream, agent_ctx)
+}
+
+fn should_observe_chat_completion_stream_tool_calls(
+    agent_enabled: bool,
+    is_stream: bool,
+    client_response_semantic: ClientResponseSemantic,
+    logger_response_wire_semantic: LoggerResponseWireSemantic,
+    unified_responses_bridge_chat_completions_sse: bool,
+    cursor_responses_via_chat_completions: bool,
+    client_expects_responses_wire: bool,
+    agent_ctx: Option<&AgentContext>,
+) -> bool {
+    is_stream
+        && !unified_responses_bridge_chat_completions_sse
+        && !cursor_responses_via_chat_completions
+        && !client_expects_responses_wire
+        && client_response_semantic == ClientResponseSemantic::ChatCompletions
+        && logger_response_wire_semantic == LoggerResponseWireSemantic::ChatCompletionsSse
+        && should_observe_agent_response(agent_enabled, false, agent_ctx)
+}
+
+fn should_observe_responses_agent_items(
+    agent_enabled: bool,
+    is_stream: bool,
+    response_semantic: ClientResponseSemantic,
+    agent_ctx: Option<&AgentContext>,
+) -> bool {
+    response_semantic == ClientResponseSemantic::Responses
+        && should_observe_agent_response(agent_enabled, is_stream, agent_ctx)
+}
+
+fn should_observe_responses_stream_agent_items(
+    agent_enabled: bool,
+    is_stream: bool,
+    client_response_semantic: ClientResponseSemantic,
+    logger_response_wire_semantic: LoggerResponseWireSemantic,
+    agent_ctx: Option<&AgentContext>,
+) -> bool {
+    is_stream
+        && client_response_semantic == ClientResponseSemantic::Responses
+        && logger_response_wire_semantic == LoggerResponseWireSemantic::ResponsesSse
+        && should_observe_agent_response(agent_enabled, false, agent_ctx)
+}
+
+fn observed_tool_call_envelope(
+    ctx: &AgentContext,
+    observed: &ObservedToolCall,
+    request_id: Uuid,
+    provider: &str,
+    model: &str,
+    policy_mode: &str,
+    alephant_agent_name: Option<&str>,
+    alephant_agent_name_source: Option<&str>,
+    alephant_agent_trust_level: Option<&str>,
+) -> AgentEventEnvelope {
+    let policy_mode = policy_mode
+        .parse::<AgentPolicyMode>()
+        .expect("AgentPolicyMode parser is infallible");
+    let metadata = serde_json::json!({
+        "observer": "chat_completions_tool_observer",
+        "provider": provider,
+        "model": model,
+        "request_id": request_id.to_string(),
+        "tool_type": observed.tool_type,
+        "arguments_summary": observed.arguments_summary,
+        "choice_index": observed.choice_index,
+    });
+
+    AgentEventEnvelope {
+        version: "2026-05-27".to_string(),
+        event_id: format!("evt_{}", Uuid::new_v4().simple()),
+        event_type: "tool.call.observed".to_string(),
+        event_source: AgentEventSource::Alephant,
+        event_phase: AgentEventPhase::After,
+        policy_stage: AgentPolicyStage::AuditOnly,
+        policy_mode,
+        event_source_trust: AgentEventSourceTrust::GatewayObserved,
+        sequence: None,
+        observed_at: Utc::now(),
+        timestamp: None,
+        name: Some(observed.tool_name.clone()),
+        alephant_agent_name: alephant_agent_name.map(str::to_string),
+        alephant_agent_name_source: alephant_agent_name_source.map(str::to_string),
+        alephant_agent_trust_level: alephant_agent_trust_level.map(str::to_string),
+        workspace_id: String::new(),
+        virtual_key_id: None,
+        agent_id_external: ctx.agent_id_external.clone(),
+        agent_uid: ctx.agent_uid,
+        run_id: ctx.run_id.clone(),
+        step_id: ctx.step_id.clone(),
+        parent_step_id: ctx.parent_step_id.clone(),
+        tool_call_id: observed.tool_call_id.clone(),
+        handoff_id: ctx.handoff_id.clone(),
+        graph_node: ctx.graph_node.clone(),
+        step_kind: Some(AgentStepKind::ToolCall),
+        step_source: AgentStepSource::Gateway,
+        step_confidence: AgentConfidence::Medium,
+        trust_level: ctx.trust_level,
+        context_conflict: false,
+        step_id_conflict: false,
+        attempt: None,
+        input_hash: None,
+        metadata,
+    }
+}
+
+fn observed_chat_stream_step_id(
+    request_id: Uuid,
+    observed: &ObservedChatCompletionStreamToolCall,
+) -> String {
+    let key = observed
+        .tool_call_index
+        .map(|index| format!("index_{index}"))
+        .or_else(|| {
+            observed
+                .tool_call_id
+                .as_ref()
+                .map(|id| format!("call_{id}"))
+        })
+        .unwrap_or_else(|| "unknown".to_string());
+
+    format!(
+        "gwobs:chatcmpl:{request_id}:{}:{key}:tool_call_observed",
+        observed.choice_index
+    )
+}
+
+fn observed_chat_stream_tool_call_envelope(
+    ctx: &AgentContext,
+    observed: &ObservedChatCompletionStreamToolCall,
+    request_id: Uuid,
+    provider: &str,
+    model: &str,
+    policy_mode: &str,
+    alephant_agent_name: Option<&str>,
+    alephant_agent_name_source: Option<&str>,
+    alephant_agent_trust_level: Option<&str>,
+) -> AgentEventEnvelope {
+    let policy_mode = policy_mode
+        .parse::<AgentPolicyMode>()
+        .expect("AgentPolicyMode parser is infallible");
+    let mut metadata = if observed.metadata.is_object() {
+        observed.metadata.clone()
+    } else {
+        serde_json::json!({})
+    };
+    if let Some(map) = metadata.as_object_mut() {
+        map.insert("provider".to_string(), serde_json::json!(provider));
+        map.insert("model".to_string(), serde_json::json!(model));
+        map.insert(
+            "request_id".to_string(),
+            serde_json::json!(request_id.to_string()),
+        );
+    }
+
+    AgentEventEnvelope {
+        version: "2026-05-27".to_string(),
+        event_id: format!("evt_{}", Uuid::new_v4().simple()),
+        event_type: "tool.call.observed".to_string(),
+        event_source: AgentEventSource::Alephant,
+        event_phase: AgentEventPhase::After,
+        policy_stage: AgentPolicyStage::AuditOnly,
+        policy_mode,
+        event_source_trust: AgentEventSourceTrust::GatewayObserved,
+        sequence: None,
+        observed_at: Utc::now(),
+        timestamp: None,
+        name: Some(
+            observed
+                .tool_name
+                .clone()
+                .unwrap_or_else(|| "unknown".to_string()),
+        ),
+        alephant_agent_name: alephant_agent_name.map(str::to_string),
+        alephant_agent_name_source: alephant_agent_name_source.map(str::to_string),
+        alephant_agent_trust_level: alephant_agent_trust_level.map(str::to_string),
+        workspace_id: String::new(),
+        virtual_key_id: None,
+        agent_id_external: ctx.agent_id_external.clone(),
+        agent_uid: ctx.agent_uid,
+        run_id: ctx.run_id.clone(),
+        step_id: Some(observed_chat_stream_step_id(request_id, observed)),
+        parent_step_id: ctx.step_id.clone(),
+        tool_call_id: observed.tool_call_id.clone(),
+        handoff_id: ctx.handoff_id.clone(),
+        graph_node: ctx.graph_node.clone(),
+        step_kind: Some(AgentStepKind::ToolCall),
+        step_source: AgentStepSource::Gateway,
+        step_confidence: AgentConfidence::Medium,
+        trust_level: ctx.trust_level,
+        context_conflict: false,
+        step_id_conflict: false,
+        attempt: None,
+        input_hash: None,
+        metadata,
+    }
+}
+
+fn observed_stream_step_id(request_id: Uuid, observed: &ObservedResponsesStreamItem) -> String {
+    let response_id = observed.response_id.as_deref().unwrap_or("unknown");
+    let output_index_or_sequence = observed
+        .output_index
+        .map(|index| index.to_string())
+        .unwrap_or_else(|| observed.sequence.to_string());
+    let item_id = observed.item_id.as_deref().unwrap_or("none");
+    let event_type = observed.event_type.replace('.', "_");
+
+    format!(
+        "gwobs:responses:{request_id}:{response_id}:\
+         {output_index_or_sequence}:{item_id}:{event_type}"
+    )
+}
+
+fn observed_responses_item_envelope(
+    ctx: &AgentContext,
+    observed: &ObservedResponsesItem,
+    request_id: Uuid,
+    provider: &str,
+    model: &str,
+    policy_mode: &str,
+    alephant_agent_name: Option<&str>,
+    alephant_agent_name_source: Option<&str>,
+    alephant_agent_trust_level: Option<&str>,
+) -> AgentEventEnvelope {
+    let policy_mode = policy_mode
+        .parse::<AgentPolicyMode>()
+        .expect("AgentPolicyMode parser is infallible");
+    let mut metadata = observed.metadata.clone();
+    if let Some(map) = metadata.as_object_mut() {
+        map.insert("provider".to_string(), serde_json::json!(provider));
+        map.insert("model".to_string(), serde_json::json!(model));
+        map.insert(
+            "request_id".to_string(),
+            serde_json::json!(request_id.to_string()),
+        );
+        map.insert(
+            "response_id".to_string(),
+            serde_json::json!(observed.response_id),
+        );
+        map.insert(
+            "output_index".to_string(),
+            serde_json::json!(observed.output_index),
+        );
+        map.insert("item_id".to_string(), serde_json::json!(observed.item_id));
+        map.insert("call_id".to_string(), serde_json::json!(observed.call_id));
+    }
+
+    let step_kind = match observed.kind {
+        ObservedResponsesItemKind::FunctionCall | ObservedResponsesItemKind::McpCall => {
+            Some(AgentStepKind::ToolCall)
+        }
+        ObservedResponsesItemKind::Reasoning => Some(AgentStepKind::Reasoning),
+    };
+
+    AgentEventEnvelope {
+        version: "2026-05-27".to_string(),
+        event_id: format!("evt_{}", Uuid::new_v4().simple()),
+        event_type: observed.event_type.to_string(),
+        event_source: AgentEventSource::Alephant,
+        event_phase: AgentEventPhase::After,
+        policy_stage: AgentPolicyStage::AuditOnly,
+        policy_mode,
+        event_source_trust: AgentEventSourceTrust::GatewayObserved,
+        sequence: None,
+        observed_at: Utc::now(),
+        timestamp: None,
+        name: observed.name.clone(),
+        alephant_agent_name: alephant_agent_name.map(str::to_string),
+        alephant_agent_name_source: alephant_agent_name_source.map(str::to_string),
+        alephant_agent_trust_level: alephant_agent_trust_level.map(str::to_string),
+        workspace_id: String::new(),
+        virtual_key_id: None,
+        agent_id_external: ctx.agent_id_external.clone(),
+        agent_uid: ctx.agent_uid,
+        run_id: ctx.run_id.clone(),
+        step_id: ctx.step_id.clone(),
+        parent_step_id: ctx.parent_step_id.clone(),
+        tool_call_id: observed.call_id.clone(),
+        handoff_id: ctx.handoff_id.clone(),
+        graph_node: ctx.graph_node.clone(),
+        step_kind,
+        step_source: AgentStepSource::Gateway,
+        step_confidence: if ctx.step_id.is_some() {
+            AgentConfidence::Medium
+        } else {
+            AgentConfidence::Low
+        },
+        trust_level: ctx.trust_level,
+        context_conflict: false,
+        step_id_conflict: false,
+        attempt: None,
+        input_hash: None,
+        metadata,
+    }
+}
+
+fn observed_responses_stream_item_envelope(
+    ctx: &AgentContext,
+    observed: &ObservedResponsesStreamItem,
+    request_id: Uuid,
+    provider: &str,
+    model: &str,
+    policy_mode: &str,
+    alephant_agent_name: Option<&str>,
+    alephant_agent_name_source: Option<&str>,
+    alephant_agent_trust_level: Option<&str>,
+) -> AgentEventEnvelope {
+    let policy_mode = policy_mode
+        .parse::<AgentPolicyMode>()
+        .expect("AgentPolicyMode parser is infallible");
+    let mut metadata = if observed.metadata.is_object() {
+        observed.metadata.clone()
+    } else {
+        serde_json::json!({})
+    };
+    if let Some(map) = metadata.as_object_mut() {
+        map.insert("provider".to_string(), serde_json::json!(provider));
+        map.insert("model".to_string(), serde_json::json!(model));
+        map.insert(
+            "request_id".to_string(),
+            serde_json::json!(request_id.to_string()),
+        );
+        map.insert(
+            "response_id".to_string(),
+            serde_json::json!(observed.response_id),
+        );
+        map.insert(
+            "output_index".to_string(),
+            serde_json::json!(observed.output_index),
+        );
+        map.insert("item_id".to_string(), serde_json::json!(observed.item_id));
+        map.insert("call_id".to_string(), serde_json::json!(observed.call_id));
+    }
+
+    let step_kind = match observed.kind {
+        ObservedResponsesStreamItemKind::FunctionCall
+        | ObservedResponsesStreamItemKind::McpCall => Some(AgentStepKind::ToolCall),
+        ObservedResponsesStreamItemKind::Reasoning => Some(AgentStepKind::Reasoning),
+        ObservedResponsesStreamItemKind::ResponseCompleted => Some(AgentStepKind::LlmCall),
+        ObservedResponsesStreamItemKind::Error => Some(AgentStepKind::ErrorRecovery),
+    };
+
+    AgentEventEnvelope {
+        version: "2026-05-27".to_string(),
+        event_id: format!("evt_{}", Uuid::new_v4().simple()),
+        event_type: observed.event_type.to_string(),
+        event_source: AgentEventSource::Alephant,
+        event_phase: AgentEventPhase::After,
+        policy_stage: AgentPolicyStage::AuditOnly,
+        policy_mode,
+        event_source_trust: AgentEventSourceTrust::GatewayObserved,
+        sequence: Some(u64::from(observed.sequence)),
+        observed_at: Utc::now(),
+        timestamp: None,
+        name: observed.name.clone(),
+        alephant_agent_name: alephant_agent_name.map(str::to_string),
+        alephant_agent_name_source: alephant_agent_name_source.map(str::to_string),
+        alephant_agent_trust_level: alephant_agent_trust_level.map(str::to_string),
+        workspace_id: String::new(),
+        virtual_key_id: None,
+        agent_id_external: ctx.agent_id_external.clone(),
+        agent_uid: ctx.agent_uid,
+        run_id: ctx.run_id.clone(),
+        step_id: Some(observed_stream_step_id(request_id, observed)),
+        parent_step_id: ctx.step_id.clone(),
+        tool_call_id: observed.call_id.clone(),
+        handoff_id: ctx.handoff_id.clone(),
+        graph_node: ctx.graph_node.clone(),
+        step_kind,
+        step_source: AgentStepSource::Gateway,
+        step_confidence: AgentConfidence::Medium,
+        trust_level: ctx.trust_level,
+        context_conflict: false,
+        step_id_conflict: false,
+        attempt: None,
+        input_hash: None,
+        metadata,
+    }
+}
+
+fn apply_auth_scope_to_observed_tool_event(
+    envelope: &mut AgentEventEnvelope,
+    workspace_id: impl ToString,
+    virtual_key_id: Option<Uuid>,
+) {
+    envelope.workspace_id = workspace_id.to_string();
+    envelope.virtual_key_id = virtual_key_id;
 }
 
 fn inference_provider_for_ingest_meta(provider: &InferenceProvider) -> Option<String> {
@@ -365,6 +790,42 @@ impl LoggerService {
             &mut agent_fields,
             &mut properties,
         );
+        if should_observe_chat_completion_tool_calls(
+            self.app_state.config().agent.enabled,
+            self.mapper_ctx.is_stream,
+            self.mapper_ctx.client_response_semantic,
+            self.agent_ctx.as_ref(),
+        ) && let Some(agent_ctx) = self.agent_ctx.as_ref()
+        {
+            let observed_tool_calls = observe_chat_completion_tool_calls(&response_body);
+            for observed in observed_tool_calls {
+                let mut envelope = observed_tool_call_envelope(
+                    agent_ctx,
+                    &observed,
+                    self.request_id,
+                    &provider,
+                    &model,
+                    self.app_state.config().agent.policy_mode.as_str(),
+                    agent_fields.alephant_agent_name.as_deref(),
+                    agent_fields.alephant_agent_name_source.as_deref(),
+                    agent_fields.alephant_agent_trust_level.as_deref(),
+                );
+                apply_auth_scope_to_observed_tool_event(
+                    &mut envelope,
+                    self.auth_ctx.org_id,
+                    self.auth_ctx.virtual_key_id,
+                );
+                if let Err(err) = emit_agent_event(&self.app_state, &self.auth_ctx, &envelope).await
+                {
+                    tracing::warn!(
+                        error = %err,
+                        request_id = %self.request_id,
+                        tool_name = %observed.tool_name,
+                        "failed to emit observed agent tool call event"
+                    );
+                }
+            }
+        }
 
         let completed_at = Utc::now();
         let latency_ms = (completed_at - self.start_time).num_milliseconds().max(0);
@@ -407,6 +868,10 @@ impl LoggerService {
         } else {
             None
         };
+
+        let provider_for_event = provider.clone();
+        let model_for_event = model.clone();
+        let agent_fields_for_event = agent_fields.clone();
 
         let request_log = RequestLog::builder()
             .id(self.request_id)
@@ -515,6 +980,122 @@ impl LoggerService {
             .request_log_transport()
             .send(&log_message)
             .await?;
+        if should_observe_chat_completion_stream_tool_calls(
+            self.app_state.config().agent.enabled,
+            self.mapper_ctx.is_stream,
+            self.mapper_ctx.client_response_semantic,
+            self.mapper_ctx.logger_response_wire_semantic,
+            self.mapper_ctx
+                .unified_responses_bridge_chat_completions_sse,
+            self.mapper_ctx.cursor_responses_via_chat_completions,
+            self.mapper_ctx.client_expects_responses_wire,
+            self.agent_ctx.as_ref(),
+        ) && let Some(agent_ctx) = self.agent_ctx.as_ref()
+        {
+            let observed_tool_calls =
+                observe_chat_completion_stream_tool_calls(self.request_id, &response_body);
+            for observed in observed_tool_calls {
+                let mut envelope = observed_chat_stream_tool_call_envelope(
+                    agent_ctx,
+                    &observed,
+                    self.request_id,
+                    &provider_for_event,
+                    &model_for_event,
+                    self.app_state.config().agent.policy_mode.as_str(),
+                    agent_fields_for_event.alephant_agent_name.as_deref(),
+                    agent_fields_for_event.alephant_agent_name_source.as_deref(),
+                    agent_fields_for_event.alephant_agent_trust_level.as_deref(),
+                );
+                apply_auth_scope_to_observed_tool_event(
+                    &mut envelope,
+                    self.auth_ctx.org_id,
+                    self.auth_ctx.virtual_key_id,
+                );
+                if let Err(err) = emit_agent_event(&self.app_state, &self.auth_ctx, &envelope).await
+                {
+                    tracing::warn!(
+                        error = %err,
+                        request_id = %self.request_id,
+                        tool_call_id = ?observed.tool_call_id,
+                        tool_name = ?observed.tool_name,
+                        "failed to emit observed chat completions stream tool call event"
+                    );
+                }
+            }
+        }
+        if should_observe_responses_stream_agent_items(
+            self.app_state.config().agent.enabled,
+            self.mapper_ctx.is_stream,
+            self.mapper_ctx.client_response_semantic,
+            self.mapper_ctx.logger_response_wire_semantic,
+            self.agent_ctx.as_ref(),
+        ) && let Some(agent_ctx) = self.agent_ctx.as_ref()
+        {
+            let observed_items =
+                observe_responses_stream_agent_items(self.request_id, &response_body);
+            for observed in observed_items {
+                let mut envelope = observed_responses_stream_item_envelope(
+                    agent_ctx,
+                    &observed,
+                    self.request_id,
+                    &provider_for_event,
+                    &model_for_event,
+                    self.app_state.config().agent.policy_mode.as_str(),
+                    agent_fields_for_event.alephant_agent_name.as_deref(),
+                    agent_fields_for_event.alephant_agent_name_source.as_deref(),
+                    agent_fields_for_event.alephant_agent_trust_level.as_deref(),
+                );
+                apply_auth_scope_to_observed_tool_event(
+                    &mut envelope,
+                    self.auth_ctx.org_id,
+                    self.auth_ctx.virtual_key_id,
+                );
+                if let Err(err) = emit_agent_event(&self.app_state, &self.auth_ctx, &envelope).await
+                {
+                    tracing::warn!(
+                        error = %err,
+                        request_id = %self.request_id,
+                        event_type = %envelope.event_type,
+                        "failed to emit observed responses stream agent event"
+                    );
+                }
+            }
+        } else if should_observe_responses_agent_items(
+            self.app_state.config().agent.enabled,
+            self.mapper_ctx.is_stream,
+            self.mapper_ctx.client_response_semantic,
+            self.agent_ctx.as_ref(),
+        ) && let Some(agent_ctx) = self.agent_ctx.as_ref()
+        {
+            let observed_items = observe_responses_nonstream_agent_items(&response_body);
+            for observed in observed_items {
+                let mut envelope = observed_responses_item_envelope(
+                    agent_ctx,
+                    &observed,
+                    self.request_id,
+                    &provider_for_event,
+                    &model_for_event,
+                    self.app_state.config().agent.policy_mode.as_str(),
+                    agent_fields_for_event.alephant_agent_name.as_deref(),
+                    agent_fields_for_event.alephant_agent_name_source.as_deref(),
+                    agent_fields_for_event.alephant_agent_trust_level.as_deref(),
+                );
+                apply_auth_scope_to_observed_tool_event(
+                    &mut envelope,
+                    self.auth_ctx.org_id,
+                    self.auth_ctx.virtual_key_id,
+                );
+                if let Err(err) = emit_agent_event(&self.app_state, &self.auth_ctx, &envelope).await
+                {
+                    tracing::warn!(
+                        error = %err,
+                        request_id = %self.request_id,
+                        event_type = %envelope.event_type,
+                        "failed to emit observed responses agent event"
+                    );
+                }
+            }
+        }
         Ok(())
     }
 }
@@ -529,7 +1110,12 @@ mod tests {
             ALEPHANT_SESSION_ID_PROPERTY, ALEPHANT_SESSION_NAME_PROPERTY,
             ALEPHANT_SESSION_PATH_PROPERTY, SessionHeaders,
         },
-        types::{extensions::PromptCompressionTokenPair, usage_tokens::UsageTokenCounts},
+        types::{
+            extensions::{
+                ClientResponseSemantic, LoggerResponseWireSemantic, PromptCompressionTokenPair,
+            },
+            usage_tokens::UsageTokenCounts,
+        },
     };
 
     #[test]
@@ -634,6 +1220,611 @@ mod tests {
             .as_ref()
             .map_or(usage.prompt_tokens, |p| i64::from(p.origin_prompt_token));
         assert_eq!(got, 4_096);
+    }
+
+    #[test]
+    fn responses_observer_requires_responses_semantic() {
+        let ctx = crate::agent::context::AgentContext {
+            agent_id_external: Some("agent-1".to_string()),
+            run_id: Some("run-1".to_string()),
+            ..Default::default()
+        };
+
+        assert!(super::should_observe_responses_agent_items(
+            true,
+            false,
+            crate::types::extensions::ClientResponseSemantic::Responses,
+            Some(&ctx),
+        ));
+        assert!(!super::should_observe_responses_agent_items(
+            true,
+            false,
+            crate::types::extensions::ClientResponseSemantic::ChatCompletions,
+            Some(&ctx),
+        ));
+        assert!(!super::should_observe_responses_agent_items(
+            true,
+            true,
+            crate::types::extensions::ClientResponseSemantic::Responses,
+            Some(&ctx),
+        ));
+    }
+
+    #[test]
+    fn responses_observer_allows_agent_uid_only_context() {
+        let ctx = crate::agent::context::AgentContext {
+            agent_uid: Some(uuid::Uuid::nil()),
+            ..Default::default()
+        };
+
+        assert!(super::should_observe_responses_agent_items(
+            true,
+            false,
+            crate::types::extensions::ClientResponseSemantic::Responses,
+            Some(&ctx),
+        ));
+    }
+
+    #[test]
+    fn should_observe_responses_stream_requires_responses_sse_wire() {
+        let ctx = crate::agent::context::AgentContext {
+            agent_id_external: Some("agent-1".to_string()),
+            run_id: Some("run-1".to_string()),
+            ..Default::default()
+        };
+
+        assert!(super::should_observe_responses_stream_agent_items(
+            true,
+            true,
+            crate::types::extensions::ClientResponseSemantic::Responses,
+            crate::types::extensions::LoggerResponseWireSemantic::ResponsesSse,
+            Some(&ctx),
+        ));
+        assert!(!super::should_observe_responses_stream_agent_items(
+            true,
+            true,
+            crate::types::extensions::ClientResponseSemantic::Responses,
+            crate::types::extensions::LoggerResponseWireSemantic::ChatCompletionsSse,
+            Some(&ctx),
+        ));
+        assert!(!super::should_observe_responses_stream_agent_items(
+            true,
+            false,
+            crate::types::extensions::ClientResponseSemantic::Responses,
+            crate::types::extensions::LoggerResponseWireSemantic::ResponsesSse,
+            Some(&ctx),
+        ));
+        assert!(!super::should_observe_responses_stream_agent_items(
+            false,
+            true,
+            crate::types::extensions::ClientResponseSemantic::Responses,
+            crate::types::extensions::LoggerResponseWireSemantic::ResponsesSse,
+            Some(&ctx),
+        ));
+        assert!(!super::should_observe_responses_stream_agent_items(
+            true,
+            true,
+            crate::types::extensions::ClientResponseSemantic::ChatCompletions,
+            crate::types::extensions::LoggerResponseWireSemantic::ResponsesSse,
+            Some(&ctx),
+        ));
+    }
+
+    #[test]
+    fn responses_stream_observer_ignores_chat_completions_sse_even_with_agent_ctx() {
+        let ctx = crate::agent::context::AgentContext {
+            agent_id_external: Some("agent-1".to_string()),
+            run_id: Some("run-1".to_string()),
+            ..Default::default()
+        };
+
+        assert!(!super::should_observe_responses_stream_agent_items(
+            true,
+            true,
+            ClientResponseSemantic::ChatCompletions,
+            LoggerResponseWireSemantic::ChatCompletionsSse,
+            Some(&ctx),
+        ));
+    }
+
+    #[test]
+    fn responses_stream_observer_ignores_responses_json_non_stream() {
+        let ctx = crate::agent::context::AgentContext {
+            agent_id_external: Some("agent-1".to_string()),
+            run_id: Some("run-1".to_string()),
+            ..Default::default()
+        };
+
+        assert!(!super::should_observe_responses_stream_agent_items(
+            true,
+            false,
+            ClientResponseSemantic::Responses,
+            LoggerResponseWireSemantic::ResponsesJson,
+            Some(&ctx),
+        ));
+    }
+
+    #[test]
+    fn responses_stream_observer_ignores_cursor_codex_responses_chat_bridge() {
+        let ctx = crate::agent::context::AgentContext {
+            agent_id_external: Some("agent-1".to_string()),
+            run_id: Some("run-1".to_string()),
+            ..Default::default()
+        };
+
+        assert!(!super::should_observe_responses_stream_agent_items(
+            true,
+            true,
+            ClientResponseSemantic::Responses,
+            LoggerResponseWireSemantic::ChatCompletionsSse,
+            Some(&ctx),
+        ));
+    }
+
+    #[test]
+    fn observed_responses_stream_envelope_derives_step_id_and_parent() {
+        let ctx = crate::agent::context::AgentContext {
+            agent_id_external: Some("agent-1".to_string()),
+            run_id: Some("run-1".to_string()),
+            step_id: Some("parent-step-1".to_string()),
+            ..Default::default()
+        };
+        let observed = crate::agent::tool_observer::ObservedResponsesStreamItem {
+            kind: crate::agent::tool_observer::ObservedResponsesStreamItemKind::FunctionCall,
+            event_type: "tool.call.observed",
+            response_id: Some("resp_1".to_string()),
+            sequence: 7,
+            output_index: Some(2),
+            item_id: Some("fc_1".to_string()),
+            call_id: Some("call_1".to_string()),
+            name: Some("lookup_price".to_string()),
+            status: Some("completed".to_string()),
+            idempotency_key: "responses_stream:resp_1:2:fc_1".to_string(),
+            metadata: serde_json::json!({
+                "observer": "responses_stream_observer",
+                "source_event_type": "response.output_item.done"
+            }),
+        };
+
+        let envelope = super::observed_responses_stream_item_envelope(
+            &ctx,
+            &observed,
+            uuid::Uuid::nil(),
+            "openai",
+            "gpt-4.1",
+            "monitor",
+            Some("Test Agent"),
+            Some("registered"),
+            Some("self_reported"),
+        );
+
+        assert_eq!(
+            envelope.step_id.as_deref(),
+            Some(
+                "gwobs:responses:00000000-0000-0000-0000-000000000000:resp_1:\
+                 2:fc_1:tool_call_observed"
+            )
+        );
+        assert_eq!(envelope.parent_step_id.as_deref(), Some("parent-step-1"));
+        assert_eq!(envelope.sequence, Some(7));
+        assert_eq!(envelope.run_id.as_deref(), Some("run-1"));
+        assert_eq!(envelope.tool_call_id.as_deref(), Some("call_1"));
+        assert_eq!(
+            envelope.step_kind,
+            Some(crate::agent::context::AgentStepKind::ToolCall)
+        );
+        assert_eq!(
+            envelope.metadata["observer"].as_str(),
+            Some("responses_stream_observer")
+        );
+        assert_eq!(
+            envelope.metadata["source_event_type"].as_str(),
+            Some("response.output_item.done")
+        );
+        assert_eq!(envelope.metadata["provider"].as_str(), Some("openai"));
+        assert_eq!(envelope.metadata["model"].as_str(), Some("gpt-4.1"));
+        assert_eq!(envelope.metadata["response_id"].as_str(), Some("resp_1"));
+        assert_eq!(envelope.metadata["output_index"].as_u64(), Some(2));
+        assert_eq!(envelope.metadata["item_id"].as_str(), Some("fc_1"));
+        assert_eq!(envelope.metadata["call_id"].as_str(), Some("call_1"));
+    }
+
+    #[test]
+    fn responses_stream_observer_path_builds_observed_events_after_log_gating() {
+        let request_id =
+            uuid::Uuid::parse_str("01890f5a-52fd-7b9a-b51e-33a22f7b6f24").expect("uuid");
+        let ctx = crate::agent::context::AgentContext {
+            agent_id_external: Some("agent-1".to_string()),
+            run_id: Some("run-1".to_string()),
+            step_id: Some("parent-step-1".to_string()),
+            ..Default::default()
+        };
+        let body = bytes::Bytes::from_static(
+            br#"data: {"type":"response.output_item.done","response_id":"resp_1","output_index":0,"ignored_secret":"ALEPHANT_SECRET_TOKEN","item":{"id":"fc_1","type":"function_call","call_id":"call_123","name":"lookup_price","arguments":"{\"symbol\":\"AAPL\"}","status":"completed"}}
+
+data: [DONE]
+
+"#,
+        );
+
+        assert!(super::should_observe_responses_stream_agent_items(
+            true,
+            true,
+            crate::types::extensions::ClientResponseSemantic::Responses,
+            crate::types::extensions::LoggerResponseWireSemantic::ResponsesSse,
+            Some(&ctx),
+        ));
+
+        let observed_items = super::observe_responses_stream_agent_items(request_id, &body);
+        assert_eq!(observed_items.len(), 1);
+
+        let mut envelope = super::observed_responses_stream_item_envelope(
+            &ctx,
+            &observed_items[0],
+            request_id,
+            "openai",
+            "gpt-4.1",
+            "monitor",
+            Some("Test Agent"),
+            Some("registered"),
+            Some("auth_bound"),
+        );
+        let workspace_id = uuid::Uuid::new_v4();
+        let virtual_key_id = uuid::Uuid::new_v4();
+        super::apply_auth_scope_to_observed_tool_event(
+            &mut envelope,
+            workspace_id,
+            Some(virtual_key_id),
+        );
+
+        assert_eq!(envelope.event_type, "tool.call.observed");
+        assert_eq!(envelope.tool_call_id.as_deref(), Some("call_123"));
+        assert_eq!(envelope.workspace_id, workspace_id.to_string());
+        assert_eq!(envelope.virtual_key_id, Some(virtual_key_id));
+        assert!(
+            !envelope
+                .metadata
+                .to_string()
+                .contains("ALEPHANT_SECRET_TOKEN")
+        );
+    }
+
+    #[test]
+    fn should_observe_chat_completion_stream_requires_chat_sse_and_agent_context() {
+        let ctx = crate::agent::context::AgentContext {
+            agent_id_external: Some("agent-1".to_string()),
+            run_id: Some("run-1".to_string()),
+            ..Default::default()
+        };
+
+        assert!(super::should_observe_chat_completion_stream_tool_calls(
+            true,
+            true,
+            ClientResponseSemantic::ChatCompletions,
+            LoggerResponseWireSemantic::ChatCompletionsSse,
+            false,
+            false,
+            false,
+            Some(&ctx),
+        ));
+        assert!(!super::should_observe_chat_completion_stream_tool_calls(
+            false,
+            true,
+            ClientResponseSemantic::ChatCompletions,
+            LoggerResponseWireSemantic::ChatCompletionsSse,
+            false,
+            false,
+            false,
+            Some(&ctx),
+        ));
+        assert!(!super::should_observe_chat_completion_stream_tool_calls(
+            true,
+            false,
+            ClientResponseSemantic::ChatCompletions,
+            LoggerResponseWireSemantic::ChatCompletionsSse,
+            false,
+            false,
+            false,
+            Some(&ctx),
+        ));
+        assert!(!super::should_observe_chat_completion_stream_tool_calls(
+            true,
+            true,
+            ClientResponseSemantic::Responses,
+            LoggerResponseWireSemantic::ChatCompletionsSse,
+            false,
+            false,
+            false,
+            Some(&ctx),
+        ));
+        assert!(!super::should_observe_chat_completion_stream_tool_calls(
+            true,
+            true,
+            ClientResponseSemantic::ChatCompletions,
+            LoggerResponseWireSemantic::ResponsesSse,
+            false,
+            false,
+            false,
+            Some(&ctx),
+        ));
+        assert!(!super::should_observe_chat_completion_stream_tool_calls(
+            true,
+            true,
+            ClientResponseSemantic::ChatCompletions,
+            LoggerResponseWireSemantic::ChatCompletionsSse,
+            false,
+            false,
+            false,
+            None,
+        ));
+
+        let empty = crate::agent::context::AgentContext::default();
+        assert!(!super::should_observe_chat_completion_stream_tool_calls(
+            true,
+            true,
+            ClientResponseSemantic::ChatCompletions,
+            LoggerResponseWireSemantic::ChatCompletionsSse,
+            false,
+            false,
+            false,
+            Some(&empty),
+        ));
+    }
+
+    #[test]
+    fn chat_completion_stream_observer_ignores_responses_bridge_paths() {
+        let ctx = crate::agent::context::AgentContext {
+            agent_id_external: Some("agent-1".to_string()),
+            run_id: Some("run-1".to_string()),
+            ..Default::default()
+        };
+
+        for (
+            unified_responses_bridge_chat_completions_sse,
+            cursor_responses_via_chat_completions,
+            client_expects_responses_wire,
+        ) in [
+            (true, false, false),
+            (false, true, false),
+            (false, false, true),
+        ] {
+            assert!(!super::should_observe_chat_completion_stream_tool_calls(
+                true,
+                true,
+                ClientResponseSemantic::ChatCompletions,
+                LoggerResponseWireSemantic::ChatCompletionsSse,
+                unified_responses_bridge_chat_completions_sse,
+                cursor_responses_via_chat_completions,
+                client_expects_responses_wire,
+                Some(&ctx),
+            ));
+        }
+    }
+
+    #[test]
+    fn observed_chat_stream_envelope_uses_gateway_child_step_and_parent() {
+        let request_id =
+            uuid::Uuid::parse_str("01890f5a-52fd-7b9a-b51e-33a22f7b6f24").expect("uuid");
+        let agent_uid =
+            uuid::Uuid::parse_str("01890f5a-52fd-7b9a-b51e-33a22f7b6f25").expect("uuid");
+        let ctx = crate::agent::context::AgentContext {
+            agent_id_external: Some("support-bot".to_string()),
+            agent_uid: Some(agent_uid),
+            run_id: Some("run-1".to_string()),
+            step_id: Some("parent-step-1".to_string()),
+            handoff_id: Some("handoff-1".to_string()),
+            graph_node: Some("planner".to_string()),
+            trust_level: crate::agent::context::AgentTrustLevel::SelfReported,
+            ..Default::default()
+        };
+        let observed = crate::agent::tool_observer::ObservedChatCompletionStreamToolCall {
+            choice_index: 3,
+            tool_call_index: Some(2),
+            tool_call_id: Some("call_abc".to_string()),
+            tool_name: Some("lookup_price".to_string()),
+            tool_type: Some("function".to_string()),
+            arguments_summary: Some("{\"symbol\":\"AAPL\"}".to_string()),
+            arguments_hash: Some("sha256:abc".to_string()),
+            arguments_chars: Some(17),
+            arguments_valid_json: Some(true),
+            arguments_truncated: false,
+            chunk_count: 4,
+            finish_reason: Some("tool_calls".to_string()),
+            sse_done_seen: true,
+            aggregation_status: crate::agent::tool_observer::ChatStreamAggregationStatus::Complete,
+            idempotency_key: "chatcmpl:obs".to_string(),
+            metadata: serde_json::json!({
+                "observer": "chat_completions_stream_tool_observer",
+                "aggregation_status": "complete",
+                "choice_index": 3
+            }),
+        };
+
+        let envelope = super::observed_chat_stream_tool_call_envelope(
+            &ctx,
+            &observed,
+            request_id,
+            "openai",
+            "gpt-4.1",
+            "monitor",
+            Some("Registered Bot"),
+            Some("virtual_key_label"),
+            Some("auth_bound"),
+        );
+
+        assert_eq!(envelope.event_type, "tool.call.observed");
+        assert_eq!(
+            envelope.step_id.as_deref(),
+            Some(
+                "gwobs:chatcmpl:01890f5a-52fd-7b9a-b51e-33a22f7b6f24:3:\
+                 index_2:tool_call_observed"
+            )
+        );
+        assert_eq!(envelope.parent_step_id.as_deref(), Some("parent-step-1"));
+        assert_eq!(envelope.tool_call_id.as_deref(), Some("call_abc"));
+        assert_eq!(envelope.name.as_deref(), Some("lookup_price"));
+        assert_eq!(
+            envelope.step_kind,
+            Some(crate::agent::context::AgentStepKind::ToolCall)
+        );
+        assert_eq!(
+            envelope.step_source,
+            crate::agent::context::AgentStepSource::Gateway
+        );
+        assert_eq!(
+            envelope.step_confidence,
+            crate::agent::context::AgentConfidence::Medium
+        );
+        assert_eq!(
+            envelope.event_source_trust,
+            crate::agent::context::AgentEventSourceTrust::GatewayObserved
+        );
+        assert_eq!(envelope.agent_id_external.as_deref(), Some("support-bot"));
+        assert_eq!(envelope.agent_uid, Some(agent_uid));
+        assert_eq!(envelope.run_id.as_deref(), Some("run-1"));
+        assert_eq!(envelope.handoff_id.as_deref(), Some("handoff-1"));
+        assert_eq!(envelope.graph_node.as_deref(), Some("planner"));
+        assert_eq!(
+            envelope.trust_level,
+            crate::agent::context::AgentTrustLevel::SelfReported
+        );
+        assert_eq!(
+            envelope.alephant_agent_name.as_deref(),
+            Some("Registered Bot")
+        );
+        assert_eq!(
+            envelope.alephant_agent_name_source.as_deref(),
+            Some("virtual_key_label")
+        );
+        assert_eq!(
+            envelope.alephant_agent_trust_level.as_deref(),
+            Some("auth_bound")
+        );
+        assert_eq!(
+            envelope.metadata["observer"].as_str(),
+            Some("chat_completions_stream_tool_observer")
+        );
+        assert_eq!(envelope.metadata["provider"].as_str(), Some("openai"));
+        assert_eq!(envelope.metadata["model"].as_str(), Some("gpt-4.1"));
+        assert_eq!(
+            envelope.metadata["request_id"].as_str(),
+            Some("01890f5a-52fd-7b9a-b51e-33a22f7b6f24")
+        );
+        assert_eq!(envelope.metadata["choice_index"].as_u64(), Some(3));
+    }
+
+    #[test]
+    fn chat_stream_observer_path_builds_observed_events_after_log_gating() {
+        let request_id =
+            uuid::Uuid::parse_str("01890f5a-52fd-7b9a-b51e-33a22f7b6f24").expect("uuid");
+        let ctx = crate::agent::context::AgentContext {
+            agent_id_external: Some("support-bot".to_string()),
+            run_id: Some("run-1".to_string()),
+            step_id: Some("parent-step-1".to_string()),
+            ..Default::default()
+        };
+        let body = concat!(
+            "data: {\"id\":\"chatcmpl_1\",\"choices\":[{\"index\":0,\"delta\":\
+             {\"tool_calls\":[{\"index\":0,\"id\":\"call_123\",\"type\":\"\
+             function\",\"function\":{\"name\":\"lookup_price\",\"arguments\":\
+             \"\"}}]}}]}\n\n",
+            "data: {\"id\":\"chatcmpl_1\",\"choices\":[{\"index\":0,\"delta\":\
+             {\"tool_calls\":[{\"index\":0,\"function\":{\"arguments\":\"{\\\"\
+             \"}}]}}]}\n\n",
+            "data: {\"id\":\"chatcmpl_1\",\"choices\":[{\"index\":0,\"delta\":\
+             {\"tool_calls\":[{\"index\":0,\"function\":{\"arguments\":\"\
+             symbol\"}}]}}]}\n\n",
+            "data: {\"id\":\"chatcmpl_1\",\"choices\":[{\"index\":0,\"delta\":\
+             {\"tool_calls\":[{\"index\":0,\"function\":{\"arguments\":\"\\\":\
+             \\\"AAPL\\\"}\"}}]},\"finish_reason\":\"tool_calls\"}]}\n\n",
+            "data: [DONE]\n\n",
+        );
+
+        assert!(super::should_observe_chat_completion_stream_tool_calls(
+            true,
+            true,
+            ClientResponseSemantic::ChatCompletions,
+            LoggerResponseWireSemantic::ChatCompletionsSse,
+            false,
+            false,
+            false,
+            Some(&ctx),
+        ));
+
+        let observed =
+            super::observe_chat_completion_stream_tool_calls(request_id, body.as_bytes());
+        assert_eq!(observed.len(), 1);
+
+        let mut envelope = super::observed_chat_stream_tool_call_envelope(
+            &ctx,
+            &observed[0],
+            request_id,
+            "openai",
+            "gpt-4.1",
+            "monitor",
+            Some("Support Bot"),
+            Some("virtual_key_label"),
+            Some("auth_bound"),
+        );
+        super::apply_auth_scope_to_observed_tool_event(&mut envelope, uuid::Uuid::nil(), None);
+
+        assert_eq!(
+            envelope.metadata["observer"].as_str(),
+            Some("chat_completions_stream_tool_observer")
+        );
+        assert_eq!(
+            envelope.metadata["source_wire"].as_str(),
+            Some("chat_completions_sse")
+        );
+        assert_eq!(envelope.parent_step_id.as_deref(), Some("parent-step-1"));
+        assert_eq!(envelope.tool_call_id.as_deref(), Some("call_123"));
+        assert_eq!(envelope.name.as_deref(), Some("lookup_price"));
+    }
+
+    #[test]
+    fn observed_responses_reasoning_envelope_uses_reasoning_step_kind() {
+        let ctx = crate::agent::context::AgentContext {
+            agent_id_external: Some("agent-1".to_string()),
+            run_id: Some("run-1".to_string()),
+            ..Default::default()
+        };
+        let observed = crate::agent::tool_observer::ObservedResponsesItem {
+            kind: crate::agent::tool_observer::ObservedResponsesItemKind::Reasoning,
+            event_type: "llm.reasoning.observed",
+            response_id: Some("resp_1".to_string()),
+            output_index: Some(0),
+            item_id: Some("rs_1".to_string()),
+            call_id: None,
+            name: Some("Reasoning summary observed".to_string()),
+            status: None,
+            metadata: serde_json::json!({
+                "observer": "responses_nonstream_agent_observer",
+                "summary_count": 1
+            }),
+        };
+
+        let envelope = super::observed_responses_item_envelope(
+            &ctx,
+            &observed,
+            uuid::Uuid::nil(),
+            "openai",
+            "gpt-4.1",
+            "monitor",
+            Some("Test Agent"),
+            Some("registered"),
+            Some("self_reported"),
+        );
+
+        assert_eq!(envelope.event_type, "llm.reasoning.observed");
+        assert_eq!(
+            envelope.step_kind,
+            Some(crate::agent::context::AgentStepKind::Reasoning)
+        );
+        assert_eq!(envelope.name.as_deref(), Some("Reasoning summary observed"));
+        assert_eq!(
+            envelope.metadata["observer"].as_str(),
+            Some("responses_nonstream_agent_observer")
+        );
     }
 }
 
@@ -781,5 +1972,144 @@ mod agent_property_tests {
         assert_eq!(fields.alephant_agent_name_source, None);
         assert_eq!(fields.alephant_agent_trust_level, None);
         assert!(properties.is_empty());
+    }
+
+    #[test]
+    fn observed_tool_call_envelope_inherits_agent_context() {
+        let request_id = Uuid::parse_str("01890f5a-52fd-7b9a-b51e-33a22f7b6f24").expect("uuid");
+        let ctx = AgentContext {
+            agent_id_external: Some("support-bot".to_string()),
+            agent_name: Some("Support Bot".to_string()),
+            run_id: Some("run-1".to_string()),
+            step_id: Some("step-2".to_string()),
+            graph_node: Some("tool-planner".to_string()),
+            trust_level: AgentTrustLevel::SelfReported,
+            ..AgentContext::default()
+        };
+        let observed = crate::agent::tool_observer::ObservedToolCall {
+            tool_call_id: Some("call-1".to_string()),
+            tool_name: "zendesk.get_ticket".to_string(),
+            tool_type: Some("function".to_string()),
+            arguments_summary: Some("{\"ticket_id\":\"T-1\"}".to_string()),
+            choice_index: Some(0),
+        };
+
+        let envelope = super::observed_tool_call_envelope(
+            &ctx,
+            &observed,
+            request_id,
+            "openai",
+            "gpt-4o",
+            "audit",
+            Some("Registered Bot"),
+            Some("virtual_key_label"),
+            Some("auth_bound"),
+        );
+
+        assert_eq!(envelope.event_type, "tool.call.observed");
+        assert_eq!(envelope.agent_id_external.as_deref(), Some("support-bot"));
+        assert_eq!(envelope.run_id.as_deref(), Some("run-1"));
+        assert_eq!(envelope.step_id.as_deref(), Some("step-2"));
+        assert_eq!(envelope.tool_call_id.as_deref(), Some("call-1"));
+        assert_eq!(envelope.name.as_deref(), Some("zendesk.get_ticket"));
+        assert_eq!(envelope.step_kind, Some(AgentStepKind::ToolCall));
+        assert_eq!(
+            envelope.event_source_trust,
+            crate::agent::context::AgentEventSourceTrust::GatewayObserved
+        );
+        assert_eq!(
+            envelope.metadata["observer"],
+            "chat_completions_tool_observer"
+        );
+        assert_eq!(envelope.metadata["provider"], "openai");
+        assert_eq!(envelope.metadata["model"], "gpt-4o");
+        assert_eq!(envelope.metadata["request_id"], request_id.to_string());
+        assert_eq!(envelope.metadata["tool_type"], "function");
+        assert_eq!(
+            envelope.metadata["arguments_summary"],
+            "{\"ticket_id\":\"T-1\"}"
+        );
+        assert_eq!(
+            envelope.alephant_agent_name.as_deref(),
+            Some("Registered Bot")
+        );
+    }
+
+    #[test]
+    fn should_observe_tool_calls_requires_agent_enabled_context_and_non_stream() {
+        let ctx = AgentContext {
+            run_id: Some("run-1".to_string()),
+            ..AgentContext::default()
+        };
+
+        assert!(super::should_observe_chat_completion_tool_calls(
+            true,
+            false,
+            crate::types::extensions::ClientResponseSemantic::ChatCompletions,
+            Some(&ctx),
+        ));
+        assert!(!super::should_observe_chat_completion_tool_calls(
+            false,
+            false,
+            crate::types::extensions::ClientResponseSemantic::ChatCompletions,
+            Some(&ctx),
+        ));
+        assert!(!super::should_observe_chat_completion_tool_calls(
+            true,
+            true,
+            crate::types::extensions::ClientResponseSemantic::ChatCompletions,
+            Some(&ctx),
+        ));
+        assert!(!super::should_observe_chat_completion_tool_calls(
+            true,
+            false,
+            crate::types::extensions::ClientResponseSemantic::ChatCompletions,
+            None,
+        ));
+        assert!(!super::should_observe_chat_completion_tool_calls(
+            true,
+            false,
+            crate::types::extensions::ClientResponseSemantic::Responses,
+            Some(&ctx),
+        ));
+
+        let empty = AgentContext::default();
+        assert!(!super::should_observe_chat_completion_tool_calls(
+            true,
+            false,
+            crate::types::extensions::ClientResponseSemantic::ChatCompletions,
+            Some(&empty),
+        ));
+    }
+
+    #[test]
+    fn observed_tool_call_envelope_fills_auth_scoped_fields_before_send() {
+        let request_id = Uuid::new_v4();
+        let workspace_id = Uuid::new_v4();
+        let virtual_key_id = Uuid::new_v4();
+        let ctx = AgentContext {
+            run_id: Some("run-1".to_string()),
+            ..AgentContext::default()
+        };
+        let observed = crate::agent::tool_observer::ObservedToolCall {
+            tool_call_id: Some("call-1".to_string()),
+            tool_name: "search".to_string(),
+            tool_type: Some("function".to_string()),
+            arguments_summary: None,
+            choice_index: Some(0),
+        };
+
+        let mut envelope = super::observed_tool_call_envelope(
+            &ctx, &observed, request_id, "openai", "gpt-4o", "audit", None, None, None,
+        );
+
+        super::apply_auth_scope_to_observed_tool_event(
+            &mut envelope,
+            workspace_id,
+            Some(virtual_key_id),
+        );
+
+        assert_eq!(envelope.workspace_id, workspace_id.to_string());
+        assert_eq!(envelope.virtual_key_id, Some(virtual_key_id));
     }
 }

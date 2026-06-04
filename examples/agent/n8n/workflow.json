@@ -1,0 +1,110 @@
+{
+  "name": "Alephant Agent Gateway n8n Support Demo",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "manual-trigger",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -640,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ ($env.GATEWAY_BASE || $env.ALEPHANT_GATEWAY_URL || 'http://127.0.0.1:8080').replace(/\\/$/, '') + '/v1/chat/completions' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ 'Bearer ' + ($env.ALEPHANT_API_KEY || $env.ALEPHANT_CONTROL_OPENROUTER_API_KEY) }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\"model\": $env.ALEPHANT_MODEL || \"openai/gpt-4o-mini\", \"messages\": [{\"role\": \"system\", \"content\": \"You are an n8n support triage agent. Think briefly, use the supplied policy context, and return a concise operator-facing next action.\"}, {\"role\": \"user\", \"content\": \"Plan a refund risk escalation response. Policy context: refund policy requires account standing, payment state, and concise next action.\"}], \"temperature\": 0.2}"
+      },
+      "id": "call-gateway-llm",
+      "name": "Call Gateway LLM",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -300,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ ($env.GATEWAY_BASE || $env.ALEPHANT_GATEWAY_URL || 'http://127.0.0.1:8080').replace(/\\/$/, '') + '/v1/agent/events' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ 'Bearer ' + ($env.ALEPHANT_API_KEY || $env.ALEPHANT_CONTROL_OPENROUTER_API_KEY) }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ source: 'n8n', events: [{ version: '2026-05-27', event_id: 'evt_n8n_execution_' + $execution.id, type: 'execution.started', agent_id: $env.ALEPHANT_AGENT_ID || 'n8n-demo-agent', agent_name: $env.ALEPHANT_AGENT_NAME || 'n8n Workflow Demo Agent', run_id: 'exec_' + $execution.id, timestamp: new Date().toISOString(), workflowId: $workflow.id || 'wf_support_triage', executionId: String($execution.id), metadata: { workflow_name: 'Alephant Agent Gateway n8n Support Demo' } }, { version: '2026-05-27', event_id: 'evt_n8n_tool_started_' + $execution.id, type: 'node.started', agent_id: $env.ALEPHANT_AGENT_ID || 'n8n-demo-agent', agent_name: $env.ALEPHANT_AGENT_NAME || 'n8n Workflow Demo Agent', run_id: 'exec_' + $execution.id, timestamp: new Date().toISOString(), workflowId: $workflow.id || 'wf_support_triage', executionId: String($execution.id), nodeId: 'call-gateway-llm', nodeName: 'Call Gateway LLM', nodeType: 'n8n-nodes-langchain.lmChatOpenAi', metadata: { tool_name: 'gateway.chat_completions', model: $env.ALEPHANT_MODEL || 'openai/gpt-4o-mini' } }, { version: '2026-05-27', event_id: 'evt_n8n_tool_finished_' + $execution.id, type: 'node.finished', agent_id: $env.ALEPHANT_AGENT_ID || 'n8n-demo-agent', agent_name: $env.ALEPHANT_AGENT_NAME || 'n8n Workflow Demo Agent', run_id: 'exec_' + $execution.id, timestamp: new Date().toISOString(), workflowId: $workflow.id || 'wf_support_triage', executionId: String($execution.id), nodeId: 'call-gateway-llm', nodeName: 'Call Gateway LLM', nodeType: 'n8n-nodes-langchain.lmChatOpenAi', metadata: { result_preview: ($json.choices?.[0]?.message?.content || '').slice(0, 240) } }] }) }}"
+      },
+      "id": "emit-alephant-agent-events",
+      "name": "Emit Alephant Agent Events",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        60,
+        0
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Call Gateway LLM",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Gateway LLM": {
+      "main": [
+        [
+          {
+            "node": "Emit Alephant Agent Events",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "alephant-agent-gateway-n8n-demo",
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "tags": []
+}

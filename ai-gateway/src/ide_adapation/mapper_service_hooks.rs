@@ -29,7 +29,10 @@ use crate::{
     },
     middleware::mapper::registry::EndpointConverterRegistry,
     types::{
-        extensions::{MapperContext, NativeSemanticPassthrough},
+        extensions::{
+            ClientResponseSemantic, LoggerResponseWireSemantic, MapperContext,
+            NativeSemanticPassthrough,
+        },
         model_id::ModelId,
         response::Response,
     },
@@ -147,6 +150,12 @@ pub(crate) fn mapper_context_native_semantic_passthrough(
             });
             Ok(MapperContext {
                 is_stream,
+                client_response_semantic: ClientResponseSemantic::ChatCompletions,
+                logger_response_wire_semantic: if is_stream {
+                    LoggerResponseWireSemantic::ChatCompletionsSse
+                } else {
+                    LoggerResponseWireSemantic::ChatCompletionsJson
+                },
                 model: Some(model),
                 anthropic_openai_usage,
                 unified_responses_bridge_chat_completions_sse: false,
@@ -165,6 +174,12 @@ pub(crate) fn mapper_context_native_semantic_passthrough(
                 .map_err(InternalError::MapperError)?;
             Ok(MapperContext {
                 is_stream: fields.stream,
+                client_response_semantic: ClientResponseSemantic::Responses,
+                logger_response_wire_semantic: if fields.stream {
+                    LoggerResponseWireSemantic::ResponsesSse
+                } else {
+                    LoggerResponseWireSemantic::ResponsesJson
+                },
                 model: Some(model),
                 anthropic_openai_usage: None,
                 unified_responses_bridge_chat_completions_sse: false,
@@ -187,6 +202,8 @@ pub(crate) fn mapper_context_native_semantic_passthrough(
             });
             Ok(MapperContext {
                 is_stream,
+                client_response_semantic: ClientResponseSemantic::Other,
+                logger_response_wire_semantic: LoggerResponseWireSemantic::Other,
                 model: Some(model),
                 anthropic_openai_usage,
                 unified_responses_bridge_chat_completions_sse: false,
@@ -370,6 +387,7 @@ mod tests {
     use serde_json::json;
 
     use super::*;
+    use crate::types::extensions::LoggerResponseWireSemantic;
 
     #[test]
     fn native_semantic_passthrough_context_supports_responses() {
@@ -391,6 +409,10 @@ mod tests {
         assert!(!ctx.is_stream);
         assert!(ctx.native_semantic_passthrough);
         assert!(!ctx.cursor_responses_via_chat_completions);
+        assert_eq!(
+            ctx.client_response_semantic,
+            ClientResponseSemantic::Responses
+        );
     }
 
     #[test]
@@ -413,5 +435,40 @@ mod tests {
 
         assert!(ctx.is_stream);
         assert!(ctx.native_semantic_passthrough);
+        assert_eq!(
+            ctx.client_response_semantic,
+            ClientResponseSemantic::Responses
+        );
+        assert_eq!(
+            ctx.logger_response_wire_semantic,
+            LoggerResponseWireSemantic::ResponsesSse
+        );
+    }
+
+    #[test]
+    fn native_semantic_passthrough_context_marks_stream_chat_completions() {
+        let body = Bytes::from(
+            serde_json::to_vec(&json!({
+                "model": "gpt-4o-mini",
+                "messages": [{ "role": "user", "content": "hi" }],
+                "stream": true
+            }))
+            .unwrap(),
+        );
+        let ctx = mapper_context_native_semantic_passthrough(
+            &ApiEndpoint::OpenAI(OpenAI::chat_completions()),
+            &ApiEndpoint::OpenAI(OpenAI::chat_completions()),
+            &body,
+        )
+        .unwrap();
+
+        assert_eq!(
+            ctx.client_response_semantic,
+            ClientResponseSemantic::ChatCompletions
+        );
+        assert_eq!(
+            ctx.logger_response_wire_semantic,
+            LoggerResponseWireSemantic::ChatCompletionsSse
+        );
     }
 }

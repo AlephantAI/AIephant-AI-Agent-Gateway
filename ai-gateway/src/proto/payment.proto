@@ -47,6 +47,17 @@ message Money {
   string network = 3;
 }
 
+message PaymentAcceptSummary {
+  string scheme = 1;
+  string network = 2;
+  string asset = 3;
+  string amount = 4;
+  string pay_to = 5;
+  string resource = 6;
+  string facilitator = 7;
+  string accept_hash = 8;
+}
+
 message EndpointPaymentSnapshot {
   string workspace_id = 1;
   string endpoint_id = 2;
@@ -83,14 +94,10 @@ message GetPaymentRequirementsRequest {
 message GetPaymentRequirementsResponse {
   string activity_id = 1;
   string payment_required_header = 2;
-  string scheme = 3;
-  string resource = 4;
-  Money price = 5;
-  string pay_to = 6;
-  string facilitator = 7;
-  google.protobuf.Timestamp expires_at = 8;
-  string failure_reason = 9;
-  bool success = 10;
+  google.protobuf.Timestamp expires_at = 3;
+  string failure_reason = 4;
+  bool success = 5;
+  repeated PaymentAcceptSummary accepts = 6;
 }
 
 message VerifyPaymentRequest {
@@ -110,6 +117,8 @@ message VerifyPaymentResponse {
   string failure_reason = 7;
   bool retryable = 8;
   bool success = 9;
+  string selected_network = 10;
+  string selected_accept_hash = 11;
 }
 
 message VerifyAndSettlePaymentRequest {
@@ -137,6 +146,8 @@ message VerifyAndSettlePaymentResponse {
   string failure_reason = 15;
   bool retryable = 16;
   bool success = 17;
+  string selected_network = 18;
+  string selected_accept_hash = 19;
 }
 
 message SettlePaymentRequest {

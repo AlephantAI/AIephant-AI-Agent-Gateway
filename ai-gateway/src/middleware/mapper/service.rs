@@ -27,7 +27,8 @@ use crate::{
     },
     types::{
         extensions::{
-            MapperContext, MapperProfileContext, MasterKeyUnifiedModelPassthrough, RequestContext,
+            ClientResponseSemantic, LoggerResponseWireSemantic, MapperContext,
+            MapperProfileContext, MasterKeyUnifiedModelPassthrough, RequestContext,
             UnifiedChatCompletionsResponsesBridge, UnifiedModelBodyPassthrough,
             UnifiedModelPolicyChecked,
         },
@@ -417,6 +418,11 @@ async fn map_request(
     };
     mapper_ctx.unified_responses_bridge_chat_completions_sse =
         unified_responses_bridge_chat_completions_sse;
+    if unified_responses_bridge_chat_completions_sse && !mapper_ctx.client_expects_responses_wire {
+        mapper_ctx.client_response_semantic = ClientResponseSemantic::ChatCompletions;
+    } else if mapper_ctx.cursor_responses_via_chat_completions {
+        mapper_ctx.client_response_semantic = ClientResponseSemantic::Responses;
+    }
     let base_path = upstream_endpoint.path(mapper_ctx.model.as_ref(), mapper_ctx.is_stream)?;
 
     let target_path_and_query = if let Some(query_params) = target_path_and_query.query() {
@@ -508,6 +514,12 @@ fn master_key_unified_passthrough_chat_completions(
         target_bytes,
         MapperContext {
             is_stream,
+            client_response_semantic: ClientResponseSemantic::ChatCompletions,
+            logger_response_wire_semantic: if is_stream {
+                LoggerResponseWireSemantic::ChatCompletionsSse
+            } else {
+                LoggerResponseWireSemantic::ChatCompletionsJson
+            },
             model: Some(model),
             anthropic_openai_usage,
             unified_responses_bridge_chat_completions_sse: false,
@@ -726,7 +738,9 @@ fn emit_mapper_policy_deny_log(
         session_headers::parse_session_headers,
         types::{
             body::{BodyReader, TfftTrigger},
-            extensions::{MapperContext, PromptHeaderForRequestLog, RequestContext},
+            extensions::{
+                ClientResponseSemantic, MapperContext, PromptHeaderForRequestLog, RequestContext,
+            },
             provider::InferenceProvider,
             router::RouterId,
         },
@@ -790,6 +804,8 @@ fn emit_mapper_policy_deny_log(
 
     let mapper_ctx = MapperContext {
         is_stream: false,
+        client_response_semantic: ClientResponseSemantic::Other,
+        logger_response_wire_semantic: LoggerResponseWireSemantic::Other,
         model: None,
         anthropic_openai_usage: None,
         unified_responses_bridge_chat_completions_sse: false,
@@ -1124,8 +1140,10 @@ mod tests {
         },
         types::{
             extensions::{
-                MapperContext, MapperProfileContext, MasterKeyUnifiedModelPassthrough,
-                PromptCompressionTokenPair, UnifiedModelBodyPassthrough, UnifiedModelPolicyChecked,
+                ClientResponseSemantic, MapperContext, MapperProfileContext,
+                MasterKeyUnifiedModelPassthrough, PromptCompressionTokenPair,
+                UnifiedChatCompletionsResponsesBridge, UnifiedModelBodyPassthrough,
+                UnifiedModelPolicyChecked,
             },
             provider::InferenceProvider,
         },
@@ -1342,6 +1360,9 @@ mod tests {
             .expect("response should build");
         resp.extensions_mut().insert(MapperContext {
             is_stream: true,
+            client_response_semantic: ClientResponseSemantic::Other,
+            logger_response_wire_semantic:
+                crate::types::extensions::LoggerResponseWireSemantic::Other,
             model: None,
             anthropic_openai_usage: None,
             unified_responses_bridge_chat_completions_sse: false,
@@ -1365,6 +1386,45 @@ mod tests {
         assert!(body_text.contains("data: {"));
         assert!(body_text.ends_with("data: [DONE]\n\n"));
         assert_eq!(body_text.matches("[DONE]").count(), 1);
+    }
+
+    #[tokio::test]
+    async fn unified_responses_bridge_marks_chat_completions_client_semantic() {
+        let app = build_test_app(Config::default()).await.expect("build app");
+        let model_mapper = ModelMapper::new(app.state.clone());
+        let registry = EndpointConverterRegistry::new(&model_mapper);
+        let body =
+            Bytes::from_static(br#"{"model":"openai/gpt-4o-mini","input":"hi","stream":false}"#);
+        let mut request = http::Request::builder()
+            .method(http::Method::POST)
+            .uri("http://router.alephant.test/responses")
+            .body(axum_core::body::Body::from(body))
+            .expect("request should build");
+        request.extensions_mut().insert(UnifiedModelPolicyChecked);
+        request
+            .extensions_mut()
+            .insert(UnifiedChatCompletionsResponsesBridge);
+
+        let mapped = super::map_request(
+            app.state.clone(),
+            registry,
+            ApiEndpoint::OpenAI(OpenAI::responses()),
+            ApiEndpoint::OpenAI(OpenAI::responses()),
+            &PathAndQuery::from_static("responses"),
+            request,
+        )
+        .await
+        .expect("map request should succeed");
+
+        let ctx = mapped
+            .extensions()
+            .get::<MapperContext>()
+            .expect("mapped request should include mapper context");
+        assert!(ctx.unified_responses_bridge_chat_completions_sse);
+        assert_eq!(
+            ctx.client_response_semantic,
+            ClientResponseSemantic::ChatCompletions
+        );
     }
 
     #[tokio::test]

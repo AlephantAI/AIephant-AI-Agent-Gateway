@@ -275,10 +275,21 @@ async fn x402_api_route_accepts_http_api_endpoint_type() {
 
     let response = app.ready().await.unwrap().call(request).await.unwrap();
     let status = response.status();
+    let payment_required_header = response
+        .headers()
+        .get("payment-required")
+        .and_then(|value| value.to_str().ok())
+        .map(str::to_owned);
     let body = response_body_json(response).await;
 
     assert_eq!(status, StatusCode::PAYMENT_REQUIRED);
+    assert_eq!(payment_required_header.as_deref(), Some("payment-required"));
     assert_eq!(body["error"]["code"], "x402_payment_required");
+    let object = body.as_object().expect("x402 body should be a JSON object");
+    assert_eq!(object.len(), 1);
+    assert!(object.contains_key("error"));
+    assert!(body.get("paymentRequirements").is_none());
+    assert!(body.get("accepts").is_none());
     assert_eq!(payment_calls.load(Ordering::SeqCst), 1);
     assert_eq!(upstream.requests.lock().await.len(), 0);
 }
@@ -651,6 +662,16 @@ impl X402PaymentService for TestPaymentService {
             activity_id: "activity-1".to_string(),
             payment_required_header: "payment-required".to_string(),
             success: true,
+            accepts: vec![ai_gateway::payment_proto::PaymentAcceptSummary {
+                scheme: "exact".to_string(),
+                network: "base".to_string(),
+                asset: "USDC".to_string(),
+                amount: "1.00000000".to_string(),
+                pay_to: "0xtesttesttesttesttesttesttest".to_string(),
+                resource: "https://target.test/resource".to_string(),
+                facilitator: "coinbase".to_string(),
+                accept_hash: "accept-hash".to_string(),
+            }],
             ..Default::default()
         }))
     }

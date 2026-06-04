@@ -10,7 +10,6 @@ use axum_core::body::Body;
 use bytes::Bytes;
 use http::{HeaderMap, HeaderName, HeaderValue, Method, Response, StatusCode, header};
 use http_body_util::{BodyExt, LengthLimitError, Limited};
-use serde_json::{Map, Value};
 use tonic::{Request as GrpcRequest, Response as GrpcResponse, metadata::MetadataMap};
 use tower::Service;
 use uuid::Uuid;
@@ -188,15 +187,25 @@ fn apply_payment_requirements_log_fields(
     response: &GetPaymentRequirementsResponse,
 ) {
     message.activity_id = uuid_or_zero(&response.activity_id);
-    let (amount, asset, network) = money_fields(response.price.as_ref());
-    message.gross_revenue = parse_money_amount(amount);
-    message.asset = asset.to_string();
-    message.network = network.to_string();
-    if !response.pay_to.is_empty() {
-        message.seller_receive_wallet_address = response.pay_to.clone();
-    }
-    if !response.facilitator.is_empty() {
-        message.facilitator = response.facilitator.clone();
+    message.gross_revenue = 0.0;
+    message.asset.clear();
+    message.network.clear();
+    message.seller_receive_wallet_address.clear();
+    message.facilitator.clear();
+    if let Some(accept) = response.accepts.first() {
+        message.gross_revenue = parse_money_amount(&accept.amount);
+        if !accept.asset.is_empty() {
+            message.asset = accept.asset.clone();
+        }
+        if !accept.network.is_empty() {
+            message.network = accept.network.clone();
+        }
+        if !accept.pay_to.is_empty() {
+            message.seller_receive_wallet_address = accept.pay_to.clone();
+        }
+        if !accept.facilitator.is_empty() {
+            message.facilitator = accept.facilitator.clone();
+        }
     }
     if !response.success {
         apply_error_log_fields(
@@ -462,10 +471,14 @@ fn log_paid_upstream_request(
             upstream_url = %url,
             body_size = body.len(),
             body_hash = %hash_body(body),
-            body = ?body,
+            body = %x402_upstream_body_for_debug_log(body),
             "x402 paid upstream request body ({DEBUG_BODY_ENV})",
         );
     }
+}
+
+fn x402_upstream_body_for_debug_log(body: &Bytes) -> std::borrow::Cow<'_, str> {
+    String::from_utf8_lossy(body)
 }
 
 #[allow(clippy::too_many_lines)]
@@ -1476,47 +1489,15 @@ fn money_fields(price: Option<&Money>) -> (&str, &str, &str) {
 }
 
 pub(crate) fn build_payment_required_body(response: &GetPaymentRequirementsResponse) -> Vec<u8> {
-    let (amount, asset, network) = money_fields(response.price.as_ref());
-    let mut requirements = Map::new();
-    requirements.insert("scheme".to_string(), Value::String(response.scheme.clone()));
-    requirements.insert("network".to_string(), Value::String(network.to_string()));
-    requirements.insert("amount".to_string(), Value::String(amount.to_string()));
-    requirements.insert("asset".to_string(), Value::String(asset.to_string()));
-    requirements.insert("payTo".to_string(), Value::String(response.pay_to.clone()));
-    insert_nonempty(
-        &mut requirements,
-        "facilitator",
-        response.facilitator.clone(),
-    );
-    insert_nonempty(&mut requirements, "resource", response.resource.clone());
-
-    if let Some(expires_at) = &response.expires_at
-        && let Some(value) = timestamp_to_rfc3339(expires_at)
-    {
-        requirements.insert("expiresAt".to_string(), Value::String(value));
-    }
-
-    let body = serde_json::json!({
-        "error": {
-            "type": PAYMENT_REQUIRED_ERROR_TYPE,
-            "code": "x402_payment_required",
-            "message": payment_required_error_message(response)
+    let body = ErrorResponse {
+        error: ErrorDetails {
+            message: payment_required_error_message(response),
+            r#type: Some(PAYMENT_REQUIRED_ERROR_TYPE.to_string()),
+            param: None,
+            code: Some("x402_payment_required".to_string()),
         },
-        "paymentRequirements": Value::Object(requirements),
-    });
+    };
     serde_json::to_vec(&body).unwrap_or_default()
-}
-
-fn timestamp_to_rfc3339(timestamp: &crate::google::protobuf::Timestamp) -> Option<String> {
-    let nanos = u32::try_from(timestamp.nanos).ok()?;
-    chrono::DateTime::<chrono::Utc>::from_timestamp(timestamp.seconds, nanos)
-        .map(|datetime| datetime.to_rfc3339())
-}
-
-fn insert_nonempty(map: &mut Map<String, Value>, key: &str, value: String) {
-    if !value.is_empty() {
-        map.insert(key.to_string(), Value::String(value));
-    }
 }
 
 fn payment_required_response(response: &GetPaymentRequirementsResponse) -> GatewayResponse {
@@ -1676,18 +1657,20 @@ mod tests {
             log::{X402LogStage, X402PaymentLogMessage, hash_sensitive},
             service::{
                 RequestBodyReadError, X402LogContext, apply_activity_log_fields,
-                apply_verify_and_settle_log_fields, body_schema_validation_error_code,
-                body_schema_validation_error_message, body_schema_validation_error_response,
-                build_payment_required_body, build_record_service_result_request,
-                build_x402_log_message, collect_limited_request_body,
-                content_length_exceeds_policy, debug_env_flag_value_enabled,
-                endpoint_payment_snapshot, handle_payment_requirements, json_error_response,
-                payment_error_response, payment_grpc_log_label, payment_grpc_request_with_auth,
+                apply_payment_requirements_log_fields, apply_verify_and_settle_log_fields,
+                body_schema_validation_error_code, body_schema_validation_error_message,
+                body_schema_validation_error_response, build_payment_required_body,
+                build_record_service_result_request, build_x402_log_message,
+                collect_limited_request_body, content_length_exceeds_policy,
+                debug_env_flag_value_enabled, endpoint_payment_snapshot,
+                handle_payment_requirements, json_error_response, payment_error_response,
+                payment_grpc_log_label, payment_grpc_request_with_auth,
                 payment_required_error_message, payment_required_response,
                 prepare_paid_upstream_request, record_service_result_succeeded,
                 redacted_payment_grpc_metadata, response_timeout, safe_policy_headers,
                 upstream_response, verify_and_settle_payment_succeeded,
                 with_on_response_body_completion, x402_endpoint_type_matches_route,
+                x402_upstream_body_for_debug_log,
             },
             types::{
                 X402EndpointSnapshot, X402OriginAuthSnapshot, X402PolicySnapshot,
@@ -1837,6 +1820,16 @@ mod tests {
             .await
             .expect("body under limit");
         assert_eq!(body, Bytes::from_static(b"ok"));
+    }
+
+    #[test]
+    fn x402_upstream_body_debug_log_prints_utf8_text() {
+        let body = Bytes::from_static("{\"message\":\"给我一份 x402 的使用指南\"}".as_bytes());
+
+        assert_eq!(
+            x402_upstream_body_for_debug_log(&body),
+            "{\"message\":\"给我一份 x402 的使用指南\"}"
+        );
     }
 
     #[tokio::test]
@@ -2161,13 +2154,16 @@ mod tests {
     async fn payment_required_response_sets_status_content_type_and_header() {
         let response = payment_required_response(&GetPaymentRequirementsResponse {
             payment_required_header: "x402 header value".to_string(),
-            scheme: "exact".to_string(),
-            price: Some(crate::payment_proto::Money {
+            accepts: vec![crate::payment_proto::PaymentAcceptSummary {
+                scheme: "exact".to_string(),
+                network: "base".to_string(),
                 amount: "0.25".to_string(),
                 asset: "USDC".to_string(),
-                network: "base".to_string(),
-            }),
-            pay_to: "0xabc".to_string(),
+                pay_to: "0xabc".to_string(),
+                resource: String::new(),
+                facilitator: String::new(),
+                accept_hash: String::new(),
+            }],
             success: true,
             ..Default::default()
         });
@@ -2197,6 +2193,7 @@ mod tests {
         let value: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(value["error"]["type"], "payment_required");
         assert_eq!(value["error"]["code"], "x402_payment_required");
+        assert!(value.get("paymentRequirements").is_none());
     }
 
     #[tokio::test]
@@ -2264,44 +2261,40 @@ mod tests {
     }
 
     #[test]
-    fn payment_required_body_omits_empty_optional_fields() {
-        let mut response = crate::payment_proto::GetPaymentRequirementsResponse {
+    fn payment_required_body_contains_only_error_object() {
+        let response = crate::payment_proto::GetPaymentRequirementsResponse {
             activity_id: "activity-1".to_string(),
             payment_required_header: "header-value".to_string(),
-            scheme: "exact".to_string(),
-            resource: String::new(),
-            price: Some(crate::payment_proto::Money {
-                amount: "0.25".to_string(),
-                asset: "USDC".to_string(),
-                network: "base".to_string(),
+            expires_at: Some(crate::google::protobuf::Timestamp {
+                seconds: 1_760_000_000,
+                nanos: 0,
             }),
-            pay_to: "0xabc".to_string(),
-            facilitator: String::new(),
-            expires_at: None,
-            failure_reason: String::new(),
             success: true,
+            accepts: vec![crate::payment_proto::PaymentAcceptSummary {
+                scheme: "exact".to_string(),
+                network: "base".to_string(),
+                asset: "USDC".to_string(),
+                amount: "0.25".to_string(),
+                pay_to: "0xabc".to_string(),
+                resource: "https://api.example.com/weather".to_string(),
+                facilitator: "facilitator-a".to_string(),
+                accept_hash: "accept-hash".to_string(),
+            }],
+            ..Default::default()
         };
 
         let body = build_payment_required_body(&response);
         let value: serde_json::Value = serde_json::from_slice(&body).unwrap();
 
-        assert_eq!(value["paymentRequirements"]["scheme"], "exact");
-        assert_eq!(value["paymentRequirements"]["amount"], "0.25");
-        assert_eq!(value["paymentRequirements"]["asset"], "USDC");
-        assert_eq!(value["paymentRequirements"]["network"], "base");
-        assert_eq!(value["paymentRequirements"]["payTo"], "0xabc");
-        assert!(value["paymentRequirements"].get("resource").is_none());
-        assert!(value["paymentRequirements"].get("facilitator").is_none());
-
-        response.resource = "https://api.example.com/weather".to_string();
-        response.facilitator = "facilitator-a".to_string();
-        let body = build_payment_required_body(&response);
-        let value: serde_json::Value = serde_json::from_slice(&body).unwrap();
-        assert_eq!(
-            value["paymentRequirements"]["resource"],
-            "https://api.example.com/weather"
-        );
-        assert_eq!(value["paymentRequirements"]["facilitator"], "facilitator-a");
+        assert_eq!(value["error"]["type"], "payment_required");
+        assert_eq!(value["error"]["code"], "x402_payment_required");
+        assert_eq!(value["error"]["message"], "Payment required");
+        assert!(value.get("paymentRequirements").is_none());
+        assert!(value.get("accepts").is_none());
+        let serialized = serde_json::to_string(&value).unwrap();
+        assert!(!serialized.contains("payTo"));
+        assert!(!serialized.contains("acceptHash"));
+        assert!(!serialized.contains("facilitator-a"));
     }
 
     #[test]
@@ -2325,6 +2318,76 @@ mod tests {
             }),
             "x402 payment requirements failed"
         );
+    }
+
+    #[test]
+    fn payment_requirements_log_fields_use_first_accept_summary() {
+        let mut message = X402PaymentLogMessage::new(X402LogStage::PaymentRequired);
+
+        apply_payment_requirements_log_fields(
+            &mut message,
+            &GetPaymentRequirementsResponse {
+                activity_id: "55555555-5555-5555-5555-555555555555".to_string(),
+                success: true,
+                accepts: vec![
+                    crate::payment_proto::PaymentAcceptSummary {
+                        scheme: "exact".to_string(),
+                        network: "base".to_string(),
+                        asset: "USDC".to_string(),
+                        amount: "1.25".to_string(),
+                        pay_to: "0xseller".to_string(),
+                        resource: "https://api.example.com/weather".to_string(),
+                        facilitator: "coinbase".to_string(),
+                        accept_hash: "accept-1".to_string(),
+                    },
+                    crate::payment_proto::PaymentAcceptSummary {
+                        scheme: "exact".to_string(),
+                        network: "ethereum".to_string(),
+                        asset: "USDC".to_string(),
+                        amount: "9.99".to_string(),
+                        pay_to: "0xother".to_string(),
+                        resource: "https://api.example.com/other".to_string(),
+                        facilitator: "other".to_string(),
+                        accept_hash: "accept-2".to_string(),
+                    },
+                ],
+                ..Default::default()
+            },
+        );
+
+        assert_eq!(message.activity_id, "55555555-5555-5555-5555-555555555555");
+        assert_eq!(message.gross_revenue, 1.25);
+        assert_eq!(message.asset, "USDC");
+        assert_eq!(message.network, "base");
+        assert_eq!(message.seller_receive_wallet_address, "0xseller");
+        assert_eq!(message.facilitator, "coinbase");
+    }
+
+    #[test]
+    fn payment_requirements_log_fields_tolerate_empty_accepts() {
+        let mut message = X402PaymentLogMessage::new(X402LogStage::PaymentRequired);
+        message.gross_revenue = 9.99;
+        message.asset = "USDC".to_string();
+        message.network = "base".to_string();
+        message.seller_receive_wallet_address = "0xsnapshot".to_string();
+        message.facilitator = "snapshot-facilitator".to_string();
+
+        apply_payment_requirements_log_fields(
+            &mut message,
+            &GetPaymentRequirementsResponse {
+                activity_id: "55555555-5555-5555-5555-555555555555".to_string(),
+                success: true,
+                accepts: vec![],
+                ..Default::default()
+            },
+        );
+
+        assert_eq!(message.activity_id, "55555555-5555-5555-5555-555555555555");
+        assert_eq!(message.gross_revenue, 0.0);
+        assert_eq!(message.asset, "");
+        assert_eq!(message.network, "");
+        assert_eq!(message.seller_receive_wallet_address, "");
+        assert_eq!(message.facilitator, "");
     }
 
     #[test]

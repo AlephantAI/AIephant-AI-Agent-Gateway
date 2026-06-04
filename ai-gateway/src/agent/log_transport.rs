@@ -1,9 +1,6 @@
 use std::{sync::Arc, time::Duration};
 
-use reqwest::{
-    Client, StatusCode,
-    header::{CONTENT_TYPE, HeaderName},
-};
+use reqwest::{Client, StatusCode, header::CONTENT_TYPE};
 use url::Url;
 
 use crate::{agent::log_payload::AgentEventLogPayload, app_redis::AppRedis, types::secret::Secret};
@@ -15,8 +12,7 @@ pub struct AgentEventLogTransport {
     http_fallback_enabled: bool,
     http_endpoint: Url,
     http_timeout: Duration,
-    http_auth_header: String,
-    http_auth_token: Secret<String>,
+    http_authorization: Secret<String>,
     http_client: Client,
 }
 
@@ -34,8 +30,6 @@ pub enum AgentEventLogTransportError {
     HttpStatus(StatusCode),
     #[error("agent event log HTTP fallback is disabled")]
     HttpFallbackDisabled,
-    #[error("invalid agent event log HTTP auth header name: {0}")]
-    InvalidHeaderName(String),
 }
 
 impl AgentEventLogTransport {
@@ -46,8 +40,7 @@ impl AgentEventLogTransport {
         http_fallback_enabled: bool,
         http_endpoint: Url,
         http_timeout: Duration,
-        http_auth_header: String,
-        http_auth_token: String,
+        http_authorization: String,
         http_client: Client,
     ) -> Self {
         Self {
@@ -56,8 +49,7 @@ impl AgentEventLogTransport {
             http_fallback_enabled,
             http_endpoint,
             http_timeout,
-            http_auth_header,
-            http_auth_token: Secret::from(http_auth_token),
+            http_authorization: Secret::from(http_authorization),
             http_client,
         }
     }
@@ -152,26 +144,16 @@ impl AgentEventLogTransport {
             return Err(AgentEventLogTransportError::HttpFallbackDisabled);
         }
 
-        let mut request = self
+        let request = self
             .http_client
             .post(self.http_endpoint.clone())
             .timeout(self.http_timeout)
             .header(CONTENT_TYPE, "application/json")
-            .body(body);
-
-        let http_auth_token = self.http_auth_token.expose().trim();
-        if !http_auth_token.is_empty() {
-            let header_name =
-                HeaderName::from_bytes(self.http_auth_header.as_bytes()).map_err(|_| {
-                    AgentEventLogTransportError::InvalidHeaderName(self.http_auth_header.clone())
-                })?;
-            let header_value = if header_name.as_str().eq_ignore_ascii_case("authorization") {
-                format!("Bearer {http_auth_token}")
-            } else {
-                http_auth_token.to_string()
-            };
-            request = request.header(header_name, header_value);
-        }
+            .body(body)
+            .header(
+                "authorization",
+                format!("Bearer {}", self.http_authorization.expose()),
+            );
 
         let response = request.send().await?;
         let status = response.status();
@@ -200,14 +182,13 @@ mod tests {
     use crate::{agent::log_payload::AgentEventLogPayload, app_redis::AppRedis};
 
     #[test]
-    fn debug_does_not_expose_http_auth_token() {
+    fn debug_does_not_expose_http_authorization() {
         let transport = AgentEventLogTransport::new(
             None,
             "agent-events".to_string(),
             true,
             Url::parse("http://127.0.0.1:1/v1/log/agent-event").unwrap(),
             Duration::from_secs(1),
-            "authorization".to_string(),
             "agent-token".to_string(),
             reqwest::Client::new(),
         );
@@ -227,7 +208,6 @@ mod tests {
             true,
             fixture.url(),
             Duration::from_secs(1),
-            "authorization".to_string(),
             "agent-token".to_string(),
             reqwest::Client::new(),
         );
@@ -242,7 +222,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn whitespace_only_auth_token_omits_auth_header() {
+    async fn empty_authorization_matches_request_log_bearer_header_shape() {
         let fixture = HttpFixture::start(200);
         let transport = AgentEventLogTransport::new(
             None,
@@ -250,15 +230,14 @@ mod tests {
             true,
             fixture.url(),
             Duration::from_secs(1),
-            "authorization".to_string(),
-            "   ".to_string(),
+            String::new(),
             reqwest::Client::new(),
         );
 
         transport.send(&payload_fixture()).await.unwrap();
 
         let request = fixture.receive();
-        assert_eq!(request.header("authorization"), None);
+        assert_eq!(request.header("authorization"), Some("Bearer"));
     }
 
     #[tokio::test]
@@ -270,7 +249,6 @@ mod tests {
             true,
             fixture.url(),
             Duration::from_secs(1),
-            "authorization".to_string(),
             "agent-token".to_string(),
             reqwest::Client::new(),
         );
@@ -291,7 +269,6 @@ mod tests {
             false,
             Url::parse("http://127.0.0.1:1/v1/log/agent-event").unwrap(),
             Duration::from_secs(1),
-            "authorization".to_string(),
             "agent-token".to_string(),
             reqwest::Client::new(),
         );
@@ -314,7 +291,6 @@ mod tests {
             false,
             Url::parse("http://127.0.0.1:1/v1/log/agent-event").unwrap(),
             Duration::from_millis(100),
-            "authorization".to_string(),
             "agent-token".to_string(),
             reqwest::Client::new(),
         );
@@ -337,7 +313,6 @@ mod tests {
             true,
             http.url(),
             Duration::from_secs(1),
-            "authorization".to_string(),
             "agent-token".to_string(),
             reqwest::Client::new(),
         );
@@ -359,7 +334,6 @@ mod tests {
             true,
             http.url(),
             Duration::from_millis(50),
-            "authorization".to_string(),
             "agent-token".to_string(),
             reqwest::Client::new(),
         );
@@ -381,7 +355,6 @@ mod tests {
             true,
             http.url(),
             Duration::from_millis(50),
-            "authorization".to_string(),
             "agent-token".to_string(),
             reqwest::Client::new(),
         );
@@ -394,7 +367,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn sends_custom_auth_header_as_raw_token() {
+    async fn always_sends_authorization_bearer_header() {
         let fixture = HttpFixture::start(200);
         let transport = AgentEventLogTransport::new(
             None,
@@ -402,7 +375,6 @@ mod tests {
             true,
             fixture.url(),
             Duration::from_secs(1),
-            "x-alephant-internal-token".to_string(),
             "agent-token".to_string(),
             reqwest::Client::new(),
         );
@@ -410,10 +382,8 @@ mod tests {
         transport.send(&payload_fixture()).await.unwrap();
 
         let request = fixture.receive();
-        assert_eq!(
-            request.header("x-alephant-internal-token"),
-            Some("agent-token")
-        );
+        assert_eq!(request.header("authorization"), Some("Bearer agent-token"));
+        assert_eq!(request.header("x-alephant-internal-token"), None);
     }
 
     fn payload_fixture() -> AgentEventLogPayload {

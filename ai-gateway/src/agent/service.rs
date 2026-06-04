@@ -1104,7 +1104,6 @@ mod tests {
         config.request_log.log_queue_redis_url = None;
         config.agent.event_log_http_fallback_enabled = true;
         config.agent.event_log_http_endpoint = format!("{}/v1/log/agent-event", fixture.url);
-        config.agent.event_log_http_auth_token = Secret::from("agent-token".to_string());
         let app = crate::app::build_test_app(config).await.expect("build app");
         let mut service = AgentEventsService::new(app.state);
         let response = service
@@ -1122,7 +1121,7 @@ mod tests {
             .expect("agent event should be sent to HTTP fallback");
         assert_eq!(request.method, "POST");
         assert_eq!(request.path, "/v1/log/agent-event");
-        assert_eq!(request.header("authorization"), Some("Bearer agent-token"));
+        assert_eq!(request.header("authorization"), Some("Bearer sk-test"));
         assert!(request.body.contains("\"eventId\":\"evt-test\""));
         assert!(request.body.contains("\"alephantRunId\":\"run-1\""));
         assert!(!request.body.contains("\"event_id\""));

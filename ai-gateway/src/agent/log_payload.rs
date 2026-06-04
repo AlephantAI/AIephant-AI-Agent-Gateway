@@ -164,7 +164,7 @@ impl AgentEventLogPayload {
             policy_mode: envelope.policy_mode.as_str().to_string(),
             event_source_trust: envelope.event_source_trust.as_str().to_string(),
             observed_at: envelope.observed_at,
-            event_time: envelope.timestamp,
+            event_time: Some(envelope.timestamp.unwrap_or(envelope.observed_at)),
             sequence: envelope.sequence,
             step_kind: envelope
                 .step_kind
@@ -471,6 +471,58 @@ mod tests {
         ] {
             assert!(value.get(key).is_some(), "{key} should be present");
         }
+    }
+
+    #[test]
+    fn log_payload_uses_observed_at_as_event_time_when_timestamp_missing() {
+        let observed_at = Utc.with_ymd_and_hms(2026, 6, 4, 10, 0, 1).unwrap();
+        let envelope = AgentEventEnvelope {
+            version: "2026-05-27".to_string(),
+            event_id: "evt-observed-only".to_string(),
+            event_type: "tool.call.observed".to_string(),
+            event_source: AgentEventSource::Alephant,
+            event_phase: AgentEventPhase::After,
+            policy_stage: AgentPolicyStage::AuditOnly,
+            policy_mode: AgentPolicyMode::Audit,
+            event_source_trust: AgentEventSourceTrust::GatewayObserved,
+            sequence: None,
+            observed_at,
+            timestamp: None,
+            name: None,
+            alephant_agent_name: None,
+            alephant_agent_name_source: None,
+            alephant_agent_trust_level: None,
+            workspace_id: "workspace-observed".to_string(),
+            virtual_key_id: None,
+            agent_id_external: Some("agent-observed".to_string()),
+            agent_uid: None,
+            run_id: Some("run-observed".to_string()),
+            step_id: Some("step-observed".to_string()),
+            parent_step_id: None,
+            tool_call_id: None,
+            handoff_id: None,
+            graph_node: None,
+            step_kind: Some(AgentStepKind::ToolCall),
+            step_source: AgentStepSource::Gateway,
+            step_confidence: AgentConfidence::Medium,
+            trust_level: AgentTrustLevel::SelfReported,
+            context_conflict: false,
+            step_id_conflict: false,
+            attempt: None,
+            input_hash: None,
+            metadata: json!({}),
+        };
+
+        let value = serde_json::to_value(AgentEventLogPayload::from(&envelope)).unwrap();
+
+        assert_eq!(
+            value["observedAt"],
+            serde_json::to_value(observed_at).unwrap()
+        );
+        assert_eq!(
+            value["eventTime"],
+            serde_json::to_value(observed_at).unwrap()
+        );
     }
 
     #[test]
