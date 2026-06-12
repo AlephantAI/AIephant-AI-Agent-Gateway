@@ -28,15 +28,22 @@ override.tf.json
 *_override.tf.json
 
 .vscode
+.claude/settings.json
+.codegraph/
+.cursor/mcp.json
+.mcp.json
+opencode.jsonc
 
 test-artifacts/runs/
 
 # Local developer noise
 .claude/settings.local.json
 .kiro/
-google
 scripts/provider_mock/.runtime/
 scripts/provider_mock/__pycache__/
 scripts/provider_mock/tests/__pycache__/
 crates/gateway-e2e-harness/scripts/__pycache__/
 examples/agent/langgraph/__pycache__/
+examples/agent/__pycache__/
+examples/agent/*/__pycache__/
+examples/agent/*/venv/

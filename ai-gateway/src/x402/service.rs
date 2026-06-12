@@ -25,7 +25,7 @@ use crate::{
         VerifyAndSettlePaymentResponse,
     },
     policy_proto::X402InboundEvaluateResponse,
-    router::router_details::{RouteType, X402RouteKind},
+    router::router_details::RouteType,
     session_headers::ALEPHANT_SESSION_ID_HEADER,
     store::router::DbX402PaymentActivityLogFields,
     types::{request::Request, response::Response as GatewayResponse},
@@ -499,7 +499,6 @@ async fn handle_x402_request(
     let Some(RouteType::X402Agent {
         slug,
         remaining_path,
-        route_kind,
     }) = req.extensions().get::<RouteType>().cloned()
     else {
         return json_error_response(
@@ -557,30 +556,6 @@ async fn handle_x402_request(
     };
     let mut log_context =
         log_context.with_resolved_snapshot(&resolved.snapshot, resolved.source.as_str());
-
-    if !x402_endpoint_type_matches_route(route_kind, resolved.snapshot.endpoint_type.as_deref()) {
-        let failure_reason = if resolved.snapshot.endpoint_type.is_some() {
-            "x402 endpoint type does not match route"
-        } else {
-            "x402 endpoint type missing"
-        };
-        tracing::warn!(
-            slug = %slug,
-            route_kind = %route_kind.as_str(),
-            endpoint_type = ?resolved.snapshot.endpoint_type,
-            "x402 endpoint type does not match route"
-        );
-        let mut message = build_x402_log_message(X402LogStage::SnapshotMiss, &log_context);
-        message.service_status = "not_found".to_string();
-        apply_error_log_fields(&mut message, "not_found", failure_reason);
-        emit_x402_log_best_effort(&app_state, message).await;
-        return json_error_response(
-            StatusCode::NOT_FOUND,
-            "Resource not found",
-            INVALID_REQUEST_ERROR_TYPE,
-            "not_found",
-        );
-    }
 
     let max_request_size = request_body_limit(&resolved.snapshot);
     if content_length_exceeds_policy(&headers, max_request_size) {
@@ -1248,17 +1223,6 @@ fn request_body_limit(snapshot: &X402EndpointSnapshot) -> usize {
     usize::try_from(snapshot.policy.max_request_size.max(0)).unwrap_or(0)
 }
 
-fn x402_endpoint_type_matches_route(
-    route_kind: X402RouteKind,
-    endpoint_type: Option<&str>,
-) -> bool {
-    endpoint_type
-        .map(str::trim)
-        .map(str::to_ascii_lowercase)
-        .as_deref()
-        == Some(route_kind.expected_endpoint_type())
-}
-
 pub(crate) fn content_length_exceeds_policy(headers: &HeaderMap, max_bytes: usize) -> bool {
     let max_bytes = u64::try_from(max_bytes).unwrap_or(u64::MAX);
 
@@ -1669,8 +1633,7 @@ mod tests {
                 prepare_paid_upstream_request, record_service_result_succeeded,
                 redacted_payment_grpc_metadata, response_timeout, safe_policy_headers,
                 upstream_response, verify_and_settle_payment_succeeded,
-                with_on_response_body_completion, x402_endpoint_type_matches_route,
-                x402_upstream_body_for_debug_log,
+                with_on_response_body_completion, x402_upstream_body_for_debug_log,
             },
             types::{
                 X402EndpointSnapshot, X402OriginAuthSnapshot, X402PolicySnapshot,
@@ -2108,7 +2071,7 @@ mod tests {
                 String::new(),
                 "weather".to_string(),
                 "POST".to_string(),
-                "/x402/agents/weather".to_string(),
+                "/x402/weather".to_string(),
             )
             .with_resolved_snapshot(&test_snapshot(), "db"),
         )
@@ -2407,7 +2370,7 @@ mod tests {
             "session-1".to_string(),
             "weather".to_string(),
             "POST".to_string(),
-            "/x402/agents/weather".to_string(),
+            "/x402/weather".to_string(),
         )
         .with_resolved_snapshot(&test_snapshot(), "redis")
         .with_payment_context(&payment_context)
@@ -2585,35 +2548,5 @@ mod tests {
         assert_eq!(request.failure_reason, "");
         assert_eq!(request.cache_billing_mode, "disabled");
         assert_eq!(request.response_hash, "response-hash");
-    }
-
-    #[test]
-    fn endpoint_type_must_match_x402_route_kind() {
-        use crate::router::router_details::X402RouteKind;
-
-        assert!(x402_endpoint_type_matches_route(
-            X402RouteKind::Agent,
-            Some("agent")
-        ));
-        assert!(!x402_endpoint_type_matches_route(
-            X402RouteKind::Agent,
-            Some("http_api")
-        ));
-        assert!(x402_endpoint_type_matches_route(
-            X402RouteKind::HttpApi,
-            Some("http_api")
-        ));
-        assert!(!x402_endpoint_type_matches_route(
-            X402RouteKind::HttpApi,
-            Some("agent")
-        ));
-        assert!(!x402_endpoint_type_matches_route(
-            X402RouteKind::HttpApi,
-            None
-        ));
-        assert!(x402_endpoint_type_matches_route(
-            X402RouteKind::HttpApi,
-            Some(" HTTP_API ")
-        ));
     }
 }

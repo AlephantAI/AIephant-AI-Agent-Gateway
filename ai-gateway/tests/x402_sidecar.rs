@@ -67,7 +67,7 @@ async fn x402_agent_post_without_authorization_builds_with_app() {
 
     let request = Request::builder()
         .method(Method::POST)
-        .uri("/x402/agents/test-agent")
+        .uri("/x402/test-agent")
         .body(Body::empty())
         .expect("x402 agent request");
 
@@ -98,7 +98,7 @@ async fn x402_api_post_without_authorization_builds_with_app() {
 
     let request = Request::builder()
         .method(Method::POST)
-        .uri("/x402/api/test-api")
+        .uri("/x402/test-api")
         .body(Body::empty())
         .expect("x402 api request");
 
@@ -142,7 +142,7 @@ async fn x402_request_with_invalid_body_schema_returns_400_before_policy() {
 
     let request = Request::builder()
         .method(Method::POST)
-        .uri("/x402/agents/schema-agent")
+        .uri("/x402/schema-agent")
         .header(header::CONTENT_TYPE, "application/json")
         .body(Body::from(r#"{"chain":"base"}"#))
         .expect("x402 request");
@@ -193,7 +193,7 @@ async fn paid_x402_request_forwards_allowlisted_headers_and_injects_signature() 
 
     let request = Request::builder()
         .method(Method::POST)
-        .uri("/x402/agents/paid-agent")
+        .uri("/x402/paid-agent")
         .header("X-API-Key", "inbound-secret")
         .header("X-Drop-Me", "no")
         .header("PAYMENT-SIGNATURE", "paid-test-signature")
@@ -237,7 +237,7 @@ async fn paid_x402_request_forwards_allowlisted_headers_and_injects_signature() 
 }
 
 #[tokio::test]
-async fn x402_api_route_accepts_http_api_endpoint_type() {
+async fn x402_unified_route_accepts_http_api_endpoint_type_with_payment_required_header() {
     let policy = spawn_policy_service(Arc::new(AtomicUsize::new(0))).await;
     let payment_calls = Arc::new(AtomicUsize::new(0));
     let payment = spawn_payment_service(payment_calls.clone()).await;
@@ -269,7 +269,7 @@ async fn x402_api_route_accepts_http_api_endpoint_type() {
 
     let request = Request::builder()
         .method(Method::POST)
-        .uri("/x402/api/api-endpoint")
+        .uri("/x402/api-endpoint")
         .body(Body::from("{}"))
         .expect("x402 api request");
 
@@ -295,7 +295,7 @@ async fn x402_api_route_accepts_http_api_endpoint_type() {
 }
 
 #[tokio::test]
-async fn x402_api_route_rejects_agent_endpoint_type() {
+async fn x402_unified_route_accepts_agent_endpoint_type() {
     let policy = spawn_policy_service(Arc::new(AtomicUsize::new(0))).await;
     let payment_calls = Arc::new(AtomicUsize::new(0));
     let payment = spawn_payment_service(payment_calls.clone()).await;
@@ -321,19 +321,22 @@ async fn x402_api_route_rejects_agent_endpoint_type() {
 
     let request = Request::builder()
         .method(Method::POST)
-        .uri("/x402/api/agent-endpoint")
+        .uri("/x402/agent-endpoint")
         .body(Body::from("{}"))
-        .expect("x402 api request");
+        .expect("x402 request");
 
     let response = app.ready().await.unwrap().call(request).await.unwrap();
+    let status = response.status();
+    let body = response_body_json(response).await;
 
-    assert_eq!(response.status(), StatusCode::NOT_FOUND);
-    assert_eq!(payment_calls.load(Ordering::SeqCst), 0);
+    assert_eq!(status, StatusCode::PAYMENT_REQUIRED);
+    assert_eq!(body["error"]["code"], "x402_payment_required");
+    assert_eq!(payment_calls.load(Ordering::SeqCst), 1);
     assert_eq!(upstream.requests.lock().await.len(), 0);
 }
 
 #[tokio::test]
-async fn x402_agents_route_rejects_http_api_endpoint_type() {
+async fn x402_unified_route_accepts_http_api_endpoint_type() {
     let policy = spawn_policy_service(Arc::new(AtomicUsize::new(0))).await;
     let payment_calls = Arc::new(AtomicUsize::new(0));
     let payment = spawn_payment_service(payment_calls.clone()).await;
@@ -359,19 +362,22 @@ async fn x402_agents_route_rejects_http_api_endpoint_type() {
 
     let request = Request::builder()
         .method(Method::POST)
-        .uri("/x402/agents/api-only")
+        .uri("/x402/api-only")
         .body(Body::from("{}"))
-        .expect("x402 agents request");
+        .expect("x402 request");
 
     let response = app.ready().await.unwrap().call(request).await.unwrap();
+    let status = response.status();
+    let body = response_body_json(response).await;
 
-    assert_eq!(response.status(), StatusCode::NOT_FOUND);
-    assert_eq!(payment_calls.load(Ordering::SeqCst), 0);
+    assert_eq!(status, StatusCode::PAYMENT_REQUIRED);
+    assert_eq!(body["error"]["code"], "x402_payment_required");
+    assert_eq!(payment_calls.load(Ordering::SeqCst), 1);
     assert_eq!(upstream.requests.lock().await.len(), 0);
 }
 
 #[tokio::test]
-async fn x402_route_rejects_redis_snapshot_without_endpoint_type_when_db_missing() {
+async fn x402_unified_route_accepts_redis_snapshot_without_endpoint_type() {
     let policy = spawn_policy_service(Arc::new(AtomicUsize::new(0))).await;
     let payment_calls = Arc::new(AtomicUsize::new(0));
     let payment = spawn_payment_service(payment_calls.clone()).await;
@@ -396,15 +402,74 @@ async fn x402_route_rejects_redis_snapshot_without_endpoint_type_when_db_missing
 
     let request = Request::builder()
         .method(Method::POST)
-        .uri("/x402/agents/legacy-agent")
+        .uri("/x402/legacy-agent")
         .body(Body::from("{}"))
-        .expect("x402 agents request");
+        .expect("x402 request");
+
+    let response = app.ready().await.unwrap().call(request).await.unwrap();
+    let status = response.status();
+    let body = response_body_json(response).await;
+
+    assert_eq!(status, StatusCode::PAYMENT_REQUIRED);
+    assert_eq!(body["error"]["code"], "x402_payment_required");
+    assert_eq!(payment_calls.load(Ordering::SeqCst), 1);
+    assert_eq!(upstream.requests.lock().await.len(), 0);
+}
+
+#[tokio::test]
+async fn x402_agents_old_route_returns_404() {
+    let policy_calls = Arc::new(AtomicUsize::new(0));
+    let policy = spawn_policy_service(policy_calls.clone()).await;
+    let payment_calls = Arc::new(AtomicUsize::new(0));
+    let payment = spawn_payment_service(payment_calls.clone()).await;
+    let redis = spawn_redis_fixture(&[]).await;
+    let mut app = App::new(x402_config(
+        &policy.endpoint,
+        &payment.endpoint,
+        &redis.endpoint,
+    ))
+    .await
+    .expect("app");
+
+    let request = Request::builder()
+        .method(Method::POST)
+        .uri("/x402/agents/weather")
+        .body(Body::from("{}"))
+        .expect("old x402 agents request");
 
     let response = app.ready().await.unwrap().call(request).await.unwrap();
 
     assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    assert_eq!(policy_calls.load(Ordering::SeqCst), 0);
     assert_eq!(payment_calls.load(Ordering::SeqCst), 0);
-    assert_eq!(upstream.requests.lock().await.len(), 0);
+}
+
+#[tokio::test]
+async fn x402_api_old_route_returns_404() {
+    let policy_calls = Arc::new(AtomicUsize::new(0));
+    let policy = spawn_policy_service(policy_calls.clone()).await;
+    let payment_calls = Arc::new(AtomicUsize::new(0));
+    let payment = spawn_payment_service(payment_calls.clone()).await;
+    let redis = spawn_redis_fixture(&[]).await;
+    let mut app = App::new(x402_config(
+        &policy.endpoint,
+        &payment.endpoint,
+        &redis.endpoint,
+    ))
+    .await
+    .expect("app");
+
+    let request = Request::builder()
+        .method(Method::POST)
+        .uri("/x402/api/weather")
+        .body(Body::from("{}"))
+        .expect("old x402 api request");
+
+    let response = app.ready().await.unwrap().call(request).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    assert_eq!(policy_calls.load(Ordering::SeqCst), 0);
+    assert_eq!(payment_calls.load(Ordering::SeqCst), 0);
 }
 
 fn x402_config(policy_endpoint: &str, payment_endpoint: &str, redis_endpoint: &str) -> Config {

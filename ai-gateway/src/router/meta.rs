@@ -9,6 +9,7 @@ use tower::{Service as _, ServiceBuilder, buffer::BufferLayer, util::BoxCloneSer
 use tower_http::auth::AsyncRequireAuthorizationLayer;
 
 use crate::{
+    agent::tools::service::AgentToolsService,
     app_state::AppState,
     error::{api::ApiError, init::InitError, invalid_req::InvalidRequestError},
     middleware::{
@@ -30,6 +31,7 @@ pub type AgentEventsService = crate::agent::service::AgentEventsService;
 #[derive(Debug)]
 pub struct MetaRouter {
     agent_events: AgentEventsService,
+    agent_tools: AgentToolsService,
     unified_api: UnifiedApiService,
     x402_agents: crate::x402::service::X402AgentService,
 }
@@ -78,10 +80,12 @@ impl MetaRouter {
             .layer(ErrorHandlerLayer::new(app_state.clone()))
             .service(unified_api::Service::new(&app_state).await?);
         let agent_events = AgentEventsService::new(app_state.clone());
+        let agent_tools = AgentToolsService::new(app_state.clone());
         let x402_agents = crate::x402::service::X402AgentService::new(app_state);
 
         Ok(Self {
             agent_events,
+            agent_tools,
             unified_api,
             x402_agents,
         })
@@ -110,6 +114,16 @@ impl MetaRouter {
         }
     }
 
+    fn handle_agent_tools_request(
+        &mut self,
+        req: crate::types::request::Request,
+    ) -> ResponseFuture {
+        tracing::trace!("received agent tools request");
+        ResponseFuture::AgentTools {
+            future: self.agent_tools.call(req),
+        }
+    }
+
     fn handle_x402_agent_request(&mut self, req: crate::types::request::Request) -> ResponseFuture {
         tracing::trace!("received x402 agent request");
         ResponseFuture::X402Agent {
@@ -124,38 +138,39 @@ impl tower::Service<crate::types::request::Request> for MetaRouter {
     type Future = ResponseFuture;
 
     fn poll_ready(&mut self, ctx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        let mut any_pending = false;
-        if self.agent_events.poll_ready(ctx).is_pending() {
-            any_pending = true;
+        let agent_events_pending = self.agent_events.poll_ready(ctx).is_pending();
+        let agent_tools_pending = self.agent_tools.poll_ready(ctx).is_pending();
+        if agent_tools_pending {
+            tracing::warn!(
+                "agent tools service is not ready; continuing meta router \
+                 readiness"
+            );
         }
-        if self.unified_api.poll_ready(ctx).is_pending() {
-            any_pending = true;
-        }
-        if self.x402_agents.poll_ready(ctx).is_pending() {
-            any_pending = true;
-        }
-        if any_pending {
-            Poll::Pending
-        } else {
-            Poll::Ready(Ok(()))
-        }
+        let unified_api_pending = self.unified_api.poll_ready(ctx).is_pending();
+        let x402_agents_pending = self.x402_agents.poll_ready(ctx).is_pending();
+
+        combined_readiness_ignoring_agent_tools(
+            agent_events_pending,
+            agent_tools_pending,
+            unified_api_pending,
+            x402_agents_pending,
+        )
     }
 
     fn call(&mut self, req: crate::types::request::Request) -> Self::Future {
         let route_type = req.extensions().get::<RouteType>().cloned();
         match route_type {
             Some(RouteType::AgentEvents) => self.handle_agent_events_request(req),
+            Some(RouteType::AgentTools { .. }) => self.handle_agent_tools_request(req),
             Some(RouteType::UnifiedApi { path }) => self.handle_unified_api_request(req, &path),
             Some(RouteType::X402Agent {
                 slug,
                 remaining_path,
-                route_kind,
             }) => {
                 tracing::debug!(
                     slug = %slug,
                     remaining_path = %remaining_path,
-                    route_kind = %route_kind.as_str(),
-                    "routing x402 agent request"
+                    "routing x402 request"
                 );
                 self.handle_x402_agent_request(req)
             }
@@ -168,6 +183,19 @@ impl tower::Service<crate::types::request::Request> for MetaRouter {
                 }
             }
         }
+    }
+}
+
+fn combined_readiness_ignoring_agent_tools(
+    agent_events_pending: bool,
+    _agent_tools_pending: bool,
+    unified_api_pending: bool,
+    x402_agents_pending: bool,
+) -> Poll<Result<(), ApiError>> {
+    if agent_events_pending || unified_api_pending || x402_agents_pending {
+        Poll::Pending
+    } else {
+        Poll::Ready(Ok(()))
     }
 }
 
@@ -186,6 +214,10 @@ pin_project! {
             #[pin]
             future: <AgentEventsService as tower::Service<crate::types::request::Request>>::Future,
         },
+        AgentTools {
+            #[pin]
+            future: <AgentToolsService as tower::Service<crate::types::request::Request>>::Future,
+        },
         X402Agent {
             #[pin]
             future: <crate::x402::service::X402AgentService as tower::Service<crate::types::request::Request>>::Future,
@@ -201,7 +233,25 @@ impl std::future::Future for ResponseFuture {
             ResponseFutureProj::Ready { future } => future.poll(cx),
             ResponseFutureProj::UnifiedApi { future } => future.poll(cx).map_err(|e| match e {}),
             ResponseFutureProj::AgentEvents { future } => future.poll(cx).map_err(|e| match e {}),
+            ResponseFutureProj::AgentTools { future } => future.poll(cx).map_err(|e| match e {}),
             ResponseFutureProj::X402Agent { future } => future.poll(cx).map_err(|e| match e {}),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn agent_tools_pending_does_not_make_meta_router_pending() {
+        assert!(combined_readiness_ignoring_agent_tools(false, true, false, false).is_ready());
+    }
+
+    #[test]
+    fn non_agent_tools_pending_still_make_meta_router_pending() {
+        assert!(combined_readiness_ignoring_agent_tools(true, false, false, false).is_pending());
+        assert!(combined_readiness_ignoring_agent_tools(false, false, true, false).is_pending());
+        assert!(combined_readiness_ignoring_agent_tools(false, false, false, true).is_pending());
     }
 }

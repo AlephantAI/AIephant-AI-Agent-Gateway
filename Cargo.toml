@@ -19,7 +19,7 @@ default-members = ["ai-gateway"]
 [workspace.package]
 edition = "2024"
 authors = [ "legendqi <legendqi@alephant.ai>", "Alephant Developers" ]
-license = "GPL-3.0-only"
+license = "Apache-2.0"
 publish = false
 version = "0.2.0-beta.30"
 

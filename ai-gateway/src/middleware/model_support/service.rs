@@ -34,7 +34,10 @@ fn should_skip_model_support(request_kind: Option<RequestKind>) -> bool {
 }
 
 fn should_bypass_model_support_before_body_read(request_kind: Option<RequestKind>) -> bool {
-    matches!(request_kind, Some(RequestKind::AgentEvents))
+    matches!(
+        request_kind,
+        Some(RequestKind::AgentEvents | RequestKind::AgentTools)
+    )
 }
 
 fn canonical_provider_code(provider_raw: &str) -> Option<String> {
@@ -435,9 +438,12 @@ mod tests {
     }
 
     #[test]
-    fn bypasses_model_support_before_body_read_for_agent_events_only() {
+    fn bypasses_model_support_before_body_read_for_agent_routes_only() {
         assert!(should_bypass_model_support_before_body_read(Some(
             RequestKind::AgentEvents
+        )));
+        assert!(should_bypass_model_support_before_body_read(Some(
+            RequestKind::AgentTools
         )));
         assert!(!should_bypass_model_support_before_body_read(Some(
             RequestKind::UnifiedApi

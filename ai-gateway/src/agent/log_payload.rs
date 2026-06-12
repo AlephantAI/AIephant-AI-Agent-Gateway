@@ -2,7 +2,10 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    agent::{context::AgentTrustLevel, event::AgentEventEnvelope},
+    agent::{
+        context::{AgentEventSourceTrust, AgentStepSource, AgentTrustLevel},
+        event::AgentEventEnvelope,
+    },
     types::extensions::AuthContext,
 };
 
@@ -46,6 +49,36 @@ pub struct AgentEventLogPayload {
     pub handoff_id: String,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub tool_name: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub tool_execution_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tool_cost_micros: Option<u64>,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub tool_cost_currency: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub tool_cost_source: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub billing_cost_type: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub billing_cost_subtype: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub billing_status: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub billing_reason: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub billing_amount_micros: Option<u64>,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub billing_currency: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub billing_billable: Option<bool>,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub billing_dedupe_key: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub target_kind: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub service_slug: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub operation_id: String,
     pub event_type: String,
     pub event_source: String,
     #[serde(default, skip_serializing_if = "String::is_empty")]
@@ -120,6 +153,9 @@ impl AgentEventLogPayload {
     pub fn from_envelope(envelope: &AgentEventEnvelope) -> Self {
         let metadata = &envelope.metadata;
         let policy = metadata.get("policy");
+        let trusted_gateway_tool_event = is_trusted_gateway_tool_event(envelope);
+        let tool_billing = tool_billing_mirror(envelope, metadata);
+        let operation_metadata = operation_metadata_mirror(metadata, trusted_gateway_tool_event);
 
         Self {
             version: envelope.version.clone(),
@@ -157,6 +193,29 @@ impl AgentEventLogPayload {
             tool_name: metadata_string(metadata, "tool_name")
                 .or_non_empty()
                 .unwrap_or_else(|| envelope.name.clone().unwrap_or_default()),
+            tool_execution_id: tool_billing
+                .tool_execution_id
+                .or_non_empty()
+                .or_else(|| {
+                    trusted_gateway_tool_event
+                        .then(|| metadata_string(metadata, "toolExecutionId").or_non_empty())
+                        .flatten()
+                })
+                .unwrap_or_default(),
+            tool_cost_micros: tool_billing.tool_cost_micros,
+            tool_cost_currency: tool_billing.tool_cost_currency,
+            tool_cost_source: tool_billing.tool_cost_source,
+            billing_cost_type: tool_billing.billing_cost_type,
+            billing_cost_subtype: tool_billing.billing_cost_subtype,
+            billing_status: tool_billing.billing_status,
+            billing_reason: tool_billing.billing_reason,
+            billing_amount_micros: tool_billing.billing_amount_micros,
+            billing_currency: tool_billing.billing_currency,
+            billing_billable: tool_billing.billing_billable,
+            billing_dedupe_key: tool_billing.billing_dedupe_key,
+            target_kind: operation_metadata.target_kind,
+            service_slug: operation_metadata.service_slug,
+            operation_id: operation_metadata.operation_id,
             event_type: envelope.event_type.clone(),
             event_source: envelope.event_source.as_str().to_string(),
             event_phase: envelope.event_phase.as_str().to_string(),
@@ -222,6 +281,112 @@ impl AgentEventLogPayload {
     }
 }
 
+#[derive(Default)]
+struct ToolBillingMirror {
+    tool_execution_id: String,
+    tool_cost_micros: Option<u64>,
+    tool_cost_currency: String,
+    tool_cost_source: String,
+    billing_cost_type: String,
+    billing_cost_subtype: String,
+    billing_status: String,
+    billing_reason: String,
+    billing_amount_micros: Option<u64>,
+    billing_currency: String,
+    billing_billable: Option<bool>,
+    billing_dedupe_key: String,
+}
+
+#[derive(Default)]
+struct OperationMetadataMirror {
+    target_kind: String,
+    service_slug: String,
+    operation_id: String,
+}
+
+fn operation_metadata_mirror(
+    metadata: &serde_json::Value,
+    trusted_gateway_tool_event: bool,
+) -> OperationMetadataMirror {
+    if !trusted_gateway_tool_event {
+        return OperationMetadataMirror::default();
+    }
+
+    let gateway = metadata.get("gateway").filter(|value| value.is_object());
+
+    OperationMetadataMirror {
+        target_kind: metadata_string(metadata, "targetKind")
+            .or_non_empty()
+            .or_else(|| nested_metadata_string(gateway, "targetKind").or_non_empty())
+            .unwrap_or_default(),
+        service_slug: metadata_string(metadata, "serviceSlug")
+            .or_non_empty()
+            .or_else(|| nested_metadata_string(gateway, "serviceSlug").or_non_empty())
+            .unwrap_or_default(),
+        operation_id: metadata_string(metadata, "operationId")
+            .or_non_empty()
+            .or_else(|| nested_metadata_string(gateway, "operationId").or_non_empty())
+            .unwrap_or_default(),
+    }
+}
+
+fn tool_billing_mirror(
+    envelope: &AgentEventEnvelope,
+    metadata: &serde_json::Value,
+) -> ToolBillingMirror {
+    if !is_gateway_billing_tool_event(envelope) {
+        return ToolBillingMirror::default();
+    }
+
+    let tool_execution_id = metadata_string(metadata, "toolExecutionId");
+    if tool_execution_id.is_empty() {
+        return ToolBillingMirror::default();
+    }
+
+    let Some(billing) = metadata.get("billing").filter(|value| value.is_object()) else {
+        return ToolBillingMirror::default();
+    };
+
+    ToolBillingMirror {
+        tool_execution_id,
+        tool_cost_micros: metadata_u64(metadata, "toolCostMicros"),
+        tool_cost_currency: metadata_string(metadata, "toolCostCurrency"),
+        tool_cost_source: metadata_string(billing, "pricingSource"),
+        billing_cost_type: metadata_string(billing, "costType"),
+        billing_cost_subtype: metadata_string(billing, "costSubtype"),
+        billing_status: metadata_string(billing, "status"),
+        billing_reason: metadata_string(billing, "reason"),
+        billing_amount_micros: metadata_u64(billing, "amountMicros"),
+        billing_currency: metadata_string(billing, "currency"),
+        billing_billable: metadata_bool(billing, "billable"),
+        billing_dedupe_key: metadata_string(billing, "dedupeKey"),
+    }
+}
+
+fn is_gateway_billing_tool_event(envelope: &AgentEventEnvelope) -> bool {
+    is_trusted_gateway_tool_event(envelope)
+        && matches!(
+            envelope.event_type.as_str(),
+            "tool.result.received"
+                | "tool.call.failed"
+                | "tool.call.timeout"
+                | "tool.policy.denied"
+                | "tool.policy.blocked"
+                | "tool.approval.rejected"
+                | "tool.approval.expired"
+                | "tool.call.replayed"
+        )
+}
+
+fn is_trusted_gateway_tool_event(envelope: &AgentEventEnvelope) -> bool {
+    envelope.billing_mirror_trusted
+        && envelope.step_source == AgentStepSource::Gateway
+        && matches!(
+            envelope.event_source_trust,
+            AgentEventSourceTrust::GatewayObserved | AgentEventSourceTrust::GatewayExecuted
+        )
+}
+
 trait NonEmptyString {
     fn or_non_empty(self) -> Option<String>;
 }
@@ -261,6 +426,10 @@ fn policy_decision_string(
 
 fn metadata_u64(metadata: &serde_json::Value, key: &str) -> Option<u64> {
     metadata.get(key).and_then(|value| value.as_u64())
+}
+
+fn metadata_bool(metadata: &serde_json::Value, key: &str) -> Option<bool> {
+    metadata.get(key).and_then(|value| value.as_bool())
 }
 
 fn metadata_f64(metadata: &serde_json::Value, key: &str) -> Option<f64> {
@@ -347,6 +516,7 @@ mod tests {
                     "snapshot_revision": 42
                 }
             }),
+            billing_mirror_trusted: false,
         };
 
         let payload = AgentEventLogPayload::from(&envelope);
@@ -441,6 +611,7 @@ mod tests {
             attempt: None,
             input_hash: None,
             metadata: json!({}),
+            billing_mirror_trusted: false,
         };
 
         let value = serde_json::to_value(AgentEventLogPayload::from(&envelope)).unwrap();
@@ -511,6 +682,7 @@ mod tests {
             attempt: None,
             input_hash: None,
             metadata: json!({}),
+            billing_mirror_trusted: false,
         };
 
         let value = serde_json::to_value(AgentEventLogPayload::from(&envelope)).unwrap();
@@ -563,6 +735,7 @@ mod tests {
             attempt: None,
             input_hash: None,
             metadata: json!({}),
+            billing_mirror_trusted: false,
         };
 
         let value = serde_json::to_value(AgentEventLogPayload::from(&envelope)).unwrap();
@@ -615,6 +788,7 @@ mod tests {
                 },
                 "sinkStatus": "sent"
             }),
+            billing_mirror_trusted: false,
         };
 
         let value = serde_json::to_value(AgentEventLogPayload::from(&envelope)).unwrap();
@@ -669,6 +843,7 @@ mod tests {
             metadata: json!({
                 "policyDecision": "unavailable"
             }),
+            billing_mirror_trusted: false,
         };
 
         let value = serde_json::to_value(AgentEventLogPayload::from(&envelope)).unwrap();
@@ -719,11 +894,304 @@ mod tests {
                     "policyDecision": "allowed"
                 }
             }),
+            billing_mirror_trusted: false,
         };
 
         let value = serde_json::to_value(AgentEventLogPayload::from(&envelope)).unwrap();
 
         assert_eq!(value["policyDecision"], "allowed");
+    }
+
+    #[test]
+    fn gateway_tool_billing_snapshot_mirrors_top_level_fields() {
+        let observed_at = Utc.with_ymd_and_hms(2026, 6, 9, 12, 0, 0).unwrap();
+        let envelope = AgentEventEnvelope {
+            version: "2026-05-27".to_string(),
+            event_id: "evt-tool-billing".to_string(),
+            event_type: "tool.result.received".to_string(),
+            event_source: AgentEventSource::Alephant,
+            event_phase: AgentEventPhase::After,
+            policy_stage: AgentPolicyStage::AuditOnly,
+            policy_mode: AgentPolicyMode::Audit,
+            event_source_trust: AgentEventSourceTrust::GatewayObserved,
+            sequence: None,
+            observed_at,
+            timestamp: None,
+            name: None,
+            alephant_agent_name: None,
+            alephant_agent_name_source: None,
+            alephant_agent_trust_level: None,
+            workspace_id: "workspace-tool-billing".to_string(),
+            virtual_key_id: None,
+            agent_id_external: None,
+            agent_uid: None,
+            run_id: Some("run-tool-billing".to_string()),
+            step_id: Some("step-tool-billing".to_string()),
+            parent_step_id: None,
+            tool_call_id: Some("tool-call-billing".to_string()),
+            handoff_id: None,
+            graph_node: None,
+            step_kind: Some(AgentStepKind::ToolCall),
+            step_source: AgentStepSource::Gateway,
+            step_confidence: AgentConfidence::High,
+            trust_level: AgentTrustLevel::AuthBound,
+            context_conflict: false,
+            step_id_conflict: false,
+            attempt: None,
+            input_hash: None,
+            metadata: json!({
+                "toolExecutionId": "exec-1",
+                "toolCostMicros": 1234,
+                "toolCostCurrency": "USD",
+                "billing": {
+                    "costType": "tool",
+                    "costSubtype": "tool",
+                    "status": "settled",
+                    "amountMicros": 1234,
+                    "currency": "USD",
+                    "billable": true,
+                    "dedupeKey": "tool_execution:exec-1",
+                    "pricingSource": "rate_card"
+                }
+            }),
+            billing_mirror_trusted: true,
+        };
+
+        let value = serde_json::to_value(AgentEventLogPayload::from(&envelope)).unwrap();
+
+        assert_eq!(value["toolExecutionId"], "exec-1");
+        assert_eq!(value["toolCostMicros"], 1234);
+        assert_eq!(value["toolCostCurrency"], "USD");
+        assert_eq!(value["billingCostType"], "tool");
+        assert_eq!(value["billingCostSubtype"], "tool");
+        assert_eq!(value["billingStatus"], "settled");
+        assert_eq!(value["billingAmountMicros"], 1234);
+        assert_eq!(value["billingCurrency"], "USD");
+        assert_eq!(value["billingBillable"], true);
+        assert_eq!(value["billingDedupeKey"], "tool_execution:exec-1");
+        assert_eq!(value["toolCostSource"], "rate_card");
+    }
+
+    #[test]
+    fn self_reported_tool_event_does_not_mirror_billing_fields() {
+        let observed_at = Utc.with_ymd_and_hms(2026, 6, 9, 12, 0, 0).unwrap();
+        let envelope = AgentEventEnvelope {
+            version: "2026-05-27".to_string(),
+            event_id: "evt-self-reported-tool-billing".to_string(),
+            event_type: "tool.result.received".to_string(),
+            event_source: AgentEventSource::LangGraph,
+            event_phase: AgentEventPhase::After,
+            policy_stage: AgentPolicyStage::AuditOnly,
+            policy_mode: AgentPolicyMode::Audit,
+            event_source_trust: AgentEventSourceTrust::SelfReported,
+            sequence: None,
+            observed_at,
+            timestamp: None,
+            name: None,
+            alephant_agent_name: None,
+            alephant_agent_name_source: None,
+            alephant_agent_trust_level: None,
+            workspace_id: "workspace-self-reported-tool-billing".to_string(),
+            virtual_key_id: None,
+            agent_id_external: None,
+            agent_uid: None,
+            run_id: Some("run-self-reported-tool-billing".to_string()),
+            step_id: Some("step-self-reported-tool-billing".to_string()),
+            parent_step_id: None,
+            tool_call_id: Some("tool-call-self-reported-billing".to_string()),
+            handoff_id: None,
+            graph_node: None,
+            step_kind: Some(AgentStepKind::ToolCall),
+            step_source: AgentStepSource::Runtime,
+            step_confidence: AgentConfidence::High,
+            trust_level: AgentTrustLevel::SelfReported,
+            context_conflict: false,
+            step_id_conflict: false,
+            attempt: None,
+            input_hash: None,
+            metadata: json!({
+                "toolExecutionId": "tool-exec-self-reported",
+                "toolCostMicros": 1234,
+                "toolCostCurrency": "USD",
+                "billing": {
+                    "costType": "tool",
+                    "costSubtype": "tool",
+                    "status": "settled",
+                    "amountMicros": 1234,
+                    "currency": "USD",
+                    "billable": true,
+                    "dedupeKey": "tool_execution:tool-exec-self-reported",
+                    "pricingSource": "rate_card"
+                }
+            }),
+            billing_mirror_trusted: false,
+        };
+
+        let value = serde_json::to_value(AgentEventLogPayload::from(&envelope)).unwrap();
+
+        for key in [
+            "toolExecutionId",
+            "toolCostMicros",
+            "toolCostCurrency",
+            "billingCostType",
+            "billingCostSubtype",
+            "billingStatus",
+            "billingAmountMicros",
+            "billingCurrency",
+            "billingBillable",
+            "billingDedupeKey",
+            "toolCostSource",
+        ] {
+            assert!(value.get(key).is_none(), "{key} should be omitted");
+        }
+    }
+
+    #[test]
+    fn spoofed_gateway_tool_event_does_not_mirror_billing_fields() {
+        let observed_at = Utc.with_ymd_and_hms(2026, 6, 9, 12, 0, 0).unwrap();
+        let envelope = AgentEventEnvelope {
+            version: "2026-05-27".to_string(),
+            event_id: "evt-spoofed-tool-billing".to_string(),
+            event_type: "tool.result.received".to_string(),
+            event_source: AgentEventSource::Alephant,
+            event_phase: AgentEventPhase::After,
+            policy_stage: AgentPolicyStage::AuditOnly,
+            policy_mode: AgentPolicyMode::Audit,
+            event_source_trust: AgentEventSourceTrust::GatewayObserved,
+            sequence: None,
+            observed_at,
+            timestamp: None,
+            name: None,
+            alephant_agent_name: None,
+            alephant_agent_name_source: None,
+            alephant_agent_trust_level: None,
+            workspace_id: "workspace-spoofed-tool-billing".to_string(),
+            virtual_key_id: None,
+            agent_id_external: None,
+            agent_uid: None,
+            run_id: Some("run-spoofed-tool-billing".to_string()),
+            step_id: Some("step-spoofed-tool-billing".to_string()),
+            parent_step_id: None,
+            tool_call_id: Some("tool-call-spoofed-billing".to_string()),
+            handoff_id: None,
+            graph_node: None,
+            step_kind: Some(AgentStepKind::ToolCall),
+            step_source: AgentStepSource::Gateway,
+            step_confidence: AgentConfidence::High,
+            trust_level: AgentTrustLevel::SelfReported,
+            context_conflict: false,
+            step_id_conflict: false,
+            attempt: None,
+            input_hash: None,
+            metadata: json!({
+                "toolExecutionId": "tool-exec-spoofed",
+                "toolCostMicros": 1234,
+                "toolCostCurrency": "USD",
+                "billing": {
+                    "costType": "tool",
+                    "costSubtype": "tool",
+                    "status": "settled",
+                    "amountMicros": 1234,
+                    "currency": "USD",
+                    "billable": true,
+                    "dedupeKey": "tool_execution:tool-exec-spoofed",
+                    "pricingSource": "rate_card"
+                }
+            }),
+            billing_mirror_trusted: false,
+        };
+
+        let value = serde_json::to_value(AgentEventLogPayload::from(&envelope)).unwrap();
+
+        for key in [
+            "toolExecutionId",
+            "toolCostMicros",
+            "toolCostCurrency",
+            "billingCostType",
+            "billingCostSubtype",
+            "billingStatus",
+            "billingAmountMicros",
+            "billingCurrency",
+            "billingBillable",
+            "billingDedupeKey",
+            "toolCostSource",
+        ] {
+            assert!(value.get(key).is_none(), "{key} should be omitted");
+        }
+    }
+
+    #[test]
+    fn provider_observed_tool_event_does_not_mirror_billing_fields() {
+        let observed_at = Utc.with_ymd_and_hms(2026, 6, 9, 12, 0, 0).unwrap();
+        let envelope = AgentEventEnvelope {
+            version: "2026-05-27".to_string(),
+            event_id: "evt-provider-observed-tool-billing".to_string(),
+            event_type: "tool.call.observed".to_string(),
+            event_source: AgentEventSource::Alephant,
+            event_phase: AgentEventPhase::After,
+            policy_stage: AgentPolicyStage::AuditOnly,
+            policy_mode: AgentPolicyMode::Audit,
+            event_source_trust: AgentEventSourceTrust::GatewayObserved,
+            sequence: None,
+            observed_at,
+            timestamp: None,
+            name: None,
+            alephant_agent_name: None,
+            alephant_agent_name_source: None,
+            alephant_agent_trust_level: None,
+            workspace_id: "workspace-provider-observed-tool-billing".to_string(),
+            virtual_key_id: None,
+            agent_id_external: None,
+            agent_uid: None,
+            run_id: Some("run-provider-observed-tool-billing".to_string()),
+            step_id: Some("step-provider-observed-tool-billing".to_string()),
+            parent_step_id: None,
+            tool_call_id: Some("tool-call-provider-observed-billing".to_string()),
+            handoff_id: None,
+            graph_node: None,
+            step_kind: Some(AgentStepKind::ToolCall),
+            step_source: AgentStepSource::Gateway,
+            step_confidence: AgentConfidence::Medium,
+            trust_level: AgentTrustLevel::SelfReported,
+            context_conflict: false,
+            step_id_conflict: false,
+            attempt: None,
+            input_hash: None,
+            metadata: json!({
+                "toolExecutionId": "tool-exec-provider-observed",
+                "toolCostMicros": 1234,
+                "toolCostCurrency": "USD",
+                "billing": {
+                    "costType": "tool",
+                    "costSubtype": "tool",
+                    "status": "settled",
+                    "amountMicros": 1234,
+                    "currency": "USD",
+                    "billable": true,
+                    "dedupeKey": "tool_execution:tool-exec-provider-observed",
+                    "pricingSource": "rate_card"
+                }
+            }),
+            billing_mirror_trusted: false,
+        };
+
+        let value = serde_json::to_value(AgentEventLogPayload::from(&envelope)).unwrap();
+
+        for key in [
+            "toolExecutionId",
+            "toolCostMicros",
+            "toolCostCurrency",
+            "billingCostType",
+            "billingCostSubtype",
+            "billingStatus",
+            "billingAmountMicros",
+            "billingCurrency",
+            "billingBillable",
+            "billingDedupeKey",
+            "toolCostSource",
+        ] {
+            assert!(value.get(key).is_none(), "{key} should be omitted");
+        }
     }
 
     #[test]

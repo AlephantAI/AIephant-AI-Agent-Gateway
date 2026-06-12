@@ -1,0 +1,64 @@
+telemetry:
+  level: "info,ai_gateway=trace"
+  exporter: stdout
+
+alephant:
+  log-collector-url: "http://127.0.0.1:9877"
+  features: all
+
+request-log:
+  transport: http
+
+agent:
+  enabled: true
+  allow-header-context: true
+  event-stream-key: ""
+  event-log-http-fallback-enabled: true
+  event-log-http-endpoint: "http://127.0.0.1:9877/v1/log/agent-event"
+  event-log-http-timeout-ms: 3000
+  context-conflict-action: warn
+  step-conflict-action: warn
+  metadata-redaction: basic
+  policy-mode: audit
+  tools:
+    enabled: true
+    catalog-source: static
+    require-policy-decision: false
+    fail-open-for-static-targets: true
+    schema-validation-enabled: true
+    idempotency-ttl-seconds: 3600
+    response-mode: http-strict
+    redis-timeout-ms: 1000
+    policy-timeout-ms: 1000
+    max-concurrent-per-workspace: 32
+    timeout-ms: 8000
+    max-request-bytes: 65536
+    max-response-bytes: 65536
+    egress-policy:
+      https-only: false
+      block-loopback: false
+      block-link-local: true
+      block-metadata-ip: true
+      block-private-network: true
+      allow-environment-proxy: false
+    targets:
+      - tool-id: docs.search
+        name: Search docs
+        description: Search product docs through a mock MCP Streamable HTTP server.
+        kind: mcp-streamable-http
+        url: "http://127.0.0.1:8766/mcp"
+        method: POST
+        risk-level: low
+        timeout-ms: 8000
+        input-schema:
+          type: object
+          properties:
+            query:
+              type: string
+          required:
+            - query
+        rate-card:
+          currency: USD
+          fixed-micros: 10000
+
+routers: {}

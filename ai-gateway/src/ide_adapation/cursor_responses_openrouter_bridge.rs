@@ -299,6 +299,7 @@ pub(crate) struct CursorChatToResponsesStreamState {
     tools: HashMap<u32, ToolStreamTrack>,
     last_usage: Option<async_openai::types::CompletionUsage>,
     last_finish: Option<FinishReason>,
+    emit_content_part_shell_events: bool,
     emit_tool_done_events: bool,
 }
 
@@ -343,6 +344,7 @@ fn chat_reasoning_tokens(raw: &Value) -> Option<u64> {
 impl CursorChatToResponsesStreamState {
     fn with_tool_done_events(emit_tool_done_events: bool) -> Self {
         Self {
+            emit_content_part_shell_events: emit_tool_done_events,
             emit_tool_done_events,
             ..Self::default()
         }
@@ -431,20 +433,22 @@ impl CursorChatToResponsesStreamState {
                 }
             }),
         )?;
-        put_sse_data_json(
-            buf,
-            &json!({
-                "type": "response.content_part.added",
-                "item_id": self.message_item_id,
-                "output_index": 0,
-                "content_index": 0,
-                "part": {
-                    "type": "output_text",
-                    "text": "",
-                    "annotations": []
-                }
-            }),
-        )?;
+        if self.emit_content_part_shell_events {
+            put_sse_data_json(
+                buf,
+                &json!({
+                    "type": "response.content_part.added",
+                    "item_id": self.message_item_id,
+                    "output_index": 0,
+                    "content_index": 0,
+                    "part": {
+                        "type": "output_text",
+                        "text": "",
+                        "annotations": []
+                    }
+                }),
+            )?;
+        }
         Ok(())
     }
 
@@ -699,6 +703,7 @@ impl Default for CursorChatToResponsesStreamState {
             tools: HashMap::new(),
             last_usage: None,
             last_finish: None,
+            emit_content_part_shell_events: false,
             emit_tool_done_events: false,
         }
     }
@@ -1203,8 +1208,44 @@ mod stream_bridge_tests {
     use super::{CursorChatToResponsesStreamState, map_json_response_chat_to_responses};
 
     #[test]
-    fn text_delta_emits_output_item_and_content_part_before_delta() {
+    fn cursor_text_delta_omits_content_part_shell() {
         let mut state = CursorChatToResponsesStreamState::default();
+        let chunk = CreateChatCompletionStreamResponse {
+            id: "chatcmpl-test".to_string(),
+            choices: vec![ChatChoiceStream {
+                index: 0,
+                delta: ChatCompletionStreamResponseDelta {
+                    content: Some("hi".to_string()),
+                    role: Some(Role::Assistant),
+                    function_call: None,
+                    tool_calls: None,
+                    refusal: None,
+                    reasoning_content: None,
+                },
+                finish_reason: None,
+                logprobs: None,
+            }],
+            created: 1,
+            model: "gpt-test".to_string(),
+            system_fingerprint: None,
+            object: "chat.completion.chunk".to_string(),
+            usage: None,
+            service_tier: None,
+        };
+        let raw = json!({
+            "choices": [{ "delta": { "content": "hi", "role": "assistant" } }]
+        });
+        let out = state
+            .process_upstream_chat_chunk(&chunk, &raw)
+            .expect("chunk maps");
+        let text = String::from_utf8(out.to_vec()).unwrap();
+        assert!(text.contains("response.output_text.delta"));
+        assert!(!text.contains("response.content_part.added"));
+    }
+
+    #[test]
+    fn responses_wire_text_delta_emits_content_part_before_delta() {
+        let mut state = CursorChatToResponsesStreamState::with_tool_done_events(true);
         let chunk = CreateChatCompletionStreamResponse {
             id: "chatcmpl-test".to_string(),
             choices: vec![ChatChoiceStream {

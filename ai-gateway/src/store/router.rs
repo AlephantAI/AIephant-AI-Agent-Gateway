@@ -441,18 +441,7 @@ const FETCH_X402_PAYMENT_ACTIVITY_LOG_FIELDS_SQL: &str = r"
             LIMIT 1
             ";
 
-impl RouterStore {
-    pub fn new(pool: PgPool) -> Result<Self, InitError> {
-        Ok(Self { pool })
-    }
-
-    pub async fn fetch_active_x402_endpoint_snapshot(
-        &self,
-        slug: &str,
-        method: &str,
-    ) -> Result<Option<crate::x402::snapshot::DbX402EndpointSnapshotRow>, sqlx::Error> {
-        sqlx::query_as::<_, crate::x402::snapshot::DbX402EndpointSnapshotRow>(
-            r"
+const FETCH_ACTIVE_X402_ENDPOINT_SNAPSHOT_SQL: &str = r"
             SELECT
                 e.id AS endpoint_id,
                 e.workspace_id,
@@ -496,35 +485,25 @@ impl RouterStore {
               AND e.deleted_at IS NULL
               AND p.deleted_at IS NULL
             LIMIT 1
-            ",
-        )
-        .bind(slug)
-        .bind(method)
-        .fetch_optional(&self.pool)
-        .await
+            ";
+
+impl RouterStore {
+    pub fn new(pool: PgPool) -> Result<Self, InitError> {
+        Ok(Self { pool })
     }
 
-    pub async fn fetch_active_x402_endpoint_type(
+    pub async fn fetch_active_x402_endpoint_snapshot(
         &self,
         slug: &str,
         method: &str,
-    ) -> Result<Option<String>, sqlx::Error> {
-        sqlx::query_scalar::<_, Option<String>>(
-            r"
-            SELECT NULLIF(e.endpoint_type::text, '') AS endpoint_type
-            FROM x402_endpoints e
-            WHERE lower(e.slug) = lower($1)
-              AND lower(e.method::text) = lower($2)
-              AND e.status::text = 'active'
-              AND e.deleted_at IS NULL
-            LIMIT 1
-            ",
+    ) -> Result<Option<crate::x402::snapshot::DbX402EndpointSnapshotRow>, sqlx::Error> {
+        sqlx::query_as::<_, crate::x402::snapshot::DbX402EndpointSnapshotRow>(
+            FETCH_ACTIVE_X402_ENDPOINT_SNAPSHOT_SQL,
         )
         .bind(slug)
         .bind(method)
         .fetch_optional(&self.pool)
         .await
-        .map(Option::flatten)
     }
 
     pub async fn fetch_active_x402_endpoint_secret_ciphertext(
@@ -1750,6 +1729,13 @@ mod tests {
         assert!(sql.contains("settled_at"));
         assert!(sql.contains("available_at"));
         assert!(sql.contains("verified_at"));
+    }
+
+    #[test]
+    fn x402_snapshot_main_query_projects_agent_id_and_endpoint_type() {
+        let sql = FETCH_ACTIVE_X402_ENDPOINT_SNAPSHOT_SQL;
+        assert!(sql.contains("e.agent_id"));
+        assert!(sql.contains("NULLIF(e.endpoint_type::text, '')"));
     }
 
     #[tokio::test]

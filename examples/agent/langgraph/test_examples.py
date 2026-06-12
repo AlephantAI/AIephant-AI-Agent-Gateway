@@ -120,6 +120,44 @@ class LangGraphExamplesTest(unittest.TestCase):
 
         self.assertEqual(adapter.agent_name, "Env Agent")
 
+    def test_env_agent_id_overrides_default_demo_id(self) -> None:
+        alephant_adapter = import_adapter_module()
+
+        AlephantAgentAdapter = alephant_adapter.AlephantAgentAdapter
+
+        with patch.object(alephant_adapter, "find_dotenv", return_value=None), patch.dict(
+            "os.environ",
+            {
+                "ALEPHANT_API_KEY": "test-key",
+                "ALEPHANT_AGENT_ID": "env-agent-id",
+            },
+            clear=True,
+        ):
+            adapter = AlephantAgentAdapter.from_env(agent_id="demo-agent")
+
+        self.assertEqual(adapter.agent_id, "env-agent-id")
+
+    def test_request_headers_include_browser_compatible_user_agent(self) -> None:
+        alephant_adapter = import_adapter_module()
+
+        AlephantAgentAdapter = alephant_adapter.AlephantAgentAdapter
+
+        with patch.object(alephant_adapter, "find_dotenv", return_value=None), patch.dict(
+            "os.environ",
+            {
+                "ALEPHANT_API_KEY": "test-key",
+                "ALEPHANT_HTTP_USER_AGENT": "Custom Agent/1.0",
+            },
+            clear=True,
+        ):
+            adapter = AlephantAgentAdapter.from_env(agent_id="demo-agent")
+
+        headers = adapter._request_headers()
+
+        self.assertEqual(headers["User-Agent"], "Custom Agent/1.0")
+        self.assertEqual(headers["Accept"], "application/json")
+        self.assertIn("Mozilla/5.0", alephant_adapter.DEFAULT_HTTP_USER_AGENT)
+
     def test_agent_name_is_sent_in_headers_and_event_payload(self) -> None:
         alephant_adapter = import_adapter_module()
         AgentStepContext = alephant_adapter.AgentStepContext

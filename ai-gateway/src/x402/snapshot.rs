@@ -121,14 +121,14 @@ pub fn snapshot_from_db_row(
     })
 }
 
-async fn fill_missing_endpoint_type_from_db(
+async fn fill_missing_redis_snapshot_fields_from_db(
     app_state: &AppState,
     snapshot: &mut X402EndpointSnapshot,
     slug: &str,
     method: &str,
 ) -> Result<(), ApiError> {
     snapshot.endpoint_type = normalize_endpoint_type(snapshot.endpoint_type.take());
-    if snapshot.endpoint_type.is_some() {
+    if snapshot.endpoint_type.is_some() && snapshot.agent_id.is_some() {
         return Ok(());
     }
 
@@ -136,12 +136,20 @@ async fn fill_missing_endpoint_type_from_db(
         return Ok(());
     };
 
-    snapshot.endpoint_type = normalize_endpoint_type(
-        store
-            .fetch_active_x402_endpoint_type(slug, method)
-            .await
-            .map_err(InternalError::DatabaseError)?,
-    );
+    let Some(row) = store
+        .fetch_active_x402_endpoint_snapshot(slug, method)
+        .await
+        .map_err(InternalError::DatabaseError)?
+    else {
+        return Ok(());
+    };
+
+    if snapshot.endpoint_type.is_none() {
+        snapshot.endpoint_type = normalize_endpoint_type(row.endpoint_type);
+    }
+    if snapshot.agent_id.is_none() {
+        snapshot.agent_id = row.agent_id;
+    }
 
     Ok(())
 }
@@ -167,7 +175,8 @@ pub async fn resolve_snapshot(
                         error,
                     }
                 })?;
-                fill_missing_endpoint_type_from_db(app_state, &mut snapshot, slug, method).await?;
+                fill_missing_redis_snapshot_fields_from_db(app_state, &mut snapshot, slug, method)
+                    .await?;
                 return Ok(Some(ResolvedSnapshot {
                     snapshot,
                     source: SnapshotSource::Redis,

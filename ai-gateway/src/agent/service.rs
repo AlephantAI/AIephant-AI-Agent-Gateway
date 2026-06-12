@@ -463,6 +463,7 @@ fn normalize_event(
         attempt: event.attempt,
         input_hash: event.input_hash.clone(),
         metadata,
+        billing_mirror_trusted: false,
     }
 }
 

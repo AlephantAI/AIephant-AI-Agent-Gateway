@@ -60,6 +60,15 @@ message ValidateAgentPolicyRequest {
   bytes metadata = 16;
   string entity_type = 17;
   string entity_id = 18;
+  string tool_execution_id = 19;
+  string tool_id = 20;
+  string tool_call_id = 21;
+  string snapshot_revision_text = 22;
+  string policy_revision_text = 23;
+  string schema_hash = 24;
+  string arguments_hash = 25;
+  int64 estimated_cost_micros = 26;
+  string currency = 27;
 }
 
 enum AgentPolicyPhase {
@@ -67,6 +76,7 @@ enum AgentPolicyPhase {
   AGENT_POLICY_PHASE_MODEL_REQUEST = 1;
   AGENT_POLICY_PHASE_TOOL_CALL = 2;
   AGENT_POLICY_PHASE_RUN_UPDATE = 3;
+  AGENT_POLICY_PHASE_TOOL_APPROVAL_RESUME = 4;
 }
 
 message AgentPolicyRuntimeContext {
@@ -86,6 +96,21 @@ message ValidateAgentPolicyResponse {
   AgentPolicyScope policy_scope = 8;
   repeated AgentPolicyIssue violations = 9;
   repeated AgentPolicyIssue warnings = 10;
+  AgentPolicyDecisionKind decision = 11;
+  int64 policy_revision = 12;
+  string approval_request_id = 13;
+  string approval_status_id = 14;
+  string resume_token = 15;
+  string expires_at = 16;
+}
+
+enum AgentPolicyDecisionKind {
+  AGENT_POLICY_DECISION_KIND_UNSPECIFIED = 0;
+  AGENT_POLICY_DECISION_KIND_ALLOW = 1;
+  AGENT_POLICY_DECISION_KIND_DENY = 2;
+  AGENT_POLICY_DECISION_KIND_BLOCK = 3;
+  AGENT_POLICY_DECISION_KIND_APPROVAL_REQUIRED = 4;
+  AGENT_POLICY_DECISION_KIND_AUDIT_WARNING = 5;
 }
 
 enum AgentPolicyScope {

@@ -17,6 +17,12 @@ agent:
   step-conflict-action: warn
   metadata-redaction: basic
   policy-mode: audit
+  tools:
+    enabled: false
+    timeout-ms: 8000
+    max-request-bytes: 65536
+    max-response-bytes: 65536
+    targets: []
 
 rate-limit-store:
   type: redis

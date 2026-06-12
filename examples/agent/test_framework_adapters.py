@@ -1,6 +1,7 @@
 import json
 import importlib.util
 import py_compile
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -58,6 +59,15 @@ FRAMEWORKS = {
 def import_script(framework: str, script_name: str):
     path = ROOT / framework / script_name
     spec = importlib.util.spec_from_file_location(f"{framework}_example", path)
+    module = importlib.util.module_from_spec(spec)
+    assert spec is not None
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    return module
+
+
+def import_file(module_name: str, path: Path):
+    spec = importlib.util.spec_from_file_location(module_name, path)
     module = importlib.util.module_from_spec(spec)
     assert spec is not None
     assert spec.loader is not None
@@ -298,6 +308,45 @@ class FrameworkAdapterExamplesTest(unittest.TestCase):
         self.assertTrue(any("/v1/agent/events" in url for url in urls))
         self.assertIn("ALEPHANT_API_KEY", headers_text)
         self.assertIn("connections", workflow)
+
+    def test_tools_common_uses_alephant_agent_id_as_default_agent_id(self) -> None:
+        script = ROOT / "tools" / "common.sh"
+        result = subprocess.run(
+            [
+                "bash",
+                "-lc",
+                f"source {script}; printf '%s' \"$AGENT_ID\"",
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+            env={
+                "API_KEY": "test-key",
+                "ALEPHANT_AGENT_ID": "env-tools-agent",
+                "ENV_FILE": "/tmp/alephant-agent-example-test-missing.env",
+            },
+        )
+
+        self.assertEqual(result.stdout, "env-tools-agent")
+
+    def test_framework_client_headers_include_browser_compatible_user_agent(self) -> None:
+        framework_common = import_file("framework_common_example", ROOT / "framework_common.py")
+
+        with patch.object(framework_common, "find_dotenv", return_value=None), patch.dict(
+            "os.environ",
+            {
+                "ALEPHANT_API_KEY": "test-key",
+                "ALEPHANT_HTTP_USER_AGENT": "Custom Agent/1.0",
+            },
+            clear=True,
+        ):
+            client = framework_common.AgentEventClient.from_env()
+
+        headers = client._request_headers()
+
+        self.assertEqual(headers["User-Agent"], "Custom Agent/1.0")
+        self.assertEqual(headers["Accept"], "application/json")
+        self.assertIn("Mozilla/5.0", framework_common.DEFAULT_HTTP_USER_AGENT)
 
 
 if __name__ == "__main__":

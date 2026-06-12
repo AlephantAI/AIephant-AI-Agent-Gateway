@@ -20,6 +20,11 @@ from typing import Any
 
 
 DEFAULT_MODEL = "openai/gpt-4o-mini"
+DEFAULT_HTTP_USER_AGENT = (
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36 "
+    "AlephantAgentExample/1.0"
+)
 
 
 @dataclass(frozen=True)
@@ -47,6 +52,7 @@ class AlephantAgentAdapter:
         dry_run: bool = False,
         debug_headers: bool = False,
         debug_body: bool = False,
+        http_user_agent: str = DEFAULT_HTTP_USER_AGENT,
         timeout_seconds: float = 20.0,
     ) -> None:
         self.base_url = base_url.rstrip("/")
@@ -58,6 +64,7 @@ class AlephantAgentAdapter:
         self.dry_run = dry_run or not api_key
         self.debug_headers = debug_headers
         self.debug_body = debug_body
+        self.http_user_agent = http_user_agent
         self.timeout_seconds = timeout_seconds
 
     @classmethod
@@ -74,13 +81,14 @@ class AlephantAgentAdapter:
             or os.getenv("ALEPHANT_GATEWAY_URL", "http://127.0.0.1:8080"),
             api_key=os.getenv("ALEPHANT_CONTROL_OPENROUTER_API_KEY")
             or os.getenv("ALEPHANT_API_KEY"),
-            agent_id=agent_id,
+            agent_id=os.getenv("ALEPHANT_AGENT_ID") or agent_id,
             run_id=run_id or f"run_{uuid.uuid4().hex}",
             agent_name=os.getenv("ALEPHANT_AGENT_NAME") or default_agent_name,
             model=os.getenv("ALEPHANT_MODEL", DEFAULT_MODEL),
             dry_run=os.getenv("ALEPHANT_AGENT_DRY_RUN", "").lower() in {"1", "true", "yes"},
             debug_headers=truthy(os.getenv("AI_GATEWAY_DEBUG_HEADERS")),
             debug_body=truthy(os.getenv("AI_GATEWAY_DEBUG_BODY")),
+            http_user_agent=os.getenv("ALEPHANT_HTTP_USER_AGENT", DEFAULT_HTTP_USER_AGENT),
         )
 
     def agent_headers(self, context: AgentStepContext) -> dict[str, str]:
@@ -285,7 +293,9 @@ class AlephantAgentAdapter:
     def _request_headers(self, extra_headers: dict[str, str] | None = None) -> dict[str, str]:
         headers = {
             "Authorization": f"Bearer {self.api_key}",
+            "Accept": "application/json",
             "Content-Type": "application/json",
+            "User-Agent": self.http_user_agent,
         }
         if self.debug_headers:
             headers["alephant-debug-headers"] = "true"

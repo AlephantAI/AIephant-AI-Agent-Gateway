@@ -16,8 +16,11 @@ use crate::{
 
 /// Regex for extracting the first path segment and the rest of the path.
 const UNIFIED_URL_REGEX: &str = r"^/(?P<first_segment>[^/?]+)(?P<rest>/[^?]*)?(?P<query>\?.*)?$";
-const X402_AGENT_ROUTE_PREFIX: &str = "/x402/agents/";
-const X402_API_ROUTE_PREFIX: &str = "/x402/api/";
+const X402_ROUTE_PREFIX: &str = "/x402/";
+const X402_RESERVED_AGENTS_SEGMENT: &str = "agents";
+const X402_RESERVED_API_SEGMENT: &str = "api";
+const AGENT_TOOLS_LIST_PATH: &str = "/agent/tools/list";
+const AGENT_TOOLS_CALL_PATH: &str = "/agent/tools/call";
 
 pub struct RouterDetailsLayer {}
 
@@ -47,36 +50,30 @@ pub struct RouterDetailsService<S> {
 #[derive(Debug, Clone)]
 pub enum RouteType {
     AgentEvents,
+    AgentTools {
+        action: AgentToolsRouteAction,
+    },
     UnifiedApi {
         path: CompactString,
     },
     X402Agent {
         slug: CompactString,
         remaining_path: CompactString,
-        route_kind: X402RouteKind,
     },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum X402RouteKind {
-    Agent,
-    HttpApi,
+pub enum AgentToolsRouteAction {
+    List,
+    Call,
 }
 
-impl X402RouteKind {
-    #[must_use]
-    pub fn expected_endpoint_type(self) -> &'static str {
-        match self {
-            Self::Agent => "agent",
-            Self::HttpApi => "http_api",
-        }
-    }
-
+impl AgentToolsRouteAction {
     #[must_use]
     pub fn as_str(self) -> &'static str {
         match self {
-            Self::Agent => "agents",
-            Self::HttpApi => "api",
+            Self::List => "list",
+            Self::Call => "call",
         }
     }
 }
@@ -84,14 +81,13 @@ impl X402RouteKind {
 impl<S> RouterDetailsService<S> {
     fn parse_route(&self, request: &Request) -> Result<RouteType, ApiError> {
         let path = request.uri().path();
-        if let Some((route_kind, slug, remaining_path)) = parse_x402_path(path) {
+        if let Some((slug, remaining_path)) = parse_x402_path(path) {
             return Ok(RouteType::X402Agent {
                 slug: slug.into(),
                 remaining_path: remaining_path.into(),
-                route_kind,
             });
         }
-        if path.starts_with("/x402/agents") || path.starts_with("/x402/api") {
+        if path == "/x402" || path.starts_with("/x402/") {
             return Err(ApiError::InvalidRequest(InvalidRequestError::NotFound(
                 path.to_string(),
             )));
@@ -120,20 +116,27 @@ impl<S> RouterDetailsService<S> {
         if rest_path == "/agent/events" {
             return Ok(RouteType::AgentEvents);
         }
+        match rest_path {
+            AGENT_TOOLS_LIST_PATH => {
+                return Ok(RouteType::AgentTools {
+                    action: AgentToolsRouteAction::List,
+                });
+            }
+            AGENT_TOOLS_CALL_PATH => {
+                return Ok(RouteType::AgentTools {
+                    action: AgentToolsRouteAction::Call,
+                });
+            }
+            _ => {}
+        }
         Ok(RouteType::UnifiedApi {
             path: rest_path.trim_start_matches('/').into(),
         })
     }
 }
 
-fn parse_x402_path(path: &str) -> Option<(X402RouteKind, &str, &str)> {
-    let (route_kind, rest) = if let Some(rest) = path.strip_prefix(X402_AGENT_ROUTE_PREFIX) {
-        (X402RouteKind::Agent, rest)
-    } else if let Some(rest) = path.strip_prefix(X402_API_ROUTE_PREFIX) {
-        (X402RouteKind::HttpApi, rest)
-    } else {
-        return None;
-    };
+fn parse_x402_path(path: &str) -> Option<(&str, &str)> {
+    let rest = path.strip_prefix(X402_ROUTE_PREFIX)?;
     let (slug, remaining) = rest
         .split_once('/')
         .map_or((rest, ""), |(slug, remaining)| {
@@ -147,7 +150,11 @@ fn parse_x402_path(path: &str) -> Option<(X402RouteKind, &str, &str)> {
             )
         });
     let slug = slug.trim();
-    (!slug.is_empty()).then_some((route_kind, slug, remaining))
+    if slug.is_empty() || slug == X402_RESERVED_AGENTS_SEGMENT || slug == X402_RESERVED_API_SEGMENT
+    {
+        return None;
+    }
+    Some((slug, remaining))
 }
 
 fn extract_path_and_query(path: &str, query: Option<&str>) -> Result<PathAndQuery, ApiError> {
@@ -186,6 +193,9 @@ where
             RouteType::AgentEvents => {
                 req.extensions_mut().insert(RequestKind::AgentEvents);
             }
+            RouteType::AgentTools { .. } => {
+                req.extensions_mut().insert(RequestKind::AgentTools);
+            }
             RouteType::UnifiedApi { path } => {
                 tracing::info!(path = %path, "unified api request path");
                 let extracted_path_and_query = match extract_path_and_query(path, req.uri().query())
@@ -211,6 +221,8 @@ where
 
 #[cfg(test)]
 mod tests {
+    use tower::{Service, ServiceExt as _};
+
     use super::*;
 
     #[test]
@@ -284,103 +296,138 @@ mod tests {
     }
 
     #[test]
-    fn parses_x402_agent_route() {
+    fn parses_agent_tools_list_before_unified_api() {
         let service = service();
 
         let request = http::Request::builder()
-            .uri("http://router.alephant.test/x402/agents/test-agent/foo/bar")
+            .uri("http://router.alephant.test/v1/agent/tools/list")
             .body(axum_core::body::Body::empty())
             .unwrap();
 
         assert!(matches!(
             service.parse_route(&request).expect("route should parse"),
-            RouteType::X402Agent { slug, remaining_path, route_kind }
-                if slug == "test-agent"
-                    && remaining_path == "/foo/bar"
-                    && route_kind == X402RouteKind::Agent
+            RouteType::AgentTools {
+                action: AgentToolsRouteAction::List,
+            }
         ));
     }
 
     #[test]
-    fn parses_x402_api_route() {
+    fn parses_agent_tools_call_before_unified_api() {
         let service = service();
 
         let request = http::Request::builder()
-            .uri("http://router.alephant.test/x402/api/test-api/foo/bar")
+            .uri("http://router.alephant.test/v1/agent/tools/call")
             .body(axum_core::body::Body::empty())
             .unwrap();
 
         assert!(matches!(
             service.parse_route(&request).expect("route should parse"),
-            RouteType::X402Agent { slug, remaining_path, route_kind }
-                if slug == "test-api"
-                    && remaining_path == "/foo/bar"
-                    && route_kind == X402RouteKind::HttpApi
+            RouteType::AgentTools {
+                action: AgentToolsRouteAction::Call,
+            }
+        ));
+    }
+
+    #[tokio::test]
+    async fn agent_tools_route_sets_agent_tools_kind_without_unified_path() {
+        let inner = tower::service_fn(|req: Request| async move {
+            assert!(matches!(
+                req.extensions().get::<RouteType>(),
+                Some(RouteType::AgentTools {
+                    action: AgentToolsRouteAction::List,
+                })
+            ));
+            assert_eq!(
+                req.extensions().get::<RequestKind>(),
+                Some(&RequestKind::AgentTools)
+            );
+            assert!(req.extensions().get::<PathAndQuery>().is_none());
+
+            Ok::<Response, ApiError>(
+                http::Response::builder()
+                    .body(axum_core::body::Body::empty())
+                    .unwrap(),
+            )
+        });
+        let mut service = RouterDetailsService {
+            inner,
+            unified_url_regex: Regex::new(UNIFIED_URL_REGEX).unwrap(),
+        };
+        let request = http::Request::builder()
+            .uri("http://router.alephant.test/v1/agent/tools/list")
+            .body(axum_core::body::Body::empty())
+            .unwrap();
+
+        service.ready().await.unwrap().call(request).await.unwrap();
+    }
+
+    #[test]
+    fn parses_x402_unified_route() {
+        let service = service();
+
+        let request = http::Request::builder()
+            .uri("http://router.alephant.test/x402/weather/foo/bar")
+            .body(axum_core::body::Body::empty())
+            .unwrap();
+
+        assert!(matches!(
+            service.parse_route(&request).expect("route should parse"),
+            RouteType::X402Agent { slug, remaining_path }
+                if slug == "weather" && remaining_path == "/foo/bar"
         ));
     }
 
     #[test]
-    fn x402_agent_path_extracts_slug_only() {
+    fn x402_unified_path_extracts_slug_only() {
+        assert_eq!(parse_x402_path("/x402/weather"), Some(("weather", "")));
+    }
+
+    #[test]
+    fn x402_unified_path_extracts_remaining_path() {
         assert_eq!(
-            parse_x402_path("/x402/agents/test-agent"),
-            Some((X402RouteKind::Agent, "test-agent", ""))
+            parse_x402_path("/x402/weather/foo/bar"),
+            Some(("weather", "/foo/bar"))
         );
     }
 
     #[test]
-    fn x402_api_path_extracts_slug_only() {
+    fn x402_reserved_prefix_like_agents2_is_valid_slug() {
         assert_eq!(
-            parse_x402_path("/x402/api/test-api"),
-            Some((X402RouteKind::HttpApi, "test-api", ""))
+            parse_x402_path("/x402/agents2/foo"),
+            Some(("agents2", "/foo"))
         );
     }
 
     #[test]
-    fn x402_agent_path_rejects_missing_slug() {
-        assert_eq!(parse_x402_path("/x402/agents/"), None);
+    fn x402_reserved_prefix_like_api2_is_valid_slug() {
+        assert_eq!(parse_x402_path("/x402/api2/foo"), Some(("api2", "/foo")));
     }
 
     #[test]
-    fn x402_api_path_rejects_missing_slug() {
-        assert_eq!(parse_x402_path("/x402/api/"), None);
+    fn x402_root_without_slug_is_not_x402_route() {
+        assert_eq!(parse_x402_path("/x402"), None);
+        assert_eq!(parse_x402_path("/x402/"), None);
     }
 
     #[test]
-    fn x402_agent_route_rejects_missing_slug() {
-        let service = service();
-        let request = http::Request::builder()
-            .uri("/x402/agents/")
-            .body(axum_core::body::Body::empty())
-            .unwrap();
-
-        let err = service
-            .parse_route(&request)
-            .expect_err("missing x402 agent slug should be rejected");
-
-        assert!(matches!(
-            err,
-            ApiError::InvalidRequest(InvalidRequestError::NotFound(path))
-                if path == "/x402/agents/"
-        ));
+    fn x402_empty_slug_with_remaining_path_is_not_x402_route() {
+        assert_eq!(parse_x402_path("/x402//foo"), None);
     }
 
     #[test]
-    fn x402_api_route_rejects_missing_slug() {
-        let service = service();
-        let request = http::Request::builder()
-            .uri("/x402/api/")
-            .body(axum_core::body::Body::empty())
-            .unwrap();
+    fn x402_trailing_slash_keeps_empty_remaining_path() {
+        assert_eq!(parse_x402_path("/x402/weather/"), Some(("weather", "")));
+    }
 
-        let err = service
-            .parse_route(&request)
-            .expect_err("missing x402 api slug should be rejected");
+    #[test]
+    fn old_x402_agents_route_is_not_x402_route() {
+        assert_eq!(parse_x402_path("/x402/agents/weather"), None);
+    }
 
-        assert!(matches!(
-            err,
-            ApiError::InvalidRequest(InvalidRequestError::NotFound(path))
-                if path == "/x402/api/"
-        ));
+    #[test]
+    fn old_x402_api_route_is_not_x402_route() {
+        assert_eq!(parse_x402_path("/x402/api/weather"), None);
     }
 
     #[test]

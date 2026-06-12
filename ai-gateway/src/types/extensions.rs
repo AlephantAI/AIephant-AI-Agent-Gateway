@@ -283,6 +283,7 @@ pub enum RequestKind {
     DirectProxy,
     CustomProvider,
     AgentEvents,
+    AgentTools,
     X402Agent,
 }
 

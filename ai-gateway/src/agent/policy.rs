@@ -7,8 +7,8 @@ use crate::{
     },
     app_state::AppState,
     policy_proto::{
-        AgentPolicyIssue, AgentPolicyPhase, AgentPolicyRuntimeContext, AgentPolicyScope,
-        ValidateAgentPolicyRequest, ValidateAgentPolicyResponse,
+        AgentPolicyDecisionKind, AgentPolicyIssue, AgentPolicyPhase, AgentPolicyRuntimeContext,
+        AgentPolicyScope, ValidateAgentPolicyRequest, ValidateAgentPolicyResponse,
     },
     types::extensions::AuthContext,
 };
@@ -115,6 +115,12 @@ pub fn build_validate_agent_policy_request(
     } else {
         tool_name
     };
+    let estimated_cost_micros = metadata_i64(&envelope.metadata, "estimated_cost_micros")
+        .or_else(|| {
+            metadata_i64(&envelope.metadata, "estimated_cost_cents")
+                .map(|cents| cents.saturating_mul(10_000))
+        })
+        .unwrap_or_default();
     let metadata = serde_json::to_vec(&envelope.metadata).unwrap_or_default();
 
     ValidateAgentPolicyRequest {
@@ -147,6 +153,22 @@ pub fn build_validate_agent_policy_request(
         } else {
             auth.entity_id.to_string()
         },
+        tool_execution_id: metadata_string(&envelope.metadata, "tool_execution_id"),
+        tool_id: metadata_string(&envelope.metadata, "tool_id"),
+        tool_call_id: envelope
+            .tool_call_id
+            .clone()
+            .or_else(|| {
+                let value = metadata_string(&envelope.metadata, "tool_call_id");
+                (!value.is_empty()).then_some(value)
+            })
+            .unwrap_or_default(),
+        snapshot_revision_text: metadata_string(&envelope.metadata, "snapshot_revision_text"),
+        policy_revision_text: metadata_string(&envelope.metadata, "policy_revision_text"),
+        schema_hash: metadata_string(&envelope.metadata, "schema_hash"),
+        arguments_hash: metadata_string(&envelope.metadata, "arguments_hash"),
+        estimated_cost_micros,
+        currency: metadata_string(&envelope.metadata, "currency"),
     }
 }
 
@@ -167,17 +189,13 @@ pub fn decision_from_policy_response(
     envelope: &AgentEventEnvelope,
     response: ValidateAgentPolicyResponse,
 ) -> AgentPolicyDecision {
-    let policy_decision = if response.allowed {
-        "allowed"
-    } else {
-        "denied"
-    };
+    let (allowed, policy_decision) = event_decision_from_policy_response(&response);
     AgentPolicyDecision {
         event_id: envelope.event_id.clone(),
         event_type: envelope.event_type.clone(),
         run_id: envelope.run_id.clone(),
         step_id: envelope.step_id.clone(),
-        allowed: response.allowed,
+        allowed,
         policy_decision: policy_decision.to_string(),
         policy_stage: envelope.policy_stage.as_str().to_string(),
         sink_status: String::new(),
@@ -193,6 +211,22 @@ pub fn decision_from_policy_response(
             .to_string(),
         violations: response.violations.into_iter().map(issue_to_dto).collect(),
         warnings: response.warnings.into_iter().map(issue_to_dto).collect(),
+    }
+}
+
+fn event_decision_from_policy_response(
+    response: &ValidateAgentPolicyResponse,
+) -> (bool, &'static str) {
+    match AgentPolicyDecisionKind::try_from(response.decision)
+        .unwrap_or(AgentPolicyDecisionKind::Unspecified)
+    {
+        AgentPolicyDecisionKind::Allow => (true, "allowed"),
+        AgentPolicyDecisionKind::Deny => (false, "denied"),
+        AgentPolicyDecisionKind::Block => (false, "blocked"),
+        AgentPolicyDecisionKind::ApprovalRequired => (false, "approval_required"),
+        AgentPolicyDecisionKind::AuditWarning => (true, "audit_warning"),
+        AgentPolicyDecisionKind::Unspecified if response.allowed => (true, "allowed"),
+        AgentPolicyDecisionKind::Unspecified => (false, "denied"),
     }
 }
 
@@ -380,6 +414,7 @@ mod tests {
             event::AgentEventSource,
         },
         config::{Config, policy::OnUnavailable},
+        policy_proto::AgentPolicyDecisionKind,
         types::{org::OrgId, secret::Secret, user::UserId},
     };
 
@@ -491,6 +526,22 @@ mod tests {
     }
 
     #[test]
+    fn estimated_cost_micros_fallback_saturates_on_overflow() {
+        let workspace_id = Uuid::parse_str("11111111-1111-1111-1111-111111111111").unwrap();
+        let virtual_key_id = Uuid::parse_str("22222222-2222-2222-2222-222222222222").unwrap();
+        let department_id = Uuid::parse_str("33333333-3333-3333-3333-333333333333").unwrap();
+        let auth = auth_context(workspace_id, virtual_key_id, department_id);
+        let envelope = envelope(json!({
+            "estimated_cost_cents": i64::MAX
+        }));
+
+        let req = build_validate_agent_policy_request(&auth, &envelope);
+
+        assert_eq!(req.estimated_cost_cents, Some(i64::MAX));
+        assert_eq!(req.estimated_cost_micros, i64::MAX);
+    }
+
+    #[test]
     fn converts_policy_response_to_decision() {
         let response = ValidateAgentPolicyResponse {
             allowed: false,
@@ -514,6 +565,7 @@ mod tests {
                 operator: "lte".to_string(),
             }],
             warnings: Vec::new(),
+            ..Default::default()
         };
 
         let envelope = envelope(json!({}));
@@ -549,6 +601,38 @@ mod tests {
         assert_eq!(decision.reason, "agent_tool_denied");
         assert_eq!(decision.blocked_by, "agent.policy.tool");
         assert_eq!(decision.reason_message, "Tool denied.");
+    }
+
+    #[test]
+    fn policy_response_decision_kind_overrides_allowed_bool() {
+        let response = ValidateAgentPolicyResponse {
+            allowed: true,
+            decision: AgentPolicyDecisionKind::Block as i32,
+            reason: "agent_tool_blocked".to_string(),
+            ..Default::default()
+        };
+
+        let envelope = envelope(json!({}));
+        let decision = decision_from_policy_response(&envelope, response);
+
+        assert!(!decision.allowed);
+        assert_eq!(decision.policy_decision, "blocked");
+        assert_eq!(decision.reason, "agent_tool_blocked");
+    }
+
+    #[test]
+    fn unspecified_policy_response_keeps_allowed_compatibility() {
+        let response = ValidateAgentPolicyResponse {
+            allowed: true,
+            decision: AgentPolicyDecisionKind::Unspecified as i32,
+            ..Default::default()
+        };
+
+        let envelope = envelope(json!({}));
+        let decision = decision_from_policy_response(&envelope, response);
+
+        assert!(decision.allowed);
+        assert_eq!(decision.policy_decision, "allowed");
     }
 
     #[test]
@@ -824,6 +908,7 @@ mod tests {
             attempt: None,
             input_hash: None,
             metadata,
+            billing_mirror_trusted: false,
         }
     }
 }

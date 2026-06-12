@@ -234,7 +234,8 @@ impl AuthService {
             RequestKind::UnifiedApi
             | RequestKind::DirectProxy
             | RequestKind::CustomProvider
-            | RequestKind::AgentEvents => Ok((
+            | RequestKind::AgentEvents
+            | RequestKind::AgentTools => Ok((
                 AuthContext {
                     api_key: Secret::from(api_key_without_bearer),
                     user_id: owner_id,
@@ -262,6 +263,17 @@ impl AuthService {
 
 fn strip_bearer_prefix(api_key: &str) -> &str {
     api_key.strip_prefix("Bearer ").unwrap_or(api_key)
+}
+
+fn should_mark_custom_provider_request_kind(
+    is_custom_provider: bool,
+    request_kind: Option<&RequestKind>,
+) -> bool {
+    is_custom_provider
+        && matches!(
+            request_kind,
+            Some(RequestKind::UnifiedApi | RequestKind::DirectProxy | RequestKind::CustomProvider)
+        )
 }
 
 /// Maps `subscriptions.log_limit` into RMT `body_ttl_days` (1–730); otherwise
@@ -347,7 +359,11 @@ where
                         vk_prefix = %auth_ctx.virtual_key_prefix,
                         "auth: authenticated, master_key info"
                     );
-                    if auth_ctx.is_custom_provider {
+                    let should_mark_custom_provider = should_mark_custom_provider_request_kind(
+                        auth_ctx.is_custom_provider,
+                        request.extensions().get::<RequestKind>(),
+                    );
+                    if should_mark_custom_provider {
                         request.extensions_mut().insert(RequestKind::CustomProvider);
                     }
                     request.extensions_mut().insert(auth_ctx);
@@ -410,6 +426,30 @@ mod tests {
     fn strip_bearer_prefix_only_removes_prefix() {
         assert_eq!(strip_bearer_prefix("Bearer sk-test"), "sk-test");
         assert_eq!(strip_bearer_prefix("sk-Bearer-test"), "sk-Bearer-test");
+    }
+
+    #[test]
+    fn custom_provider_marking_preserves_agent_route_kinds() {
+        assert!(should_mark_custom_provider_request_kind(
+            true,
+            Some(&RequestKind::UnifiedApi)
+        ));
+        assert!(should_mark_custom_provider_request_kind(
+            true,
+            Some(&RequestKind::DirectProxy)
+        ));
+        assert!(!should_mark_custom_provider_request_kind(
+            true,
+            Some(&RequestKind::AgentEvents)
+        ));
+        assert!(!should_mark_custom_provider_request_kind(
+            true,
+            Some(&RequestKind::AgentTools)
+        ));
+        assert!(!should_mark_custom_provider_request_kind(
+            false,
+            Some(&RequestKind::UnifiedApi)
+        ));
     }
 
     #[test]

@@ -199,6 +199,7 @@ fn observed_tool_call_envelope(
         attempt: None,
         input_hash: None,
         metadata,
+        billing_mirror_trusted: false,
     }
 }
 
@@ -291,6 +292,7 @@ fn observed_chat_stream_tool_call_envelope(
         attempt: None,
         input_hash: None,
         metadata,
+        billing_mirror_trusted: false,
     }
 }
 
@@ -389,6 +391,7 @@ fn observed_responses_item_envelope(
         attempt: None,
         input_hash: None,
         metadata,
+        billing_mirror_trusted: false,
     }
 }
 
@@ -473,6 +476,7 @@ fn observed_responses_stream_item_envelope(
         attempt: None,
         input_hash: None,
         metadata,
+        billing_mirror_trusted: false,
     }
 }
 

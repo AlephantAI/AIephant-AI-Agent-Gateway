@@ -395,6 +395,7 @@ pub enum AgentEventSourceTrust {
     SelfReported,
     AdapterDetected,
     GatewayObserved,
+    GatewayExecuted,
     Registered,
 }
 
@@ -405,6 +406,7 @@ impl AgentEventSourceTrust {
             Self::SelfReported => "self_reported",
             Self::AdapterDetected => "adapter_detected",
             Self::GatewayObserved => "gateway_observed",
+            Self::GatewayExecuted => "gateway_executed",
             Self::Registered => "registered",
         }
     }
@@ -423,6 +425,7 @@ impl FromStr for AgentEventSourceTrust {
         Ok(match value.trim().to_ascii_lowercase().as_str() {
             "adapter_detected" | "adapter-detected" => Self::AdapterDetected,
             "gateway_observed" | "gateway-observed" => Self::GatewayObserved,
+            "gateway_executed" | "gateway-executed" => Self::GatewayExecuted,
             "registered" => Self::Registered,
             _ => Self::SelfReported,
         })
@@ -562,12 +565,33 @@ mod tests {
             AgentEventSourceTrust::GatewayObserved
         );
         assert_eq!(
+            "gateway_executed".parse::<AgentEventSourceTrust>().unwrap(),
+            AgentEventSourceTrust::GatewayExecuted
+        );
+        assert_eq!(
             "registered".parse::<AgentEventSourceTrust>().unwrap(),
             AgentEventSourceTrust::Registered
         );
         assert_eq!(
             "future".parse::<AgentEventSourceTrust>().unwrap(),
             AgentEventSourceTrust::SelfReported
+        );
+    }
+
+    #[test]
+    fn agent_event_source_trust_gateway_executed_roundtrips() {
+        let value = AgentEventSourceTrust::GatewayExecuted;
+
+        assert_eq!(value.as_str(), "gateway_executed");
+        assert_eq!(value.to_string(), "gateway_executed");
+        assert_eq!(
+            serde_json::to_value(value).unwrap(),
+            serde_json::json!("gateway_executed")
+        );
+        assert_eq!(
+            serde_json::from_value::<AgentEventSourceTrust>(serde_json::json!("gateway-executed"))
+                .unwrap(),
+            AgentEventSourceTrust::GatewayExecuted
         );
     }
 

@@ -297,6 +297,8 @@ pub struct AgentEventEnvelope {
     pub attempt: Option<u32>,
     pub input_hash: Option<String>,
     pub metadata: serde_json::Value,
+    #[serde(skip)]
+    pub billing_mirror_trusted: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]

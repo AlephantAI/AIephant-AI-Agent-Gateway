@@ -4,10 +4,39 @@
 use tokio::sync::Mutex;
 use url::Url;
 
+const DEL_IF_VALUE_SCRIPT: &str = r"
+if redis.call('GET', KEYS[1]) == ARGV[1] then
+  redis.call('DEL', KEYS[1])
+  return 1
+end
+return 0
+";
+
 #[derive(Debug)]
 pub struct AppRedis {
     url: Url,
     conn: Mutex<Option<redis::aio::MultiplexedConnection>>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn del_if_value_script_only_deletes_matching_token() {
+        let script = del_if_value_script_source();
+
+        assert!(script.contains("redis.call('GET', KEYS[1])"));
+        assert!(script.contains("== ARGV[1]"));
+        assert!(script.contains("redis.call('DEL', KEYS[1])"));
+        assert!(script.contains("return 1"));
+        assert!(script.contains("return 0"));
+    }
+}
+
+#[cfg(test)]
+fn del_if_value_script_source() -> &'static str {
+    DEL_IF_VALUE_SCRIPT
 }
 
 impl AppRedis {
@@ -203,6 +232,25 @@ impl AppRedis {
             .query_async(conn)
             .await?;
         Ok(inserted.is_some())
+    }
+
+    pub async fn del_if_value(
+        &self,
+        key: &str,
+        expected_value: &str,
+    ) -> Result<bool, redis::RedisError> {
+        let mut guard = self.conn.lock().await;
+        if guard.is_none() {
+            let client = redis::Client::open(self.url.as_str())?;
+            *guard = Some(client.get_multiplexed_async_connection().await?);
+        }
+        let conn = guard.as_mut().expect("connection ensured");
+        let deleted: i64 = redis::Script::new(DEL_IF_VALUE_SCRIPT)
+            .key(key)
+            .arg(expected_value)
+            .invoke_async(conn)
+            .await?;
+        Ok(deleted == 1)
     }
 
     pub async fn del(&self, key: &str) -> Result<(), redis::RedisError> {

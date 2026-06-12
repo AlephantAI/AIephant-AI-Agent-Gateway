@@ -19,6 +19,11 @@ from typing import Any
 
 
 EVENT_VERSION = "2026-05-27"
+DEFAULT_HTTP_USER_AGENT = (
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36 "
+    "AlephantAgentExample/1.0"
+)
 
 
 class AgentEventClient:
@@ -30,6 +35,7 @@ class AgentEventClient:
         dry_run: bool = False,
         debug_headers: bool = False,
         debug_body: bool = False,
+        http_user_agent: str = DEFAULT_HTTP_USER_AGENT,
         timeout_seconds: float = 20.0,
     ) -> None:
         self.base_url = base_url.rstrip("/")
@@ -37,6 +43,7 @@ class AgentEventClient:
         self.dry_run = dry_run or not api_key
         self.debug_headers = debug_headers
         self.debug_body = debug_body
+        self.http_user_agent = http_user_agent
         self.timeout_seconds = timeout_seconds
 
     @classmethod
@@ -50,6 +57,7 @@ class AgentEventClient:
             dry_run=truthy(os.getenv("ALEPHANT_AGENT_DRY_RUN")),
             debug_headers=truthy(os.getenv("AI_GATEWAY_DEBUG_HEADERS")),
             debug_body=truthy(os.getenv("AI_GATEWAY_DEBUG_BODY")),
+            http_user_agent=os.getenv("ALEPHANT_HTTP_USER_AGENT", DEFAULT_HTTP_USER_AGENT),
         )
 
     def emit_events(self, *, source: str, events: list[dict[str, Any]]) -> dict[str, Any]:
@@ -112,7 +120,11 @@ class AgentEventClient:
         return json.loads(body)
 
     def _request_headers(self) -> dict[str, str]:
-        headers = {"Content-Type": "application/json"}
+        headers = {
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+            "User-Agent": self.http_user_agent,
+        }
         if self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"
         if self.debug_headers:

@@ -125,7 +125,9 @@ fn precheck(req: &Request) -> Result<(), ApiError> {
     };
 
     match route_type {
-        RouteType::AgentEvents | RouteType::X402Agent { .. } => return Ok(()),
+        RouteType::AgentEvents | RouteType::AgentTools { .. } | RouteType::X402Agent { .. } => {
+            return Ok(());
+        }
         RouteType::UnifiedApi { .. } => {}
     }
 
@@ -170,7 +172,7 @@ mod tests {
     use std::str::FromStr;
 
     use super::*;
-    use crate::router::router_details::X402RouteKind;
+    use crate::router::router_details::AgentToolsRouteAction;
 
     fn request_with_route(path: &str, route_type: RouteType, method: Method) -> Request {
         let mut req = http::Request::builder()
@@ -200,13 +202,26 @@ mod tests {
     fn precheck_accepts_x402_without_path_and_query() {
         let mut req = http::Request::builder()
             .method(Method::GET)
-            .uri("http://router.alephant.test/x402/agents/weather")
+            .uri("http://router.alephant.test/x402/weather")
             .body(axum_core::body::Body::empty())
             .unwrap();
         req.extensions_mut().insert(RouteType::X402Agent {
             slug: "weather".into(),
             remaining_path: "".into(),
-            route_kind: X402RouteKind::Agent,
+        });
+
+        assert!(precheck(&req).is_ok());
+    }
+
+    #[test]
+    fn precheck_accepts_agent_tools_without_unified_path_and_query() {
+        let mut req = http::Request::builder()
+            .method(Method::POST)
+            .uri("http://router.alephant.test/v1/agent/tools/list")
+            .body(axum_core::body::Body::empty())
+            .unwrap();
+        req.extensions_mut().insert(RouteType::AgentTools {
+            action: AgentToolsRouteAction::List,
         });
 
         assert!(precheck(&req).is_ok());
