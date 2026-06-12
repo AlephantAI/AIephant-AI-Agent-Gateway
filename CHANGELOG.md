@@ -1,6 +1,29 @@
 
 ```md
 
+# 2026-06-12 Updates
+
+# Alephant AI Gateway Update Logs
+
+This submission advances the Agent tool gateway capability from "observable" to a complete closed loop that is "routable, executable, governable, auditable, and locally verifiable", and simultaneously completes the MCP/OpenAPI tool targets, framework examples, x402, and configuration templates.
+
+## Completion of Agent Tools Gateway capabilities
+Added ai-gateway/src/agent/tools/* A complete set of tool gateway modules, including tool catalog, executor, auditing, policy evaluation, outbound restrictions, idempotence, runtime snapshot, schema verification and unified response structure.
+## MCP Tool Target support
+Three new target adaptation codes, mcp_http, mcp_streamable_http, and mcp_sse, are added, covering MCP initialization, session/lifecycle, SSE parsing, transport, target hash, test support, etc.
+## OpenAPI Tool Target support
+Added ai-gateway/src/agent/tools/openapi/*, including OpenAPI tool execution, request mapping, outbound control, execution result modeling and type definition.
+## Agent event observation and log enhancement
+Update agent/, logger/, tool_observer.rs, log_payload.rs, etc., and enhance the event recording, sink/transport, context and log fields of tool call / tool execution.
+## Agent Tools E2E and examples
+Added ai-gateway/examples/agent_tools_e2e_gateway.rs, as well as examples/agent/tools/, examples/agent/mcp_sse/, examples/agent/openapi/*, for locally running MCP/OpenAPI tool list/call, mock server, event sink and runtime snapshot scenarios.
+## Multi-Agent framework example extension
+Add MCP SSE and OpenAPI tool examples to crewai, langgraph, mastra, openai_agents, and update public framework adapter tests.
+## x402 payment link update
+Synchronize x402/*, including payment client, policy, proxy, service, snapshot, forward signature, log, body schema, etc.
+## Configuration and template synchronization
+Configuration updates such as .env.template, .gitignore, Cargo.toml, ai-gateway/config/*.yaml, etc. will be synchronized;
+
 # 2026-06-02 Updates
 
 # Alephant AI Gateway Update Logs
