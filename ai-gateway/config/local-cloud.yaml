@@ -4,7 +4,7 @@ telemetry:
   exporter: stdout
 
 alephant:
-  log-collector-url: "http://alephantai-logs-collector.dev.svc.cluster.local:8585"
+  log-collector-url: "http://127.0.0.1:8585"
   features: all
 
 # Object storage (S3-compatible API). For local integration, adjust `endpoint`;
@@ -60,7 +60,7 @@ agent:
 
 policy:
   enabled: true
-  grpc-endpoint: "http://alephantai-policy-service.dev.svc.cluster.local:9090"
+  grpc-endpoint: "http://127.0.0.1:9090"
   on-unavailable: deny
 
 cloudflare-kv:
