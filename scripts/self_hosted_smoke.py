@@ -38,6 +38,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--binary", type=Path, default=Path("target/debug/ai-gateway"))
     parser.add_argument("--rate-limit-only", action="store_true", help="verify shared workspace quotas")
+    parser.add_argument("--image-only", action="store_true", help="verify multipart image edits with the OpenAI SDK")
+    parser.add_argument("--audio-only", action="store_true", help="verify raw audio endpoints with the OpenAI SDK")
     parser.add_argument("--redis", action="store_true", help="test two gateway processes with temporary Redis")
     args = parser.parse_args()
     if args.redis and not args.rate_limit_only:
@@ -52,9 +54,44 @@ def main():
 
     class Upstream(http.server.BaseHTTPRequestHandler):
         def do_POST(self):
-            request = json.loads(self.rfile.read(int(self.headers.get("Content-Length", "0"))))
+            raw = self.rfile.read(int(self.headers.get("Content-Length", "0")))
+            if self.path.endswith(("audio/transcriptions", "images/edits")):
+                from email.parser import BytesParser
+                from email.policy import default
+                message = BytesParser(policy=default).parsebytes(("Content-Type: " + self.headers["Content-Type"] + "\r\n\r\n").encode() + raw)
+                request = {part.get_param("name", header="content-disposition"): (part.get_filename(), part.get_payload(decode=True)) for part in message.iter_parts()}
+                if self.path.endswith("images/edits"):
+                    request["__parts"] = [(part.get_param("name", header="content-disposition"), part.get_filename(), part.get_payload(decode=True)) for part in message.iter_parts()]
+            else:
+                request = json.loads(raw)
             observed.append((self.path, self.headers.get("Authorization"), request))
-            if self.path.endswith("chat/completions"):
+            if self.path.endswith("audio/speech") and request.get("input") == "provider-failure":
+                data = b'{"error":{"code":"provider_failure","message":"failed"}}'
+                self.send_response(503)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
+                return
+            if self.path.endswith("audio/speech"):
+                data = b"RIFF\x00\xfflocal-audio\r\n"
+                self.send_response(200)
+                self.send_header("Content-Type", "audio/wav")
+                self.send_header("Content-Length", str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
+                return
+            if self.path.endswith("audio/transcriptions"):
+                data = b"hello transcript\n"
+                self.send_response(200)
+                self.send_header("Content-Type", "text/plain")
+                self.send_header("Content-Length", str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
+                return
+            if self.path.endswith("images/edits"):
+                body = {"created": 1, "data": [{"b64_json": "bG9jYWw="}]}
+            elif self.path.endswith("chat/completions"):
                 prompt = request["messages"][-1]["content"]
                 if prompt == "invalid-request":
                     body = {"success": False, "error": {"code": "invalid_request", "message": "private user input"}}
@@ -94,6 +131,10 @@ def main():
         profile = profile.replace("https-only: true", "https-only: false")
         profile = profile.replace("block-loopback: true", "block-loopback: false")
         profile = profile.replace("level: warn", "level: info,ai_gateway::dispatcher=debug")
+        if args.image_only:
+            profile = profile.replace("allowed-models: [openai/gpt-4o]", "allowed-models: [openai/gpt-4o, openai/gpt-image-1]\n      blocked-models: [openai/denied]")
+        if args.audio_only:
+            profile = profile.replace("allowed-models: [openai/gpt-4o]", "allowed-models: [openai/gpt-4o, openai/tts-1, openai/whisper-1]\n      blocked-models: [openai/denied]")
         if args.rate_limit_only:
             profile += "\nglobal:\n  identity-rate-limit:\n    enabled: true\n    requests: 3\n    window-seconds: 60\n    backend: memory\n    scopes: [models, tools]\n"
             if args.redis:
@@ -159,7 +200,7 @@ def main():
             last_headers = {}
 
             def call(path, payload=None, key=gateway_key, extra_headers=None, port=None):
-                data = None if payload is None else json.dumps(payload).encode()
+                data = None if payload is None else payload if isinstance(payload, bytes) else json.dumps(payload).encode()
                 headers = {"Content-Type": "application/json"}
                 if key is not None:
                     headers["Authorization"] = "Bearer " + key
@@ -195,6 +236,63 @@ def main():
                 if secondary_process is not None:
                     wait_for_gateway(secondary_process, secondary_port)
                 payload = {"model": "openai/gpt-4o", "messages": [{"role": "user", "content": "hello"}]}
+                if args.image_only:
+                    import openai
+                    import httpx
+                    with openai.OpenAI(base_url=f"http://127.0.0.1:{gateway_port}/v1", api_key=gateway_key,
+                                       max_retries=0, http_client=httpx.Client(trust_env=False)) as client:
+                        for images in [[("a.png", b"PNG\x00\xffa", "image/png")],
+                                       [("a.png", b"PNG\x00\xffa", "image/png"), ("b.png", b"PNG\x01\xffb", "image/png")]]:
+                            response = client.images.edit(model="openai/gpt-image-1", image=images, mask=("mask.png", b"MASK\x00\xff", "image/png"), prompt="edit locally", response_format="b64_json")
+                            assert response.data[0].b64_json == "bG9jYWw="
+                            parts=observed[-1][2]["__parts"]
+                            assert [(f,b) for n,f,b in parts if n in ("image", "image[]")] == [(f,b) for f,b,_ in images], parts
+                            assert observed[-1][2]["mask"] == ("mask.png", b"MASK\x00\xff")
+                            assert observed[-1][2]["model"][1] == b"gpt-image-1"
+                            assert observed[-1][1] == "Bearer " + upstream_key
+                    print("PASS: OpenAI SDK single/multiple image edits, mask and binary preservation")
+                    return
+                if args.audio_only:
+                    import openai
+                    import httpx
+                    with openai.OpenAI(base_url=f"http://127.0.0.1:{gateway_port}/v1", api_key=gateway_key,
+                                       max_retries=0, http_client=httpx.Client(trust_env=False)) as client:
+                        response = client.audio.speech.create(model="openai/tts-1", voice="alloy", input="hello", response_format="wav")
+                        assert response.read() == b"RIFF\x00\xfflocal-audio\r\n"
+                        assert response.response.headers["content-type"] == "audio/wav"
+                        assert observed[-1][2]["model"] == "tts-1"
+                        transcript = client.audio.transcriptions.create(model="openai/whisper-1", file=("sample.wav", b"RIFF\x00\xff\r\ndata", "audio/wav"), response_format="text", prompt="hello")
+                        assert transcript == "hello transcript\n", transcript
+                        request = observed[-1][2]
+                        assert request["file"] == ("sample.wav", b"RIFF\x00\xff\r\ndata"), request
+                        assert request["model"][1] == b"whisper-1"
+                        assert request["response_format"][1] == b"text"
+                        assert observed[-1][1] == "Bearer " + upstream_key
+                        before = len(observed)
+                        try:
+                            client.audio.speech.create(model="openai/denied", voice="alloy", input="hello")
+                            raise AssertionError("denied audio model accepted")
+                        except openai.PermissionDeniedError:
+                            pass
+                        assert len(observed) == before
+                    def multipart(fields):
+                        return b"".join(b'--b\r\nContent-Disposition: form-data; name="' + name.encode() + b'"' +
+                            (b'; filename="sample.wav"' if name == "file" else b'') + b"\r\n\r\n" + value + b"\r\n" for name, value in fields) + b"--b--\r\n"
+                    valid = [("model", b"openai/whisper-1"), ("file", b"RIFF\x00\xff")]
+                    for fields in [valid + [("model", b"other")], valid[1:], valid[:1],
+                                   valid + [("response_format", b"text"), ("response_format", b"json")]]:
+                        before = len(observed)
+                        status, body = call("/v1/audio/transcriptions", multipart(fields), extra_headers={"Content-Type":"multipart/form-data; boundary=b"})
+                        assert status == 400, (status, body)
+                        assert len(observed) == before
+                    assert call("/v1/audio/transcriptions", b"broken", extra_headers={"Content-Type":"multipart/form-data; boundary=b"})[0] == 400
+                    assert call("/v1/audio/transcriptions", b"x" * (1024*1024+1), extra_headers={"Content-Type":"multipart/form-data; boundary=b"})[0] == 413
+                    assert call("/v1/audio/speech", {"model":"tts-1"}, extra_headers={"Content-Type":"text/plain"})[0] == 415
+                    before=len(observed)
+                    assert call("/v1/audio/speech", {"model":"openai/tts-1", "input":"provider-failure", "voice":"alloy"})[0] == 503
+                    assert len(observed)==before+1, "media failures must not be replayed"
+                    print("PASS: OpenAI SDK speech binary, transcription multipart, model rewrite, credential isolation and model policy")
+                    return
                 if args.rate_limit_only:
                     assert call("/v1/agent/tools/list", {})[0] == 200
                     assert call("/v1/agent/tools/list", {}, key=second_key, port=secondary_port)[0] == 200

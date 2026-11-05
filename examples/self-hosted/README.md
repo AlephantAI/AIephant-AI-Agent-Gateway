@@ -65,3 +65,18 @@ Streamable HTTP tool targets accept negotiated `2025-03-26`, `2025-06-18` and `2
 Coverage concerns the tools client lifecycle and JSON/SSE result transport, including RPC errors, `isError`, interrupted streams and timeouts. It does not advertise sampling, elicitation, tasks or subscriptions. An uncertain tool result is not replayed; the existing explicit cached-session 404 reinitialization remains in place.
 
 Protocol references: [March lifecycle](https://modelcontextprotocol.io/specification/2025-03-26/basic/lifecycle), [November lifecycle](https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle), [Streamable HTTP](https://modelcontextprotocol.io/specification/2025-11-25/basic/transports).
+
+## Audio endpoints
+
+`POST /v1/audio/speech` accepts JSON (`model`, `input`, `voice`) and forwards raw audio bytes and the upstream content type. `POST /v1/audio/transcriptions` accepts multipart (`model`, one nonempty `file`), preserving the filename, file bytes and optional fields such as `prompt`, `language` and `response_format`. JSON, text, SRT and VTT upstream responses are forwarded without chat conversion. This version supports raw audio speech and non-streaming transcription; speech SSE and transcription event streaming are rejected.
+
+Supported wire protocols: OpenAI, named OpenAI-compatible providers and a configured custom OpenAI-compatible base URL. This describes protocol support, not a guarantee that every provider offers every media model. The key's bound provider selects the upstream; its matching prefix is removed from `model`. The existing virtual-key policy applies to the original model: `allowed-models` overrides matching blocks, `blocked-models` denies exact matches, and unmatched models remain allowed (it is not a restrictive allowlist).
+
+The upload cap is **1 MiB including multipart framing**, matching the existing model-body bound; multipart permits up to 128 parts and 8 KiB of headers per part. Duplicate singleton fields, malformed forms and missing model/file fields are rejected before sending. Files and all non-model byte ranges remain intact. Media calls skip LLM/semantic caches and automatic retries/fallback, retaining authentication, workspace quotas, upstream credential sanitization and normal request logs. No duration-to-token estimate or new billing policy is applied; absent upstream usage remains absent/zero in existing token fields.
+
+```sh
+# Uses the installed openai Python SDK, generated local keys and a local mock; no paid API calls.
+python3 scripts/self_hosted_smoke.py --audio-only
+```
+
+API references: [speech](https://developers.openai.com/api/reference/resources/audio/subresources/speech/methods/create), [transcriptions](https://developers.openai.com/api/reference/resources/audio/subresources/transcriptions/methods/create).

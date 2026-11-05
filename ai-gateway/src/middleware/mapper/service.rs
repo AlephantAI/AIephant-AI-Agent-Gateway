@@ -117,6 +117,42 @@ where
             let source_endpoint_cloned = source_endpoint.clone();
             let target_endpoint = ApiEndpoint::mapped(source_endpoint, &target_provider)?;
             let target_endpoint_cloned = target_endpoint.clone();
+            if let Some(media) = req
+                .extensions_mut()
+                .remove::<crate::endpoints::media::MediaRequestContext>()
+            {
+                let raw_model = media
+                    .model
+                    .strip_prefix(&format!("{}/", target_provider.as_provider_code()))
+                    .unwrap_or(&media.model);
+                let mapper_ctx = MapperContext {
+                    is_stream: false,
+                    model: Some(
+                        ModelId::from_str_and_provider(target_provider.clone(), raw_model)
+                            .map_err(InternalError::MapperError)?,
+                    ),
+                    client_response_semantic: ClientResponseSemantic::Other,
+                    logger_response_wire_semantic: LoggerResponseWireSemantic::Other,
+                    anthropic_openai_usage: None,
+                    unified_responses_bridge_chat_completions_sse: false,
+                    native_semantic_passthrough: true,
+                    cursor_responses_via_chat_completions: false,
+                    cursor_responses_origin: None,
+                    client_expects_responses_wire: false,
+                };
+                let path = target_endpoint.path(mapper_ctx.model.as_ref(), false)?;
+                let path = if let Some(q) = extracted_path_and_query.query() {
+                    format!("{path}?{q}")
+                } else {
+                    path
+                };
+                req.extensions_mut()
+                    .insert(PathAndQuery::from_str(&path).map_err(InternalError::InvalidUri)?);
+                req.extensions_mut().insert(mapper_ctx);
+                req.extensions_mut().insert(target_endpoint);
+                return inner.call(req).await;
+            }
+
             // serialization/deserialization should be done on a dedicated
             // thread
             let converter_registry_cloned = converter_registry.clone();

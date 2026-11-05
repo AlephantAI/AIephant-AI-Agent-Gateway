@@ -26,6 +26,11 @@ pub struct TooManyRequestsError {
 #[derive(Debug, Error, Display, strum::AsRefStr)]
 #[ignore_extra_doc_attributes]
 pub enum InvalidRequestError {
+    /// {message}
+    MediaRequest {
+        status: StatusCode,
+        message: &'static str,
+    },
     /// Resource not found: {0}
     NotFound(String),
     /// HTTP method `{method}` is not allowed for `{path}`
@@ -85,6 +90,18 @@ impl IntoResponse for InvalidRequestError {
         debug!(error = %self, "Invalid request");
         let message = self.to_string();
         match self {
+            Self::MediaRequest { status, .. } => (
+                status,
+                Json(ErrorResponse {
+                    error: ErrorDetails {
+                        message,
+                        r#type: Some(INVALID_REQUEST_ERROR_TYPE.to_string()),
+                        param: None,
+                        code: Some("invalid_media_request".into()),
+                    },
+                }),
+            )
+                .into_response(),
             Self::ContentPolicyDenied { message } => (
                 StatusCode::OK,
                 Json(ErrorResponse {
@@ -313,7 +330,8 @@ impl From<&InvalidRequestError> for InvalidRequestErrorMetric {
             | InvalidRequestError::RouterIdNotFound(_)
             | InvalidRequestError::MissingRouterId
             | InvalidRequestError::InvalidRequestHeader(_) => Self::NotFound,
-            InvalidRequestError::InvalidRequest(_)
+            InvalidRequestError::MediaRequest { .. }
+            | InvalidRequestError::InvalidRequest(_)
             | InvalidRequestError::UnsupportedEndpoint(_)
             | InvalidRequestError::InvalidLargeContextHandler(_)
             | InvalidRequestError::InvalidPromptInputs(_)

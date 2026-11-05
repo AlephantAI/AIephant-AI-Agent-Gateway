@@ -771,7 +771,9 @@ where
             let (parts, body) = req.into_parts();
             let request_kind = parts.extensions.get::<RequestKind>().copied();
 
-            if should_bypass_model_support_before_body_read(request_kind) {
+            if should_bypass_model_support_before_body_read(request_kind)
+                || crate::endpoints::media::is_media_path(parts.uri.path())
+            {
                 let req = Request::from_parts(parts, body);
                 return inner.call(req).await;
             }

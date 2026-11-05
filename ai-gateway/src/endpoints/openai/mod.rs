@@ -1,3 +1,7 @@
+pub mod audio_speech;
+pub mod audio_transcriptions;
+pub use audio_speech::AudioSpeech;
+pub use audio_transcriptions::AudioTranscriptions;
 pub mod chat_completions;
 pub mod completions;
 pub mod embeddings;
@@ -21,6 +25,8 @@ pub enum OpenAI {
     Embeddings(Embeddings),
     ImageGenerations(ImageGenerations),
     Responses(Responses),
+    AudioSpeech(AudioSpeech),
+    AudioTranscriptions(AudioTranscriptions),
 }
 
 impl OpenAI {
@@ -32,6 +38,8 @@ impl OpenAI {
             Self::Embeddings(_) => Embeddings::PATH,
             Self::ImageGenerations(_) => ImageGenerations::PATH,
             Self::Responses(_) => Responses::PATH,
+            Self::AudioSpeech(_) => AudioSpeech::PATH,
+            Self::AudioTranscriptions(_) => AudioTranscriptions::PATH,
         }
     }
 
@@ -68,6 +76,7 @@ impl OpenAI {
             }
             Self::Embeddings(_) => EndpointType::Embeddings,
             Self::ImageGenerations(_) => EndpointType::Image,
+            Self::AudioSpeech(_) | Self::AudioTranscriptions(_) => EndpointType::Audio,
         }
     }
 }
@@ -81,6 +90,10 @@ impl TryFrom<&EndpointRoute> for OpenAI {
             EndpointRoute::Completions => Ok(Self::Completions(Completions)),
             EndpointRoute::Embeddings => Ok(Self::Embeddings(Embeddings)),
             EndpointRoute::ImageGenerations => Ok(Self::ImageGenerations(ImageGenerations)),
+            EndpointRoute::AudioSpeech => Ok(Self::AudioSpeech(AudioSpeech)),
+            EndpointRoute::AudioTranscriptions => {
+                Ok(Self::AudioTranscriptions(AudioTranscriptions))
+            }
             EndpointRoute::Responses => Ok(Self::Responses(Responses)),
             EndpointRoute::Messages => Err(InvalidRequestError::UnsupportedEndpoint(
                 "messages is resolved via Anthropic, not OpenAI".to_string(),

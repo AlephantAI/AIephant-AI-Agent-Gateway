@@ -17,6 +17,8 @@ impl From<OpenAI> for Anthropic {
             OpenAI::Completions(_)
             | OpenAI::Embeddings(_)
             | OpenAI::ImageGenerations(_)
+            | OpenAI::AudioSpeech(_)
+            | OpenAI::AudioTranscriptions(_)
             | OpenAI::Responses(_) => {
                 unreachable!(
                     "ApiEndpoint::mapped only maps ChatCompletions to \
@@ -42,6 +44,8 @@ impl From<OpenAI> for Google {
             OpenAI::Completions(_)
             | OpenAI::Embeddings(_)
             | OpenAI::ImageGenerations(_)
+            | OpenAI::AudioSpeech(_)
+            | OpenAI::AudioTranscriptions(_)
             | OpenAI::Responses(_) => {
                 unreachable!("ApiEndpoint::mapped only maps ChatCompletions to Google")
             }
@@ -56,6 +60,8 @@ impl From<OpenAI> for Ollama {
             OpenAI::Completions(_)
             | OpenAI::Embeddings(_)
             | OpenAI::ImageGenerations(_)
+            | OpenAI::AudioSpeech(_)
+            | OpenAI::AudioTranscriptions(_)
             | OpenAI::Responses(_) => {
                 unreachable!("ApiEndpoint::mapped only maps ChatCompletions to Ollama")
             }
@@ -77,6 +83,8 @@ impl From<OpenAI> for Bedrock {
             OpenAI::Completions(_)
             | OpenAI::Embeddings(_)
             | OpenAI::ImageGenerations(_)
+            | OpenAI::AudioSpeech(_)
+            | OpenAI::AudioTranscriptions(_)
             | OpenAI::Responses(_) => {
                 unreachable!("ApiEndpoint::mapped only maps ChatCompletions to Bedrock")
             }

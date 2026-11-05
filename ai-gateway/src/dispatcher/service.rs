@@ -266,6 +266,7 @@ impl Dispatcher {
             };
         enforce_workspace_provider_allowlist(&self.app_state, auth_ctx, &provider_for_allowlist)?;
 
+        let is_media = crate::endpoints::media::is_media_path(extracted_path_and_query.path());
         let headers_for_llm_cache = req.headers().clone();
         let session_ctx = parse_session_headers(req.headers()).map_err(ApiError::InvalidRequest)?;
 
@@ -427,7 +428,8 @@ impl Dispatcher {
                 Ok(s) => s,
             };
 
-        let llm_kv_read_ok = llm_cache_settings.should_read
+        let llm_kv_read_ok = !is_media
+            && llm_cache_settings.should_read
             && auth_ctx.is_some()
             && req_ctx.llm_kv_cache_read_allowed;
 
@@ -622,10 +624,11 @@ impl Dispatcher {
             }
         }
 
-        let llm_kv_write_enabled = llm_cache_settings.should_write
+        let llm_kv_write_enabled = !is_media
+            && llm_cache_settings.should_write
             && auth_ctx.is_some()
             && req_ctx.llm_kv_cache_write_allowed;
-        let semantic_write_enabled = self.app_state.semantic_cache().is_some();
+        let semantic_write_enabled = !is_media && self.app_state.semantic_cache().is_some();
         let (cache_tap_tx, cache_save_rx) = if llm_kv_write_enabled || semantic_write_enabled {
             let (tx, rx) = mpsc::unbounded_channel();
             (Some(tx), Some(rx))
@@ -1183,6 +1186,28 @@ impl Dispatcher {
             .config()
             .dispatcher
             .checks_business_errors(&self.provider, extracted_path_and_query);
+        if crate::endpoints::media::is_media_path(
+            extracted_path_and_query
+                .split('?')
+                .next()
+                .unwrap_or(extracted_path_and_query),
+        ) {
+            let (response, response_body_for_logger, tfft_rx) = sync_dispatch::dispatch_sync(
+                &request_builder,
+                req_body_bytes.clone(),
+                None,
+                check_business_errors,
+            )
+            .await?;
+            return Ok(SyncDispatchOutcome {
+                response,
+                response_body_for_logger,
+                tfft_rx,
+                effective_provider: self.provider.clone(),
+                effective_target_url: target_endpoint.url,
+                effective_request_body: req_body_bytes,
+            });
+        }
         let target_url = target_endpoint.url.clone();
         let mut effective_target_url = target_url.clone();
         let retry_config = get_retry_config(&self.app_state, request_kind, req_ctx);

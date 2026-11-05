@@ -2,6 +2,8 @@ pub mod anthropic;
 pub(crate) mod bedrock;
 pub mod google;
 pub mod mappings;
+pub(crate) mod media;
+pub(crate) mod multipart;
 pub mod ollama;
 pub mod openai;
 
@@ -56,6 +58,8 @@ define_endpoints! {
     (Completions, "completions"),
     (Embeddings, "embeddings"),
     (ImageGenerations, "images/generations"),
+    (AudioSpeech, "audio/speech"),
+    (AudioTranscriptions, "audio/transcriptions"),
     (Responses, "responses"),
     (Messages, "messages"),
 }
@@ -100,7 +104,9 @@ impl ApiEndpoint {
             && !matches!(oi, OpenAI::ChatCompletions(_))
         {
             match target_provider {
-                InferenceProvider::OpenAI | InferenceProvider::Named(_) => {}
+                InferenceProvider::OpenAI
+                | InferenceProvider::Named(_)
+                | InferenceProvider::Custom => {}
                 _ => {
                     return Err(InvalidRequestError::UnsupportedEndpoint(CROSS.to_string()));
                 }

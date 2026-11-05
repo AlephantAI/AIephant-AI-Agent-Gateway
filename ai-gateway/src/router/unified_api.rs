@@ -83,6 +83,14 @@ impl tower::Service<Request> for Service {
         debug_log::maybe_log_headers("unified_api", &parts.headers, debug_log_config);
         let direct_proxies = self.direct_proxies.clone();
         let app_state = self.app_state.clone();
+        let body = if crate::endpoints::media::is_media_path(parts.uri.path()) {
+            axum_core::body::Body::new(http_body_util::Limited::new(
+                body,
+                crate::endpoints::media::MAX_REQUEST_BYTES,
+            ))
+        } else {
+            body
+        };
         let collect_future = body.collect();
         ResponseFuture::new(
             collect_future,
@@ -163,6 +171,8 @@ pub enum UnifiedApi {
     Completions,
     Embeddings,
     ImageGenerations,
+    AudioSpeech,
+    AudioTranscriptions,
     Responses,
     Messages,
     Models,
@@ -178,6 +188,8 @@ impl TryFrom<&str> for UnifiedApi {
             "images/generations" => Ok(Self::ImageGenerations),
             "responses" => Ok(Self::Responses),
             "messages" => Ok(Self::Messages),
+            "audio/speech" => Ok(Self::AudioSpeech),
+            "audio/transcriptions" => Ok(Self::AudioTranscriptions),
             "models" => Ok(Self::Models),
             _ => Err(InvalidRequestError::UnsupportedEndpoint(value.to_string())),
         }
@@ -348,6 +360,14 @@ impl Future for ResponseFuture {
                     let collected = match ready!(pin!(collect_future).poll(cx)) {
                         Ok(collected) => collected,
                         Err(e) => {
+                            if parts.as_ref().is_some_and(|p| {
+                                crate::endpoints::media::is_media_path(p.uri.path())
+                            }) {
+                                return Poll::Ready(Err(crate::endpoints::media::invalid(
+                                    http::StatusCode::PAYLOAD_TOO_LARGE,
+                                    "media body could not be read within the upload limit",
+                                )));
+                            }
                             return Poll::Ready(Err(InternalError::CollectBodyError(e).into()));
                         }
                     };
@@ -387,11 +407,43 @@ impl Future for ResponseFuture {
                         UnifiedApi::ImageGenerations => {
                             ApiEndpoint::OpenAI(OpenAI::image_generations())
                         }
+                        UnifiedApi::AudioSpeech => ApiEndpoint::OpenAI(OpenAI::AudioSpeech(
+                            crate::endpoints::openai::AudioSpeech,
+                        )),
+                        UnifiedApi::AudioTranscriptions => {
+                            ApiEndpoint::OpenAI(OpenAI::AudioTranscriptions(
+                                crate::endpoints::openai::AudioTranscriptions,
+                            ))
+                        }
                         UnifiedApi::Responses => ApiEndpoint::OpenAI(OpenAI::responses()),
                         UnifiedApi::Messages => ApiEndpoint::Anthropic(Anthropic::messages()),
                         UnifiedApi::Models => unreachable!("handled above"),
                     };
                     parts.extensions.insert(api);
+                    if crate::endpoints::media::is_media_path(parts.uri.path()) {
+                        let provider = UnifiedRoutePlanner::resolve_provider_from_master_key(
+                            &parts.extensions,
+                        )?;
+                        let (model, body) = crate::endpoints::media::prepare(
+                            parts.uri.path(),
+                            collected_bytes,
+                            &parts.headers,
+                            &provider,
+                        )?;
+                        crate::virtual_key::enforce::check_model_access(&parts.extensions, &model)?;
+                        parts
+                            .extensions
+                            .insert(crate::endpoints::media::MediaRequestContext { model });
+                        parts.extensions.insert(UnifiedModelPolicyChecked);
+                        parts.extensions.insert(provider.clone());
+                        parts.headers.remove(http::header::CONTENT_LENGTH);
+                        let request = Request::from_parts(parts, axum_core::body::Body::from(body));
+                        this.state.set(State::InitProxy {
+                            request: Some(request),
+                            provider,
+                        });
+                        continue;
+                    }
 
                     this.state.set(State::DetermineProvider {
                         collected_body: Some(collected_bytes),
