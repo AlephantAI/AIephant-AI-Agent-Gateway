@@ -17,7 +17,7 @@ use crate::{
     endpoints::ApiEndpoint,
     error::{
         api::ApiError, auth::AuthError, init::InitError, internal::InternalError,
-        stream::StreamError,
+        invalid_req::InvalidRequestError, stream::StreamError,
     },
     types::{
         extensions::AuthContext,
@@ -102,6 +102,21 @@ impl Client {
         if app_state.config().compat_mode
             && (auth_ctx.is_none() || app_state.config().local_auth.is_some())
         {
+            if app_state.config().local_auth.is_some()
+                && !auth_ctx
+                    .and_then(|auth| auth.master_key_allowed_providers.as_deref())
+                    .is_some_and(|allowed| {
+                        allowed
+                            .iter()
+                            .any(|bound| master_key_provider_matches(bound, &provider))
+                    })
+            {
+                return Err(InvalidRequestError::ModelAccessDenied(format!(
+                    "{}/*",
+                    provider.as_ref()
+                ))
+                .into());
+            }
             return self.authenticate_compat_env(request_builder, &provider);
         }
 
@@ -494,6 +509,76 @@ fn record_stream_err_metrics(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn authenticated_local_provider_binding_is_checked_before_environment_credentials() {
+        use crate::{
+            app::build_test_app,
+            config::{
+                Config,
+                local_auth::{LocalAuthConfig, LocalKeyConfig},
+            },
+            error::invalid_req::InvalidRequestError,
+            types::{org::OrgId, user::UserId},
+        };
+        use uuid::Uuid;
+        let id = Uuid::from_u128(1);
+        let workspace = Uuid::from_u128(2);
+        let config = Config {
+            compat_mode: true,
+            local_auth: Some(LocalAuthConfig {
+                keys: vec![LocalKeyConfig {
+                    id,
+                    workspace_id: workspace,
+                    key_env: "UNUSED_LOCAL_TEST_KEY".into(),
+                    provider: InferenceProvider::OpenAI,
+                    allowed_models: None,
+                    blocked_models: None,
+                }],
+            }),
+            ..Config::default()
+        };
+        let app = build_test_app(config).await.unwrap();
+        let context = AuthContext {
+            api_key: Secret::from("not-a-provider-key".to_string()),
+            user_id: UserId::new(id),
+            org_id: OrgId::new(workspace),
+            workspace_type: None,
+            virtual_key_id: Some(id),
+            virtual_key_prefix: "local".into(),
+            master_key_id: Some(id),
+            master_key_base_url: None,
+            department_id: Uuid::nil(),
+            entity_type: String::new(),
+            entity_id: Uuid::nil(),
+            entity_name: String::new(),
+            registered_agent_name: None,
+            body_ttl_days: 90,
+            is_custom_provider: false,
+            master_key_allowed_providers: Some(vec![InferenceProvider::OpenAI]),
+        };
+        let client = Client::new(&app.state, InferenceProvider::Anthropic)
+            .await
+            .unwrap();
+        let request = reqwest::Client::new().post("http://127.0.0.1/never-dispatched");
+        let result = client
+            .authenticate_inner(
+                &app.state,
+                request,
+                Some(&context),
+                InferenceProvider::Anthropic,
+            )
+            .await;
+        assert!(
+            matches!(
+                result,
+                Err(ApiError::InvalidRequest(
+                    InvalidRequestError::ModelAccessDenied(_)
+                ))
+            ),
+            "local binding must deny another provider before consulting its environment credential"
+        );
+    }
 
     #[test]
     fn master_key_provider_matches_returns_true_for_same_provider() {

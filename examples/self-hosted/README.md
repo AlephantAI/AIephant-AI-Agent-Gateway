@@ -34,3 +34,26 @@ For successful JSON responses up to 64 KiB, the gateway recognizes explicit fail
 Larger responses, non-JSON responses and SSE retain their existing handling. Do not enable the rule for an endpoint where these failure fields are ordinary business data. A checked failure cannot be saved through the successful-response cache path.
 
 OpenAPI tool targets can independently enable `detect-business-errors: true`. The tool envelope then reports a failure while metadata retains the original upstream HTTP status. Existing failure-charge settings continue to apply; the classifier does not introduce a balance or billing service. With the option absent, tool response behavior and snapshot serialization remain compatible.
+
+## Workspace request quota
+
+Add under `global` (disabled by default):
+
+```yaml
+identity-rate-limit:
+  enabled: true
+  requests: 100
+  window-seconds: 60
+  backend: memory
+  scopes: [models, tools]
+```
+
+All admitted model and tool requests share one fixed-window budget per authenticated workspace, including different keys in that workspace. Rejected requests return 429 with `Retry-After` and do not reach the upstream. Failed admitted requests consume quota; internal retries do not consume it again. Fixed windows permit bursts around a window boundary. Health and agent event ingestion are excluded.
+
+`memory` is for a single process and resets on restart. For multiple gateways use `backend: redis`, the same `REDIS_URL`, stable workspace IDs and the same `redis-key-prefix` (default `gw:identityrl:`). Gateway restarts retain the Redis window. Redis failures return 503; there is no fallback to independent local quotas. Missing Redis TTLs are repaired without clearing existing counts.
+
+```sh
+python3 scripts/self_hosted_smoke.py --rate-limit-only
+# Requires redis-server; starts and cleans up its own temporary Redis and two gateways.
+python3 scripts/self_hosted_smoke.py --rate-limit-only --redis
+```

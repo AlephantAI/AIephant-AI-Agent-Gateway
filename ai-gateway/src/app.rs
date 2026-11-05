@@ -169,6 +169,7 @@ impl tower::Service<crate::types::request::Request> for App {
 impl App {
     pub async fn new(config: Config) -> Result<Self, InitError> {
         tracing::debug!("creating app");
+        crate::config::identity_rate_limit::validate_identity_rate_limit(&config)?;
         if config.local_auth.is_some() {
             config.validate()?;
         }
@@ -409,6 +410,7 @@ impl App {
         };
 
         let app_state = AppState(Arc::new(InnerAppState {
+            identity_rate_limiter: Default::default(),
             config,
             s3,
             router_store,
@@ -700,6 +702,7 @@ pub async fn build_test_app(mut config: Config) -> Result<App, InitError> {
     );
 
     let app_state = AppState(Arc::new(InnerAppState {
+        identity_rate_limiter: Default::default(),
         config,
         s3,
         router_store: None,

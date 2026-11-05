@@ -25,6 +25,9 @@ pub struct Metrics {
     pub workspace_concurrency_redis_decr: Counter<u64>,
     /// Global client-IP rate limit: allowed (pass) decisions.
     pub client_ip_rate_limit_allowed: Counter<u64>,
+    pub identity_rate_limit_allowed: Counter<u64>,
+    pub identity_rate_limit_rejected: Counter<u64>,
+    pub identity_rate_limit_unavailable: Counter<u64>,
     /// Global client-IP rate limit: rejected (429) decisions.
     pub client_ip_rate_limit_rejected: Counter<u64>,
     /// Global client-IP rate limit: Redis path failed, fell back to memory.
@@ -51,6 +54,15 @@ pub struct Metrics {
 impl Metrics {
     #[must_use]
     pub fn new(meter: &Meter) -> Self {
+        let identity_rate_limit_allowed = meter
+            .u64_counter("identity_rate_limit_allowed_total")
+            .build();
+        let identity_rate_limit_rejected = meter
+            .u64_counter("identity_rate_limit_rejected_total")
+            .build();
+        let identity_rate_limit_unavailable = meter
+            .u64_counter("identity_rate_limit_unavailable_total")
+            .build();
         let error_count = meter
             .u64_counter("error_count")
             .with_description("Number of error occurences")
@@ -160,6 +172,9 @@ impl Metrics {
             workspace_concurrency_redis_incr,
             workspace_concurrency_redis_decr,
             client_ip_rate_limit_allowed,
+            identity_rate_limit_allowed,
+            identity_rate_limit_rejected,
+            identity_rate_limit_unavailable,
             client_ip_rate_limit_rejected,
             client_ip_rate_limit_redis_degraded,
             gateway_in_flight_allowed,

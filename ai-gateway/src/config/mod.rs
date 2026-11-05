@@ -10,6 +10,7 @@ pub mod dispatcher;
 pub mod fallback_bridge;
 pub mod fallback_policy;
 pub mod gateway_in_flight_limit;
+pub mod identity_rate_limit;
 pub mod local_auth;
 pub mod mapper_profiles;
 pub mod model_mapping;
@@ -74,6 +75,9 @@ pub struct MiddlewareConfig {
     pub client_ip_rate_limit: Option<self::client_ip_rate_limit::ClientIpRateLimitConfig>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub gateway_in_flight_limit: Option<self::gateway_in_flight_limit::GatewayInFlightLimitConfig>,
+    /// Applied after authentication so keys in a workspace share their quota.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub identity_rate_limit: Option<self::identity_rate_limit::IdentityRateLimitConfig>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub health_event_broadcast: Option<HealthEventBroadcastConfig>,
 }
@@ -363,6 +367,7 @@ impl Config {
     }
 
     pub fn validate(&self) -> Result<(), InitError> {
+        self::identity_rate_limit::validate_identity_rate_limit(self)?;
         let router_id_regex = Regex::new(ROUTER_ID_REGEX).expect("always valid if tests pass");
         for (router_id, router_config) in self.routers.as_ref() {
             router_config.validate()?;

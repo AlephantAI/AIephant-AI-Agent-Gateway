@@ -5,6 +5,7 @@ pub(crate) mod counted_body;
 pub mod debug_log;
 pub mod fallback_request_log;
 pub mod gateway_in_flight_limit;
+pub mod identity_rate_limit;
 pub mod large_context;
 pub mod mapper;
 pub mod model_support;

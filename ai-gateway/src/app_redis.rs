@@ -40,6 +40,45 @@ fn del_if_value_script_source() -> &'static str {
 }
 
 impl AppRedis {
+    /// One atomic fixed-window admission count shared by all gateway instances.
+    pub async fn identity_rate_limit_count(
+        &self,
+        key: &str,
+        window_ms: i64,
+    ) -> Result<(i64, i64, i64), redis::RedisError> {
+        static SCRIPT: std::sync::OnceLock<redis::Script> = std::sync::OnceLock::new();
+        let script = SCRIPT.get_or_init(|| {
+            redis::Script::new(
+                r#"
+local count = redis.call('INCR', KEYS[1])
+if count < 1 then return redis.error_reply('invalid identity request count') end
+local ttl = redis.call('PTTL', KEYS[1])
+local repaired = 0
+if ttl < 0 then
+  redis.call('PEXPIRE', KEYS[1], ARGV[1])
+  ttl = tonumber(ARGV[1])
+  if count > 1 then repaired = 1 end
+end
+return {count, ttl, repaired}
+"#,
+            )
+        });
+        let mut guard = self.conn.lock().await;
+        if guard.is_none() {
+            let client = redis::Client::open(self.url.as_str())?;
+            *guard = Some(client.get_multiplexed_async_connection().await?);
+        }
+        let result = script
+            .key(key)
+            .arg(window_ms)
+            .invoke_async(guard.as_mut().expect("connection ensured"))
+            .await;
+        if result.is_err() {
+            *guard = None;
+        }
+        result
+    }
+
     #[must_use]
     pub fn new(url: Url) -> Self {
         Self {

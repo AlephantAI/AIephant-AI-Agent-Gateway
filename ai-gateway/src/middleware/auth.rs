@@ -369,6 +369,58 @@ where
             .await
             {
                 Ok((auth_ctx, vk_policy)) => {
+                    if let Some(limit) = app_state
+                        .config()
+                        .global
+                        .identity_rate_limit
+                        .as_ref()
+                        .filter(|limit| {
+                            limit.applies_to(request.extensions().get::<RequestKind>().copied())
+                        })
+                    {
+                        use crate::middleware::identity_rate_limit::IdentityRateLimitError;
+                        let workspace = *auth_ctx.org_id.as_ref();
+                        match app_state
+                            .0
+                            .identity_rate_limiter
+                            .check(
+                                workspace,
+                                limit,
+                                app_state.redis().map(std::convert::AsRef::as_ref),
+                            )
+                            .await
+                        {
+                            Ok(()) => app_state.0.metrics.identity_rate_limit_allowed.add(1, &[]),
+                            Err(IdentityRateLimitError::Rejected { retry_after }) => {
+                                app_state.0.metrics.identity_rate_limit_rejected.add(1, &[]);
+                                tracing::warn!(workspace_id = %workspace, retry_after, "workspace request quota exceeded");
+                                let mut response = InvalidRequestError::TooManyRequests(
+                                    crate::error::invalid_req::TooManyRequestsError {
+                                        ratelimit_limit: u64::from(limit.requests),
+                                        ratelimit_remaining: 0,
+                                        retry_after,
+                                    },
+                                )
+                                .into_response();
+                                response.headers_mut().insert(
+                                    http::header::CACHE_CONTROL,
+                                    http::HeaderValue::from_static("no-store"),
+                                );
+                                return Err(response);
+                            }
+                            Err(IdentityRateLimitError::Unavailable) => {
+                                app_state
+                                    .0
+                                    .metrics
+                                    .identity_rate_limit_unavailable
+                                    .add(1, &[]);
+                                tracing::warn!(workspace_id = %workspace, "identity rate limiter unavailable; denying admission");
+                                return Err((http::StatusCode::SERVICE_UNAVAILABLE, crate::types::json::Json(serde_json::json!({
+                                    "error": {"code":"rate_limit_unavailable","type":"server_error","message":"Identity rate limiting is unavailable."}
+                                }))).into_response());
+                            }
+                        }
+                    }
                     tracing::info!(
                         master_key_id = ?auth_ctx.master_key_id,
                         master_key_base_url = ?auth_ctx.master_key_base_url,

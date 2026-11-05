@@ -284,6 +284,7 @@ impl AppState {
 
 #[derive(derive_more::Debug)]
 pub struct InnerAppState {
+    pub identity_rate_limiter: crate::middleware::identity_rate_limit::IdentityRateLimiter,
     pub config: Config,
     pub s3: BaseS3Client,
     pub router_store: Option<RouterStore>,
