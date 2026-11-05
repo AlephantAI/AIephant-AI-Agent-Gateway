@@ -155,7 +155,24 @@ impl AuthService {
         // Resolve master_key base_url from the LRU cache (usually a fast
         // in-process lookup; `None` on cache miss or no custom URL).
         let (master_key_base_url, is_custom_provider, master_key_allowed_providers) =
-            if let Some(cache) = app_state.0.master_key_cache.as_ref() {
+            if let Some(local) = app_state
+                .config()
+                .local_auth
+                .as_ref()
+                .and_then(|config| config.keys.iter().find(|key| key.id == vk.id))
+            {
+                let custom = local.provider == InferenceProvider::Custom;
+                let base_url = custom
+                    .then(|| {
+                        app_state
+                            .config()
+                            .providers
+                            .get(&local.provider)
+                            .map(|provider| provider.base_url.to_string())
+                    })
+                    .flatten();
+                (base_url, custom, Some(vec![local.provider.clone()]))
+            } else if let Some(cache) = app_state.0.master_key_cache.as_ref() {
                 match cache.get(vk.master_key_id).await {
                     Ok(dk) => (
                         dk.base_url,

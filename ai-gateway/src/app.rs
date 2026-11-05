@@ -169,12 +169,19 @@ impl tower::Service<crate::types::request::Request> for App {
 impl App {
     pub async fn new(config: Config) -> Result<Self, InitError> {
         tracing::debug!("creating app");
+        if config.local_auth.is_some() {
+            config.validate()?;
+        }
         crate::config::client_ip_rate_limit::validate_global_client_ip_rate_limit(&config.global)?;
         crate::config::gateway_in_flight_limit::validate_global_gateway_in_flight_limit(
             &config.global,
         )?;
         let app_state = Self::build_app_state(config).await?;
         let service_stack = Self::build_service_stack(app_state.clone()).await?;
+        if app_state.config().compat_mode {
+            // Local configuration is complete; no database listener will open readiness.
+            app_state.mark_cache_warmed();
+        }
 
         if let (Some(broadcast_cfg), Some(redis_url)) = (
             app_state
@@ -269,6 +276,13 @@ impl App {
                 map.insert(vk.key_hash.clone(), vk);
             }
             tracing::info!(count = map.len(), "loaded initial virtual_keys into cache");
+            RwLock::new(Some(map))
+        } else if let Some(local_auth) = &config.local_auth {
+            let map = local_auth
+                .load()?
+                .into_iter()
+                .map(|key| (key.key_hash.clone(), key))
+                .collect();
             RwLock::new(Some(map))
         } else {
             RwLock::new(None)

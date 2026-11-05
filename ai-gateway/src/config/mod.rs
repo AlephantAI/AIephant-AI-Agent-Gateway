@@ -10,6 +10,7 @@ pub mod dispatcher;
 pub mod fallback_bridge;
 pub mod fallback_policy;
 pub mod gateway_in_flight_limit;
+pub mod local_auth;
 pub mod mapper_profiles;
 pub mod model_mapping;
 pub mod monitor;
@@ -143,6 +144,9 @@ pub struct Config {
     /// `docs/superpowers/specs/2026-04-03-compat-mode-design.md`.
     #[serde(default)]
     pub compat_mode: bool,
+    /// Local authenticated identities for self-hosted operation without PostgreSQL.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub local_auth: Option<self::local_auth::LocalAuthConfig>,
     /// Request/response log delivery (HTTP / dedicated Redis Stream).
     #[serde(default)]
     pub request_log: self::request_log::RequestLogConfig,
@@ -375,7 +379,19 @@ impl Config {
                     .to_string(),
             ));
         }
-        if self.compat_mode && self.alephant.features != self::alephant::AlephantFeatures::None {
+        if let Some(local) = &self.local_auth {
+            if !self.compat_mode || self.alephant.features != self::alephant::AlephantFeatures::Auth
+            {
+                return Err(InitError::InvalidLocalAuth(
+                    "local-auth requires compat-mode: true and alephant.features: auth".into(),
+                ));
+            }
+            local.validate()?;
+        }
+        if self.compat_mode
+            && self.local_auth.is_none()
+            && self.alephant.features != self::alephant::AlephantFeatures::None
+        {
             return Err(InitError::CompatModeAlephantFeatures(format!(
                 "alephant.features must be `none` when compat_mode is true \
                  (got {:?})",
@@ -432,6 +448,7 @@ impl crate::tests::TestDefault for Config {
             policy: self::policy::PolicyConfig::default(),
             x402: self::x402::X402Config::default(),
             compat_mode: false,
+            local_auth: None,
             request_log: self::request_log::RequestLogConfig {
                 transport: self::request_log::RequestLogTransport::Http,
                 ..Default::default()
@@ -1116,6 +1133,46 @@ unified-api:
         assert_eq!(
             cfg.semantic_cache.qdrant.collection,
             Some("from-yaml".to_string())
+        );
+    }
+
+    #[test]
+    fn local_auth_keeps_authentication_enabled_without_a_database() {
+        let mut value = serde_json::to_value(Config::default()).unwrap();
+        value["compat-mode"] = serde_json::json!(true);
+        value["alephant"]["features"] = serde_json::json!("auth");
+        value["local-auth"] = serde_json::json!({
+            "keys": [{
+                "id": "00000000-0000-0000-0000-000000000001",
+                "workspace-id": "00000000-0000-0000-0000-000000000002",
+                "key-env": "ALEPHANT_LOCAL_API_KEY",
+                "provider": "openai"
+            }]
+        });
+        let config: Config = serde_json::from_value(value)
+            .expect("a local identity must be configurable without disabling authentication");
+        config
+            .validate()
+            .expect("authenticated local mode is valid");
+        assert!(config.alephant.is_auth_enabled());
+    }
+
+    #[test]
+    fn local_auth_cannot_silently_disable_authentication() {
+        let mut value = serde_json::to_value(Config::default()).unwrap();
+        value["compat-mode"] = serde_json::json!(true);
+        value["local-auth"] = serde_json::json!({
+            "keys": [{
+                "id": "00000000-0000-0000-0000-000000000001",
+                "workspace-id": "00000000-0000-0000-0000-000000000002",
+                "key-env": "ALEPHANT_LOCAL_API_KEY",
+                "provider": "openai"
+            }]
+        });
+        let config: Config = serde_json::from_value(value).expect("local identity configuration");
+        assert!(
+            config.validate().is_err(),
+            "local keys require authentication"
         );
     }
 }

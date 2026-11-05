@@ -82,4 +82,6 @@ pub enum InitError {
     PolicyGrpcConnect(String),
     /// `compat_mode` requires alephant.features to be `none`: {0}
     CompatModeAlephantFeatures(String),
+    /// Invalid local authentication configuration: {0}
+    InvalidLocalAuth(String),
 }

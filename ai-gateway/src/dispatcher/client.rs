@@ -99,7 +99,9 @@ impl Client {
         auth_ctx: Option<&AuthContext>,
         provider: InferenceProvider,
     ) -> Result<reqwest::RequestBuilder, ApiError> {
-        if auth_ctx.is_none() && app_state.config().compat_mode {
+        if app_state.config().compat_mode
+            && (auth_ctx.is_none() || app_state.config().local_auth.is_some())
+        {
             return self.authenticate_compat_env(request_builder, &provider);
         }
 

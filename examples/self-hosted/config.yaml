@@ -1,0 +1,53 @@
+compat-mode: true
+server:
+  address: 127.0.0.1
+  port: 18081
+telemetry:
+  level: warn
+  exporter: stdout
+alephant:
+  features: auth
+local-auth:
+  keys:
+    - id: 00000000-0000-0000-0000-000000000001
+      workspace-id: 00000000-0000-0000-0000-000000000002
+      key-env: ALEPHANT_LOCAL_API_KEY
+      provider: openai
+      allowed-models: [openai/gpt-4o]
+providers:
+  openai:
+    models: [gpt-4o]
+    base-url: https://api.openai.com/v1
+routers: {}
+policy:
+  enabled: false
+x402:
+  enabled: false
+agent:
+  enabled: true
+  event-stream-key: ""
+  event-log-http-fallback-enabled: false
+  tools:
+    enabled: true
+    catalog-source: static
+    require-policy-decision: false
+    fail-open-for-static-targets: true
+    egress-policy:
+      https-only: true
+      block-loopback: true
+      block-private-network: true
+      allow-environment-proxy: false
+    targets:
+      - tool-id: docs.search
+        name: Search documents
+        description: Replace the example URL with your own document search API.
+        kind: openapi
+        url: https://example.invalid/search
+        method: POST
+        risk-level: low
+        input-schema:
+          type: object
+          properties:
+            query:
+              type: string
+          required: [query]
