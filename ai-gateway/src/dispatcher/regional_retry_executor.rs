@@ -83,6 +83,10 @@ impl<'a> RegionalRetryExecutor<'a> {
             &request_builder,
             request.req_body_bytes,
             request.cache_tap,
+            self.app_state
+                .config()
+                .dispatcher
+                .checks_business_errors(self.provider, cn_retry_url.path()),
         )
         .await?;
         let status = response.0.status();

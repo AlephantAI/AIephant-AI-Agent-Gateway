@@ -1178,6 +1178,11 @@ impl Dispatcher {
         vk_policy: Option<&VkPolicy>,
         implicit_model_fallback_ctx: Option<&UnifiedImplicitModelFallbackContext>,
     ) -> Result<SyncDispatchOutcome, ApiError> {
+        let check_business_errors = self
+            .app_state
+            .config()
+            .dispatcher
+            .checks_business_errors(&self.provider, extracted_path_and_query);
         let target_url = target_endpoint.url.clone();
         let mut effective_target_url = target_url.clone();
         let retry_config = get_retry_config(&self.app_state, request_kind, req_ctx);
@@ -1213,6 +1218,7 @@ impl Dispatcher {
                             &request_builder,
                             req_body_bytes.clone(),
                             cache_tap.clone(),
+                            check_business_errors,
                         )
                         .await?;
 
@@ -1279,6 +1285,7 @@ impl Dispatcher {
                             &request_builder,
                             req_body_bytes.clone(),
                             cache_tap.clone(),
+                            check_business_errors,
                         )
                         .await
                     };
@@ -1338,6 +1345,7 @@ impl Dispatcher {
                 &request_builder,
                 req_body_bytes.clone(),
                 cache_tap.clone(),
+                check_business_errors,
             )
             .await
         };

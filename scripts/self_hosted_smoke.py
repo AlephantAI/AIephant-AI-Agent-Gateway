@@ -31,15 +31,22 @@ def main():
             request = json.loads(self.rfile.read(int(self.headers.get("Content-Length", "0"))))
             observed.append((self.path, self.headers.get("Authorization"), request))
             if self.path.endswith("chat/completions"):
-                body = {
+                prompt = request["messages"][-1]["content"]
+                if prompt == "invalid-request":
+                    body = {"success": False, "error": {"code": "invalid_request", "message": "private user input"}}
+                elif prompt == "rate-limit":
+                    body = {"success": False, "error": {"code": "rate_limit_exceeded", "message": "private provider credential"}}
+                else:
+                    body = {
                     "id": "chatcmpl-local", "object": "chat.completion", "created": 1,
                     "model": "gpt-4o", "choices": [{"index": 0,
                         "message": {"role": "assistant", "content": "local-ok"},
                         "finish_reason": "stop"}],
                     "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2},
-                }
+                    }
             else:
-                body = {"result": "document-found"}
+                body = ({"success": False, "error": {"code": "invalid_request", "message": "private-value"}}
+                        if request.get("query") == "invalid-request" else {"result": "document-found"})
             data = json.dumps(body).encode()
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
@@ -116,6 +123,13 @@ def main():
                 assert len(model_requests) == 1, "rejected requests must not reach the upstream"
                 assert model_requests[0][1] == "Bearer " + upstream_key, "gateway key must not reach provider"
                 assert model_requests[0][2]["model"] == "gpt-4o", "provider prefix must be removed"
+                for prompt, expected in (("invalid-request", 400), ("rate-limit", 429)):
+                    bad = {"model": "openai/gpt-4o", "messages": [{"role": "user", "content": prompt}]}
+                    before = len(observed)
+                    status, body = call("/v1/chat/completions", bad)
+                    assert status == expected, ("business failure classification", prompt, status, body)
+                    assert len(observed) == before + 1, "client errors and rate limits must not be replayed"
+                    assert b"private" not in body, "provider error details must not echo sensitive values"
                 status, body = call("/v1/agent/tools/list", {})
                 assert status == 200, ("static tool catalog", status, body)
                 assert any(tool["toolId"] == "docs.search" for tool in json.loads(body)["tools"])
@@ -123,8 +137,14 @@ def main():
                 assert status == 200, ("static tool call", status, body)
                 result = json.loads(body)
                 assert result["executed"] and result["output"]["result"] == "document-found", result
+                before = len(observed)
+                status, body = call("/v1/agent/tools/call", {"tool_id": "docs.search", "arguments": {"query": "invalid-request"}})
+                result = json.loads(body)
+                assert result["status"] == "failed" and result["error"]["code"] == "invalid_request", result
+                assert len(observed) == before + 1, "a failed tool call must not be replayed"
+                assert b"private-value" not in body, "tool errors must not echo provider values"
                 assert call("/healthz/ready")[0] == 200, "local configuration must open readiness without a database listener"
-                print("PASS: production startup, readiness, authenticated model and static tool calls; no database or commercial services")
+                print("PASS: production startup, readiness, authentication, model/tool calls and business failures; no database or commercial services")
             except Exception:
                 print("Observed local upstream paths:", [item[0] for item in observed])
                 print(logs.read_text()[-10000:])

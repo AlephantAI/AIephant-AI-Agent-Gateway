@@ -19,6 +19,10 @@ providers:
     models: [gpt-4o]
     base-url: https://api.openai.com/v1
 routers: {}
+dispatcher:
+  business-error-checks:
+    - provider: openai
+      path: v1/chat/completions
 policy:
   enabled: false
 x402:
@@ -42,6 +46,7 @@ agent:
         name: Search documents
         description: Replace the example URL with your own document search API.
         kind: openapi
+        detect-business-errors: true
         url: https://example.invalid/search
         method: POST
         risk-level: low

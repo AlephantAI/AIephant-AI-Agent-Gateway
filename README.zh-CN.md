@@ -221,6 +221,8 @@ console.log(response.choices[0]?.message?.content)
 
 ## 从源码自托管
 
+无需 PostgreSQL 或商业服务的本地鉴权部署见[独立自托管配置](examples/self-hosted/README.md)：使用生产二进制、环境变量凭证和静态工具目录。
+
 Alephant AI Gateway 可作为独立的自托管 Rust 服务运行。可将自有应用指向本地网关，对接 PostgreSQL / Redis / Qdrant / S3 兼容基础设施，并在部署侧控制提供商密钥、路由器配置、缓存行为与日志目的地。
 
 当你需要在自有网络内运行网关、完全掌控上游凭证，或在接入 Alephant Cloud 之前验证适配与路由行为时，自托管尤为合适。

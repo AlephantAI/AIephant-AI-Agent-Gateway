@@ -24,3 +24,13 @@ python3 scripts/self_hosted_smoke.py
 ```
 
 The smoke check covers startup, readiness, rejected credentials, authenticated model calls, upstream credential isolation, tool discovery and tool execution. It does not call a paid provider or use a test-only authentication hook.
+
+## Explicit business failure checks
+
+`dispatcher.business-error-checks` enables checks for an exact provider and endpoint, for example `provider: openai` and `path: v1/chat/completions`. Checks are disabled when no matching entry exists. Query strings do not change the endpoint match.
+
+For successful JSON responses up to 64 KiB, the gateway recognizes explicit failure signals such as a nonempty `error`, `success: false`, or a failed `status`. It maps parameter failures to 400, rate limits to 429, unavailable models to 404, and provider failures to 502. Safe provider error codes are retained, while messages use bounded generic text rather than echoing provider input. `x-alephant-upstream-status` records the original HTTP status. Modified responses discard stale entity headers.
+
+Larger responses, non-JSON responses and SSE retain their existing handling. Do not enable the rule for an endpoint where these failure fields are ordinary business data. A checked failure cannot be saved through the successful-response cache path.
+
+OpenAPI tool targets can independently enable `detect-business-errors: true`. The tool envelope then reports a failure while metadata retains the original upstream HTTP status. Existing failure-charge settings continue to apply; the classifier does not introduce a balance or billing service. With the option absent, tool response behavior and snapshot serialization remain compatible.

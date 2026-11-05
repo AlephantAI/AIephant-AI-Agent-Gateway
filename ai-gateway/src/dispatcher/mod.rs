@@ -15,6 +15,7 @@ pub mod service;
 mod sync_dispatch;
 pub(crate) mod target_endpoint;
 pub(crate) mod upstream_auth;
+pub(crate) mod upstream_outcome;
 
 use std::pin::Pin;
 

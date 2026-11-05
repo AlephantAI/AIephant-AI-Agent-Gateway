@@ -208,6 +208,32 @@ async fn execute_runtime_openapi_tool(
         }
     };
 
+    if target.detect_business_errors
+        && (200..=299).contains(&status)
+        && let Some(failure) =
+            crate::dispatcher::upstream_outcome::classify_business_failure(&response_bytes)
+    {
+        let mut response = openapi_response_with_output(
+            target,
+            request,
+            &options,
+            &tool_execution_id,
+            OpenApiOutcomeStatus::HttpStatus(failure.status().as_u16()),
+            Some(&plan),
+            Some(status),
+            Some(response_bytes.len() as u64),
+            failure.public_body(),
+            started,
+        );
+        if let Some(metadata) = &mut response.gateway_metadata {
+            metadata.failure_stage = Some("business".into());
+            metadata.failure_class = Some(failure.code.clone());
+        }
+        if let Some(error) = &mut response.error {
+            error.code = failure.code;
+        }
+        return Ok(response);
+    }
     match classify_response(status, content_type.as_deref(), &response_bytes) {
         ResponseClassification::NonSuccess { output } => Ok(openapi_response_with_output(
             target,
@@ -319,6 +345,7 @@ fn runtime_target_from_static(
         allowed_port: port,
         path_template: parsed.path().to_string(),
         max_response_bytes: 0,
+        detect_business_errors: target.detect_business_errors,
         ..RuntimeOpenApiTarget::default()
     };
 
@@ -642,6 +669,51 @@ mod tests {
     const DEFAULT_TIMEOUT_MS: u64 = 8_000;
     const MAX_REQUEST_BYTES: usize = 65_536;
     const MAX_RESPONSE_BYTES: usize = 65_536;
+
+    #[tokio::test]
+    async fn configured_business_errors_fail_tool_calls_without_rewriting_original_http_status() {
+        for enabled in [false, true] {
+            let fixture = OpenApiHttpFixture::start(FixtureResponse {
+                status: 200, content_type: "application/json",
+                body: r#"{"success":false,"error":{"code":"invalid_request","message":"private-value"}}"#,
+                delay: None, location: None,
+            }).expect("local HTTP fixture");
+            let mut target = static_target(fixture.url("/tickets"));
+            target.detect_business_errors = enabled;
+            let response = execute_openapi_tool(
+                &target,
+                &request(serde_json::json!({})),
+                &test_egress_policy(),
+                DEFAULT_TIMEOUT_MS,
+                MAX_REQUEST_BYTES,
+                MAX_RESPONSE_BYTES,
+            )
+            .await
+            .unwrap();
+            assert_eq!(
+                response.gateway_metadata.as_ref().unwrap().http_status,
+                Some(200)
+            );
+            if enabled {
+                assert_eq!(response.status, ToolExecutionStatus::Failed);
+                assert!(!response.billing.billable);
+                assert_eq!(response.error.as_ref().unwrap().code, "invalid_request");
+                assert_eq!(
+                    response
+                        .gateway_metadata
+                        .as_ref()
+                        .unwrap()
+                        .failure_stage
+                        .as_deref(),
+                    Some("business")
+                );
+                assert!(!response.output.to_string().contains("private-value"));
+            } else {
+                assert_eq!(response.status, ToolExecutionStatus::Completed);
+                assert!(response.output.to_string().contains("private-value"));
+            }
+        }
+    }
 
     #[tokio::test]
     async fn get_2xx_json_response_completes_with_metadata() {

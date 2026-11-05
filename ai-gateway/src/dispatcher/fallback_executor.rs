@@ -137,6 +137,10 @@ impl<'a> FallbackExecutor<'a> {
             &fallback_request_builder,
             fallback_body.clone(),
             request.cache_tap,
+            self.app_state
+                .config()
+                .dispatcher
+                .checks_business_errors(&fallback_provider, request.extracted_path_and_query),
         )
         .await?;
         Ok(Some(CrossProviderFallbackOutcome {

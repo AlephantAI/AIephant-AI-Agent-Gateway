@@ -221,6 +221,8 @@ console.log(response.choices[0]?.message?.content)
 
 ## Self-host from source
 
+For authenticated local operation without PostgreSQL or commercial services, see the [self-hosted profile](examples/self-hosted/README.md). It uses the production binary, environment-based credentials and a static tool catalog.
+
 Alephant AI Gateway can run as an independent self-hosted Rust service. You can point your own applications at the local gateway, connect it to your own PostgreSQL/Redis/Qdrant/S3-compatible infrastructure, and control provider keys, router configuration, cache behavior, and logging destinations from your deployment.
 
 Self-hosting is useful when you need the gateway inside your own network, want full control over upstream provider credentials, or need to test provider adaptation and routing behavior before connecting to Alephant Cloud.

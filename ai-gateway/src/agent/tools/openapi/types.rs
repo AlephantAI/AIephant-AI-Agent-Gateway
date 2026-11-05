@@ -18,6 +18,8 @@ pub struct RuntimeOpenApiTarget {
     pub response_content_types: Vec<String>,
     pub parameter_mapping: Vec<OpenApiParameterMapping>,
     pub request_body_mapping: Option<OpenApiBodyMapping>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub detect_business_errors: bool,
 }
 
 impl RuntimeOpenApiTarget {

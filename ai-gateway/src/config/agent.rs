@@ -188,6 +188,8 @@ pub struct AgentToolTargetConfig {
     pub risk_level: String,
     pub timeout_ms: Option<u64>,
     pub input_schema: serde_json::Value,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub detect_business_errors: bool,
     pub rate_card: AgentToolRateCardConfig,
     pub allowlist: AgentToolAllowlistConfig,
 }
@@ -207,6 +209,7 @@ impl Default for AgentToolTargetConfig {
             risk_level: "medium".to_string(),
             timeout_ms: None,
             input_schema: serde_json::json!({ "type": "object" }),
+            detect_business_errors: false,
             rate_card: AgentToolRateCardConfig::default(),
             allowlist: AgentToolAllowlistConfig::default(),
         }
