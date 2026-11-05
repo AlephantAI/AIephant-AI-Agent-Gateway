@@ -28,8 +28,13 @@ pub enum TfftTrigger {
 
 /// Reads a stream of HTTP data frames as `Bytes` from a channel.
 #[derive(Debug)]
+enum LogReceiver {
+    Unbounded(UnboundedReceiver<Bytes>),
+    Bounded(mpsc::Receiver<Bytes>),
+}
+#[derive(Debug)]
 pub struct BodyReader {
-    rx: UnboundedReceiver<Bytes>,
+    rx: LogReceiver,
     tfft_tx: Option<oneshot::Sender<()>>,
     tfft_trigger: TfftTrigger,
     is_end_stream: bool,
@@ -47,13 +52,57 @@ impl BodyReader {
         tfft_trigger: TfftTrigger,
     ) -> Self {
         Self {
-            rx,
+            rx: LogReceiver::Unbounded(rx),
             tfft_tx: Some(tfft_tx),
             tfft_trigger,
             is_end_stream: false,
             size_hint,
             append_newlines,
         }
+    }
+
+    pub(crate) fn wrap_stream_bounded(
+        stream: impl Stream<Item = Result<Bytes, ApiError>> + Send + 'static,
+        append_newlines: bool,
+        tfft_trigger: TfftTrigger,
+    ) -> (Body, BodyReader, oneshot::Receiver<()>) {
+        let (tx, rx) = mpsc::channel(4);
+        let (tfft_tx, tfft_rx) = oneshot::channel();
+        let stream: Pin<Box<dyn Stream<Item = Result<Bytes, ApiError>> + Send>> = Box::pin(stream);
+        let output = futures::stream::unfold(
+            (Some(stream), tx, 0usize),
+            |(stream, tx, mut total)| async move {
+                let mut stream = stream?;
+                let item = stream.next().await?;
+                if let Ok(chunk) = &item {
+                    total = total.saturating_add(chunk.len());
+                    if total > 32 * 1024 * 1024 {
+                        return Some((
+                            Err(
+                                crate::error::invalid_req::InvalidRequestError::PayloadValidation {
+                                    status: http::StatusCode::BAD_GATEWAY,
+                                    code: "response_body_limit",
+                                }
+                                .into(),
+                            ),
+                            (None, tx, total),
+                        ));
+                    }
+                    let _ = tx.send(chunk.clone()).await;
+                }
+                Some((item, (Some(stream), tx, total)))
+            },
+        );
+        let body = Body::from_stream(output);
+        let reader = BodyReader {
+            rx: LogReceiver::Bounded(rx),
+            tfft_tx: Some(tfft_tx),
+            tfft_trigger,
+            is_end_stream: false,
+            size_hint: body.size_hint(),
+            append_newlines,
+        };
+        (body, reader, tfft_rx)
     }
 
     /// `append_newlines` is used to support LLM response logging with Alephant
@@ -96,7 +145,11 @@ impl hyper::body::Body for BodyReader {
         mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,
     ) -> Poll<Option<Result<Frame<Self::Data>, Self::Error>>> {
-        match Pin::new(&mut self.rx).poll_recv(cx) {
+        let received = match &mut self.rx {
+            LogReceiver::Unbounded(rx) => Pin::new(rx).poll_recv(cx),
+            LogReceiver::Bounded(rx) => Pin::new(rx).poll_recv(cx),
+        };
+        match received {
             Poll::Ready(Some(bytes)) => {
                 let should_signal = match self.tfft_trigger {
                     TfftTrigger::Never => false,
@@ -137,5 +190,51 @@ impl hyper::body::Body for BodyReader {
 
     fn size_hint(&self) -> SizeHint {
         self.size_hint.clone()
+    }
+}
+
+#[cfg(test)]
+mod bounded_logging_tests {
+    use super::*;
+    use http_body_util::BodyExt;
+    use std::{
+        sync::{
+            Arc,
+            atomic::{AtomicUsize, Ordering},
+        },
+        time::Duration,
+    };
+    #[tokio::test]
+    async fn bounded_logger_backpressures_without_background_prefetch() {
+        let count = Arc::new(AtomicUsize::new(0));
+        let polled = count.clone();
+        let source = futures::stream::iter((0..100).map(move |_| {
+            polled.fetch_add(1, Ordering::SeqCst);
+            Ok(Bytes::from_static(b"token"))
+        }));
+        let (mut body, logger, _) =
+            BodyReader::wrap_stream_bounded(source, false, TfftTrigger::Never);
+        for _ in 0..4 {
+            body.frame().await.unwrap().unwrap();
+        }
+        assert!(
+            tokio::time::timeout(Duration::from_millis(20), body.frame())
+                .await
+                .is_err()
+        );
+        assert_eq!(count.load(Ordering::SeqCst), 5);
+        drop(body);
+        drop(logger);
+    }
+    #[tokio::test]
+    async fn bounded_response_stops_before_logging_an_unbounded_body() {
+        let source =
+            futures::stream::once(async { Ok(Bytes::from(vec![b'x'; 32 * 1024 * 1024 + 1])) });
+        let (body, logger, _) = BodyReader::wrap_stream_bounded(source, false, TfftTrigger::Never);
+        let (client, _) = tokio::join!(body.collect(), logger.collect());
+        assert!(
+            client.is_err(),
+            "active heartbeat responses must enforce a finite body/log budget"
+        );
     }
 }

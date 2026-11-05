@@ -181,10 +181,14 @@ impl Client {
         body: B,
         api_endpoint: Option<ApiEndpoint>,
         metrics_registry: &EndpointMetricsRegistry,
+        frame_limit: Option<usize>,
     ) -> Result<SSEStream, ApiError>
     where
         B: Into<reqwest::Body>,
     {
+        if let Some(limit) = frame_limit {
+            return super::downstream_heartbeat::upstream_sse(request_builder, body, limit).await;
+        }
         let event_source = request_builder
             .body(body)
             .eventsource()

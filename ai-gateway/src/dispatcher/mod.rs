@@ -3,6 +3,7 @@ mod bedrock_client;
 pub(crate) mod cache_coordinator;
 pub mod client;
 pub(crate) mod dispatch_logger;
+pub(crate) mod downstream_heartbeat;
 mod extensions;
 pub(crate) mod fallback_executor;
 pub mod ollama_client;

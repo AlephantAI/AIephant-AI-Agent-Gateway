@@ -233,6 +233,10 @@ impl Dispatcher {
         &self,
         mut req: Request,
     ) -> Result<http::Response<crate::types::body::Body>, ApiError> {
+        let heartbeat = req
+            .extensions()
+            .get::<super::downstream_heartbeat::Active>()
+            .cloned();
         // Extract request context and extensions
         let GatewayRequestContext {
             mapper_ctx,
@@ -445,7 +449,8 @@ impl Dispatcher {
                 Ok(s) => s,
             };
 
-        let llm_kv_read_ok = !is_media
+        let llm_kv_read_ok = heartbeat.is_none()
+            && !is_media
             && !validate_response
             && llm_cache_settings.should_read
             && auth_ctx.is_some()
@@ -642,13 +647,16 @@ impl Dispatcher {
             }
         }
 
-        let llm_kv_write_enabled = !is_media
+        let llm_kv_write_enabled = heartbeat.is_none()
+            && !is_media
             && !validate_response
             && llm_cache_settings.should_write
             && auth_ctx.is_some()
             && req_ctx.llm_kv_cache_write_allowed;
-        let semantic_write_enabled =
-            !is_media && !validate_response && self.app_state.semantic_cache().is_some();
+        let semantic_write_enabled = heartbeat.is_none()
+            && !is_media
+            && !validate_response
+            && self.app_state.semantic_cache().is_some();
         let (cache_tap_tx, cache_save_rx) = if llm_kv_write_enabled || semantic_write_enabled {
             let (tx, rx) = mpsc::unbounded_channel();
             (Some(tx), Some(rx))
@@ -707,17 +715,29 @@ impl Dispatcher {
                     "regional_endpoint_retry: streaming path skipped in phase one"
                 );
             }
-            let (response, body_reader, tfft_rx) = dispatch_stream_with_retry(
-                &self.app_state,
-                request_builder,
-                req_body_bytes.clone(),
-                api_endpoint.clone(),
-                metrics_for_stream,
-                &req_ctx,
-                request_kind,
-                cache_tap_tx.clone(),
-            )
-            .await?;
+            let (response, body_reader, tfft_rx) = if let Some(active) = &heartbeat {
+                Self::dispatch_stream(
+                    &request_builder,
+                    req_body_bytes.clone(),
+                    api_endpoint.clone(),
+                    metrics_for_stream.clone(),
+                    None,
+                    Some(active.config.max_frame_bytes),
+                )
+                .await?
+            } else {
+                dispatch_stream_with_retry(
+                    &self.app_state,
+                    request_builder,
+                    req_body_bytes.clone(),
+                    api_endpoint.clone(),
+                    metrics_for_stream,
+                    &req_ctx,
+                    request_kind,
+                    cache_tap_tx.clone(),
+                )
+                .await?
+            };
             (
                 response,
                 body_reader,
@@ -727,8 +747,29 @@ impl Dispatcher {
                 req_body_bytes.clone(),
             )
         } else {
-            let outcome = self
-                .dispatch_sync_with_retry(
+            let outcome = if heartbeat.is_some() {
+                let (response, response_body_for_logger, tfft_rx) =
+                    sync_dispatch::dispatch_sync_with_limits(
+                        &request_builder,
+                        req_body_bytes.clone(),
+                        None,
+                        self.app_state.config().dispatcher.checks_business_errors(
+                            &self.provider,
+                            extracted_path_and_query.as_str(),
+                        ),
+                        true,
+                    )
+                    .await?;
+                SyncDispatchOutcome {
+                    response,
+                    response_body_for_logger,
+                    tfft_rx,
+                    effective_provider: self.provider.clone(),
+                    effective_target_url: target_url.clone(),
+                    effective_request_body: req_body_bytes.clone(),
+                }
+            } else {
+                self.dispatch_sync_with_retry(
                     request_builder,
                     req_body_bytes.clone(),
                     &req_ctx,
@@ -742,7 +783,8 @@ impl Dispatcher {
                     implicit_model_fallback_ctx.as_ref(),
                 )
                 .instrument(info_span!("dispatch_sync"))
-                .await?;
+                .await?
+            };
             (
                 outcome.response,
                 outcome.response_body_for_logger,
@@ -1148,6 +1190,7 @@ impl Dispatcher {
         api_endpoint: Option<ApiEndpoint>,
         metrics_registry: EndpointMetricsRegistry,
         cache_tap: Option<mpsc::UnboundedSender<Bytes>>,
+        frame_limit: Option<usize>,
     ) -> Result<
         (
             http::Response<crate::types::body::Body>,
@@ -1167,18 +1210,23 @@ impl Dispatcher {
             req_body_bytes,
             api_endpoint,
             &metrics_registry,
+            frame_limit,
         )
         .await?;
         let mut resp_builder = http::Response::builder();
         *resp_builder.headers_mut().unwrap() = stream_response_headers();
         resp_builder = resp_builder.status(StatusCode::OK);
 
-        let (user_resp_body, body_reader, tfft_rx) = BodyReader::wrap_stream(
-            response_stream,
-            true,
-            TfftTrigger::FirstModelToken,
-            cache_tap,
-        );
+        let (user_resp_body, body_reader, tfft_rx) = if frame_limit.is_some() {
+            BodyReader::wrap_stream_bounded(response_stream, true, TfftTrigger::FirstModelToken)
+        } else {
+            BodyReader::wrap_stream(
+                response_stream,
+                true,
+                TfftTrigger::FirstModelToken,
+                cache_tap,
+            )
+        };
 
         let response = resp_builder
             .body(user_resp_body)
@@ -1683,6 +1731,7 @@ async fn dispatch_stream_with_retry(
                         api_endpoint.clone(),
                         metrics_registry.clone(),
                         cache_tap.clone(),
+                        None,
                     )
                     .await
                 })
@@ -1722,6 +1771,7 @@ async fn dispatch_stream_with_retry(
                         api_endpoint.clone(),
                         metrics_registry.clone(),
                         cache_tap.clone(),
+                        None,
                     )
                     .await
                 })
@@ -1756,6 +1806,7 @@ async fn dispatch_stream_with_retry(
             api_endpoint,
             metrics_registry,
             cache_tap,
+            None,
         )
         .await
     }

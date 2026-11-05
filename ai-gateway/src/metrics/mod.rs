@@ -25,6 +25,7 @@ pub struct Metrics {
     pub workspace_concurrency_redis_decr: Counter<u64>,
     /// Global client-IP rate limit: allowed (pass) decisions.
     pub client_ip_rate_limit_allowed: Counter<u64>,
+    pub downstream_heartbeats: Counter<u64>,
     pub identity_rate_limit_allowed: Counter<u64>,
     pub identity_rate_limit_rejected: Counter<u64>,
     pub identity_rate_limit_unavailable: Counter<u64>,
@@ -54,6 +55,7 @@ pub struct Metrics {
 impl Metrics {
     #[must_use]
     pub fn new(meter: &Meter) -> Self {
+        let downstream_heartbeats = meter.u64_counter("downstream_heartbeat_total").build();
         let identity_rate_limit_allowed = meter
             .u64_counter("identity_rate_limit_allowed_total")
             .build();
@@ -172,6 +174,7 @@ impl Metrics {
             workspace_concurrency_redis_incr,
             workspace_concurrency_redis_decr,
             client_ip_rate_limit_allowed,
+            downstream_heartbeats,
             identity_rate_limit_allowed,
             identity_rate_limit_rejected,
             identity_rate_limit_unavailable,

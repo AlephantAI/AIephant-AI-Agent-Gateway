@@ -35,6 +35,12 @@ pub struct DispatcherConfig {
     pub business_error_checks: Vec<BusinessErrorCheck>,
     #[serde(default, rename = "validation-rules", alias = "validation_rules")]
     pub validation_rules: Vec<EndpointValidation>,
+    #[serde(
+        default,
+        rename = "downstream-heartbeat",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub downstream_heartbeat: Option<crate::dispatcher::downstream_heartbeat::HeartbeatConfig>,
 }
 
 impl DispatcherConfig {
@@ -57,6 +63,7 @@ impl Default for DispatcherConfig {
             connection_timeout: default_connection_timeout(),
             business_error_checks: Vec::new(),
             validation_rules: Vec::new(),
+            downstream_heartbeat: None,
         }
     }
 }

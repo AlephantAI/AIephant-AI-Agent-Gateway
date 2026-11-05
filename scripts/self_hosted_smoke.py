@@ -4,6 +4,7 @@
 import argparse
 import contextlib
 import http.server
+import http.client
 import json
 import os
 from pathlib import Path
@@ -38,6 +39,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--binary", type=Path, default=Path("target/debug/ai-gateway"))
     parser.add_argument("--rate-limit-only", action="store_true", help="verify shared workspace quotas")
+    parser.add_argument("--heartbeat-only", action="store_true", help="verify streaming keepalives through a local reverse proxy")
     parser.add_argument("--validation-only", action="store_true", help="verify header/image/box rules on the production media path")
     parser.add_argument("--image-only", action="store_true", help="verify multipart image edits with the OpenAI SDK")
     parser.add_argument("--audio-only", action="store_true", help="verify raw audio endpoints with the OpenAI SDK")
@@ -66,6 +68,8 @@ def main():
             else:
                 request = json.loads(raw)
             observed.append((self.path, self.headers.get("Authorization"), request, {k.lower():v for k,v in self.headers.items()}))
+            if self.path.endswith("audio/speech") and request.get("input") == "delayed-audio":
+                time.sleep(0.35)
             if self.path.endswith("audio/speech") and request.get("input") == "provider-failure":
                 data = b'{"error":{"code":"provider_failure","message":"failed"}}'
                 self.send_response(503)
@@ -90,13 +94,30 @@ def main():
                 self.end_headers()
                 self.wfile.write(data)
                 return
+            if self.path.endswith("chat/completions") and request.get("messages", [{}])[-1].get("content", "").startswith("delayed-"):
+                time.sleep(0.8)
+            if self.path.endswith("chat/completions") and request.get("stream"):
+                if request["messages"][-1]["content"] == "delayed-stream-fail":
+                    self.send_response(503)
+                    self.send_header("Content-Type", "application/json")
+                    data=b'{"error":{"code":"unavailable","message":"failed"}}'
+                    self.send_header("Content-Length",str(len(data)))
+                    self.end_headers();self.wfile.write(data);return
+                self.send_response(200)
+                self.send_header("Content-Type","text/event-stream")
+                self.end_headers()
+                event={"id":"chatcmpl-local","object":"chat.completion.chunk","created":1,"model":"gpt-4o","choices":[{"index":0,"delta":{"content":"local-ok"},"finish_reason":None}]}
+                frame=b"data: "+json.dumps(event).encode()+b"\n\n"
+                self.wfile.write(frame[:7]);self.wfile.flush();time.sleep(0.12)
+                self.wfile.write(frame[7:]);self.wfile.flush();time.sleep(0.16)
+                self.wfile.write(b"data: [DONE]\n\n");self.wfile.flush();return
             if self.path.endswith("images/edits"):
                 body = {"created": 1, "data": [{"b64_json": "bG9jYWw="}], "box":{"l":0,"t":0,"r":1,"b":1}, "usage":{"input_tokens":17}}
                 if request.get("prompt", (None,b""))[1] == b"bad-response":
                     body["box"]["r"] = -1
             elif self.path.endswith("chat/completions"):
                 prompt = request["messages"][-1]["content"]
-                if prompt == "invalid-request":
+                if prompt in ("invalid-request","delayed-invalid-request"):
                     body = {"success": False, "error": {"code": "invalid_request", "message": "private user input"}}
                 elif prompt == "rate-limit":
                     body = {"success": False, "error": {"code": "rate_limit_exceeded", "message": "private provider credential"}}
@@ -134,6 +155,8 @@ def main():
         profile = profile.replace("https-only: true", "https-only: false")
         profile = profile.replace("block-loopback: true", "block-loopback: false")
         profile = profile.replace("level: warn", "level: info,ai_gateway::dispatcher=debug")
+        if args.heartbeat_only:
+            profile=profile.replace("  business-error-checks:", "  downstream-heartbeat: {interval-ms: 50, early-sse: true, json-whitespace: true, max-frame-bytes: 65536}\n  business-error-checks:")
         if args.validation_only:
             image_rule={"kind":"image","select":{"pointer":"/multipart/image","each":"array_item"},"data_pointer":"/data_base64","encoding":"base64","formats":["png","jpeg"],"max_decoded_bytes":65536,"width":{"min":1,"max":4},"height":{"min":1,"max":4}}
             box_rule={"kind":"bounding_box","select":{"pointer":"/box"},"fields":{"left":"/l","top":"/t","right":"/r","bottom":"/b"},"min":0,"max":1}
@@ -245,6 +268,64 @@ def main():
                 if secondary_process is not None:
                     wait_for_gateway(secondary_process, secondary_port)
                 payload = {"model": "openai/gpt-4o", "messages": [{"role": "user", "content": "hello"}]}
+                if args.heartbeat_only:
+                    class Proxy(http.server.BaseHTTPRequestHandler):
+                        def do_POST(self):
+                            connection=http.client.HTTPConnection("127.0.0.1",gateway_port,timeout=5)
+                            data=self.rfile.read(int(self.headers["Content-Length"]))
+                            connection.request("POST",self.path,data,dict(self.headers))
+                            response=connection.getresponse()
+                            self.send_response(response.status)
+                            for k,v in response.getheaders():
+                                if k.lower() not in ("transfer-encoding","connection","content-length"):
+                                    self.send_header(k,v)
+                            self.end_headers()
+                            try:
+                                while True:
+                                    chunk=response.read(1)
+                                    if not chunk: break
+                                    self.wfile.write(chunk);self.wfile.flush()
+                            except (BrokenPipeError,ConnectionResetError): pass
+                            finally: connection.close()
+                        def log_message(self,*_args): pass
+                    proxy=http.server.ThreadingHTTPServer(("127.0.0.1",0),Proxy)
+                    threading.Thread(target=proxy.serve_forever,daemon=True).start()
+                    cleanup.callback(proxy.server_close);cleanup.callback(proxy.shutdown)
+                    def delayed(prompt,stream=False,key=gateway_key):
+                        connection=http.client.HTTPConnection("127.0.0.1",proxy.server_port,timeout=5)
+                        data=json.dumps({"model":"openai/gpt-4o","messages":[{"role":"user","content":prompt}],"stream":stream})
+                        start=time.monotonic()
+                        connection.request("POST","/v1/chat/completions",data,{"Content-Type":"application/json","Authorization":"Bearer "+key})
+                        response=connection.getresponse();first=response.read(1);elapsed=time.monotonic()-start
+                        rest=response.read();connection.close()
+                        return response.status,first+rest,first,elapsed
+                    assert call("/v1/chat/completions",payload)[0]==200
+                    status,body,first,elapsed=delayed("delayed-json")
+                    assert first==b"\n" and elapsed<0.7,(first,elapsed)
+                    assert json.loads(body)["choices"][0]["message"]["content"]=="local-ok"
+                    status,body,first,elapsed=delayed("delayed-invalid-request")
+                    assert status==200 and "error" in json.loads(body),(status,body)
+                    status,body,first,elapsed=delayed("delayed-stream",True)
+                    assert first==b":" and elapsed<0.7,(first,elapsed)
+                    assert body.count(b"data: [DONE]")==1,body
+                    assert b"local-ok" in body and body.count(b": alephant heartbeat")>=2,body
+                    for frame in body.split(b"\n\n"):
+                        for line in frame.splitlines():
+                            if line.startswith(b"data: ") and line!=b"data: [DONE]": json.loads(line[6:])
+                    status,body,first,elapsed=delayed("delayed-stream-fail",True)
+                    assert status==200 and b'"error"' in body,(status,body)
+                    assert delayed("delayed-json",key="invalid")[0]==401
+                    import openai
+                    import httpx
+                    with openai.OpenAI(base_url=f"http://127.0.0.1:{proxy.server_port}/v1",api_key=gateway_key,max_retries=0,http_client=httpx.Client(trust_env=False)) as client:
+                        chunks=list(client.chat.completions.create(model="openai/gpt-4o",messages=[{"role":"user","content":"delayed-stream"}],stream=True))
+                        assert "".join(c.choices[0].delta.content or "" for c in chunks)=="local-ok"
+                    before=time.monotonic()
+                    status,body=call("/v1/audio/speech",{"model":"openai/tts-1","voice":"alloy","input":"delayed-audio"})
+                    assert status==200 and body==b"RIFF\x00\xfflocal-audio\r\n"
+                    assert time.monotonic()-before>=0.3
+                    print("PASS: reverse-proxied early JSON/SSE and idle heartbeats, split frames, one DONE, post-commit errors, SDK parse, auth and binary isolation")
+                    return
                 if args.validation_only:
                     import struct
                     import zlib

@@ -28,7 +28,7 @@ use crate::{
         model_support::model_field_from_json_body,
     },
     router::{
-        direct::{DirectProxies, DirectProxyService},
+        direct::DirectProxies,
         unified_route_planner::{UnifiedRoutePlanner, UnifiedRouteRequest},
     },
     types::{
@@ -131,7 +131,7 @@ pin_project! {
         },
         Proxy {
             #[pin]
-            response_future: <DirectProxyService as tower::Service<Request>>::Future,
+            response_future: BoxFuture<'static,Result<Response,ApiError>>,
         },
     }
 }
@@ -424,6 +424,18 @@ impl Future for ResponseFuture {
                         UnifiedApi::Messages => ApiEndpoint::Anthropic(Anthropic::messages()),
                         UnifiedApi::Models => unreachable!("handled above"),
                     };
+                    if let Some(mut active) = crate::dispatcher::downstream_heartbeat::select(
+                        this.app_state
+                            .config()
+                            .dispatcher
+                            .downstream_heartbeat
+                            .as_ref(),
+                        extracted_path_and_query.path(),
+                        &collected_bytes,
+                    ) {
+                        active.sent = Some(this.app_state.0.metrics.downstream_heartbeats.clone());
+                        parts.extensions.insert(active);
+                    }
                     parts.extensions.insert(api);
                     if crate::endpoints::media::is_media_path(parts.uri.path()) {
                         let provider = UnifiedRoutePlanner::resolve_provider_from_master_key(
@@ -631,17 +643,29 @@ impl Future for ResponseFuture {
                             tracing::debug!(fallback_carrier = carrier_name);
                             proxy
                         };
+                    let active = request
+                        .extensions()
+                        .get::<crate::dispatcher::downstream_heartbeat::Active>()
+                        .cloned();
                     let response_future = direct_proxy.call(request);
+                    let response_future: BoxFuture<'static, Result<Response, ApiError>> =
+                        Box::pin(async move {
+                            response_future
+                                .await
+                                .map_err(|_| InternalError::Internal.into())
+                        });
+                    let response_future = if let Some(active) = active {
+                        Box::pin(crate::dispatcher::downstream_heartbeat::respond(
+                            response_future,
+                            active,
+                        )) as BoxFuture<'static, Result<Response, ApiError>>
+                    } else {
+                        response_future
+                    };
                     this.state.set(State::Proxy { response_future });
                 }
                 StateProj::Proxy { response_future } => {
-                    let response = ready!(response_future.poll(cx)).map_err(|_| {
-                        tracing::error!(
-                            "encountered error from what should be \
-                                 infallible service"
-                        );
-                        InternalError::Internal
-                    })?;
+                    let response = ready!(response_future.poll(cx))?;
                     return Poll::Ready(Ok(response));
                 }
             }

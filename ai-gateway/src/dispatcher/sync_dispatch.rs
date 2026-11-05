@@ -21,6 +21,22 @@ pub(super) async fn dispatch_sync(
     cache_tap: Option<mpsc::UnboundedSender<Bytes>>,
     check_business_errors: bool,
 ) -> Result<SyncDispatchResponse, ApiError> {
+    dispatch_sync_with_limits(
+        request_builder,
+        req_body_bytes,
+        cache_tap,
+        check_business_errors,
+        false,
+    )
+    .await
+}
+pub(super) async fn dispatch_sync_with_limits(
+    request_builder: &reqwest::RequestBuilder,
+    req_body_bytes: Bytes,
+    cache_tap: Option<mpsc::UnboundedSender<Bytes>>,
+    check_business_errors: bool,
+    bounded: bool,
+) -> Result<SyncDispatchResponse, ApiError> {
     let request_builder = request_builder.try_clone().ok_or_else(|| {
         // in theory, this should never happen, as we'll have already
         // collected the request body
@@ -101,16 +117,16 @@ pub(super) async fn dispatch_sync(
     }
     let mut resp_builder = http::Response::builder().status(status);
     *resp_builder.headers_mut().unwrap() = headers;
-    let (user_resp_body, body_reader, tfft_rx) = BodyReader::wrap_stream(
-        futures::stream::iter(prefix.into_iter().map(Ok::<Bytes, ApiError>)).chain(
-            response
-                .bytes_stream()
-                .map_err(|e| InternalError::ReqwestError(e).into()),
-        ),
-        false,
-        TfftTrigger::Never,
-        cache_tap,
+    let stream = futures::stream::iter(prefix.into_iter().map(Ok::<Bytes, ApiError>)).chain(
+        response
+            .bytes_stream()
+            .map_err(|e| InternalError::ReqwestError(e).into()),
     );
+    let (user_resp_body, body_reader, tfft_rx) = if bounded {
+        BodyReader::wrap_stream_bounded(stream, false, TfftTrigger::Never)
+    } else {
+        BodyReader::wrap_stream(stream, false, TfftTrigger::Never, cache_tap)
+    };
     let response = resp_builder
         .body(user_resp_body)
         .map_err(InternalError::HttpError)?;

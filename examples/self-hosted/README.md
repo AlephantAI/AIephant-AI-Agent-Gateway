@@ -126,3 +126,30 @@ python3 scripts/self_hosted_smoke.py --validation-only
 ```
 
 The pure validators and nine image/box regression scenarios are adapted from `openmodels-gateway` (source baseline `42e793a`, Apache-2.0 package metadata). PNG `0.18.1`, zune-core `0.5.3` and zune-jpeg `0.5.15` are pinned; the `image` crate is only a fixture encoder in tests. No source database-contract loader, commercial rules or billing engine is included.
+
+## Optional downstream heartbeats
+
+Disabled when `dispatcher.downstream-heartbeat` is absent. A configured policy sends idle SSE comments on selected Unified API endpoints:
+
+```yaml
+dispatcher:
+  downstream-heartbeat:
+    interval-ms: 15000
+    paths: [chat/completions, responses]
+    early-sse: false
+    json-whitespace: false
+    max-frame-bytes: 262144
+```
+
+`early-sse: true` permits SSE comments before the upstream response is ready. `json-whitespace: true` permits newline whitespace while a non-streaming JSON result is pending. Both are separate opt-ins. Intervals must be 10–60000 ms, unfinished frames 1 KiB–4 MiB. Only configured JSON model endpoints can use these modes; audio, multipart uploads, tools and other binary endpoints cannot be selected. Authentication, workspace admission and model policy run before the early response wrapper.
+
+Before any early heartbeat, the original HTTP status is retained. After it commits HTTP 200, later errors are carried by an explicit JSON `error` object or an SSE error frame followed by one `[DONE]`, with `upstream_status` where available. JSON clients must check this error envelope when opting into whitespace mode; an HTTP 200 alone is no longer a success assertion. The configured business-error classifier supplies safe error categories/codes. No successful completion is synthesized after an interrupted SSE stream without a terminal event.
+
+Heartbeats are inserted after response mapping and the usage/TTFT logging tap. They do not count as a model token, usage or cached content; `downstream_heartbeat_total` counts them separately. Idle comments are emitted between complete SSE frames, including when upstream frame bytes arrive in separate transport chunks. `Cache-Control: no-store, no-transform` and `X-Accel-Buffering: no` request streaming from proxies; configure the actual proxy accordingly.
+
+Active heartbeat requests disable retries, reconnects, regional/cross-provider fallback and response caches, even before their first business output. Their upstream SSE transport polls on demand, keeps one transport chunk and a bounded unfinished frame, and uses a four-chunk log queue with backpressure. The response/log body budget is 32 MiB; exceeding it produces a terminal failure rather than accumulating indefinitely. The existing dispatcher total timeout remains in force. Closing the client body drops its pending operation and I/O. These limits and error semantics apply only to the opt-in path.
+
+```sh
+# Uses a local flushing reverse proxy, split SSE frames, delayed/failing mock upstream and OpenAI SDK.
+python3 scripts/self_hosted_smoke.py --heartbeat-only
+```
