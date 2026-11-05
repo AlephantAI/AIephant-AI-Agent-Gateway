@@ -65,7 +65,8 @@ pub(crate) async fn prepare_policy(
         && headers
             .get(http::header::CONTENT_TYPE)
             .and_then(|v| v.to_str().ok())
-            .is_some_and(|v| v.starts_with("multipart/form-data"))
+            .and_then(|v| v.parse::<mime::Mime>().ok())
+            .is_some_and(|v| v.essence_str() == "multipart/form-data")
     {
         use base64::Engine;
         let form = crate::endpoints::multipart::Multipart::parse(
@@ -160,4 +161,32 @@ pub(crate) async fn check_endpoint_response(
         parts,
         crate::types::body::Body::from(bytes),
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[tokio::test]
+    async fn final_review_multipart_projection_uses_case_insensitive_mime_type() {
+        let _guard = crate::validation::TEST_MEDIA_LOCK.lock().await;
+        let mut encoded = std::io::Cursor::new(Vec::new());
+        image::DynamicImage::new_rgb8(2, 2)
+            .write_to(&mut encoded, image::ImageFormat::Png)
+            .unwrap();
+        let mut raw =
+            b"--b\r\nContent-Disposition: form-data; name=\"image\"; filename=\"a.png\"\r\n\r\n"
+                .to_vec();
+        raw.extend_from_slice(&encoded.into_inner());
+        raw.extend_from_slice(b"\r\n--b--\r\n");
+        let policy=ValidationPolicy::parse(&serde_json::json!({"version":1,"request_checks":[{"kind":"image","select":{"pointer":"/multipart/image","each":"array_item"},"data_pointer":"/data_base64","encoding":"base64","formats":["png"],"max_decoded_bytes":65536,"width":{"min":1,"max":4},"height":{"min":1,"max":4}}]})).unwrap();
+        let mut headers = HeaderMap::from_iter([(
+            http::header::CONTENT_TYPE,
+            "Multipart/Form-Data; boundary=b".parse().unwrap(),
+        )]);
+        assert!(
+            prepare_policy(policy, &mut headers, Bytes::from(raw))
+                .await
+                .is_ok()
+        );
+    }
 }

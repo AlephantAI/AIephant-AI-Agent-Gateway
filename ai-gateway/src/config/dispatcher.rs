@@ -44,6 +44,21 @@ pub struct DispatcherConfig {
 }
 
 impl DispatcherConfig {
+    /// Protect diagnostics before provider/model parsing, including rejected requests.
+    pub(crate) fn protects_payload_logs(&self, path: &str) -> bool {
+        let normalize = |s: &str| {
+            s.split('?')
+                .next()
+                .unwrap_or(s)
+                .trim_start_matches('/')
+                .trim_start_matches("v1/")
+                .to_owned()
+        };
+        let path = normalize(path);
+        self.validation_rules.iter().any(|r| {
+            (r.validation.is_some() || r.request_contract.is_some()) && normalize(&r.path) == path
+        })
+    }
     pub fn checks_business_errors(&self, provider: &InferenceProvider, path: &str) -> bool {
         let path = path
             .split('?')

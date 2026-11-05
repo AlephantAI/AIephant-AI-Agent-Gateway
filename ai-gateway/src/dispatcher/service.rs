@@ -255,6 +255,11 @@ impl Dispatcher {
             mut prompt_compression_tokens,
         } = Self::extract_request_context(&mut req)?;
 
+        let redact_payloads = self
+            .app_state
+            .config()
+            .dispatcher
+            .protects_payload_logs(extracted_path_and_query.path());
         let debug_log_config = req
             .extensions_mut()
             .remove::<DebugLogConfig>()
@@ -534,6 +539,7 @@ impl Dispatcher {
                 llm_kv_cache_read_enabled: true,
                 effective_provider: target_provider,
                 log_emitted: log_emitted_marker.as_ref(),
+                redact_payloads,
                 debug_log_config,
             });
             return Ok(hit_resp);
@@ -636,6 +642,7 @@ impl Dispatcher {
                             llm_kv_cache_read_enabled: true,
                             effective_provider: target_provider,
                             log_emitted: log_emitted_marker.as_ref(),
+                            redact_payloads,
                             debug_log_config,
                         });
                         return Ok(hit_resp);
@@ -953,6 +960,7 @@ impl Dispatcher {
             llm_kv_cache_read_enabled: llm_kv_read_ok,
             effective_provider: &effective_provider,
             log_emitted: log_emitted_marker.as_ref(),
+            redact_payloads,
             debug_log_config,
         });
 
@@ -1139,6 +1147,12 @@ impl Dispatcher {
         let _ = tfft_tx_for_log.send(());
 
         let response_logger = LoggerService::builder()
+            .redact_payloads(
+                self.app_state
+                    .config()
+                    .dispatcher
+                    .protects_payload_logs(extracted_path_and_query),
+            )
             .app_state(self.app_state.clone())
             .auth_ctx(auth_ctx)
             .start_time(start_time)

@@ -101,14 +101,16 @@ async fn incr_and_decr_refresh_ttl() {
     );
 
     tokio::time::sleep(Duration::from_secs(2)).await;
+    let aged_ttl: i64 = c.ttl(&key).await.expect("ttl immediately before decr");
+    assert!(aged_ttl < ttl1, "window must age before testing refresh");
 
     workspace_concurrency::redis_ops::decr_floor_refresh_ttl(&client, &key)
         .await
         .expect("decr");
     let ttl2: i64 = c.ttl(&key).await.expect("ttl after decr");
     assert!(
-        ttl2 > ttl1,
-        "ttl should refresh on decr: ttl1={ttl1} ttl2={ttl2}"
+        ttl2 > aged_ttl,
+        "ttl should refresh on decr: before={aged_ttl} after={ttl2}"
     );
     assert!(
         (3500..=TTL_SECS).contains(&ttl2),

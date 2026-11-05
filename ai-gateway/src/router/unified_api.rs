@@ -75,11 +75,23 @@ impl tower::Service<Request> for Service {
             tracing::info!("[unified_api] call: body collection started");
         }
         let (mut parts, body) = req.into_parts();
-        let debug_log_config = parts
+        let mut debug_log_config = parts
             .extensions
             .get::<DebugLogConfig>()
             .copied()
             .unwrap_or_else(|| DebugLogConfig::from_headers(&mut parts.headers));
+        if self
+            .app_state
+            .config()
+            .dispatcher
+            .protects_payload_logs(parts.uri.path())
+        {
+            debug_log_config = DebugLogConfig {
+                headers: false,
+                body: false,
+            };
+        }
+        parts.extensions.insert(debug_log_config);
         debug_log::maybe_log_headers("unified_api", &parts.headers, debug_log_config);
         let direct_proxies = self.direct_proxies.clone();
         let app_state = self.app_state.clone();

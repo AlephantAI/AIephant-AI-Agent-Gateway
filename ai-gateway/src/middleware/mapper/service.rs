@@ -203,11 +203,21 @@ async fn map_request(
 ) -> Result<Request, ApiError> {
     use http_body_util::BodyExt;
     let (mut parts, body) = req.into_parts();
-    let debug_log_config = parts
+    let mut debug_log_config = parts
         .extensions
         .get::<DebugLogConfig>()
         .copied()
         .unwrap_or_else(|| DebugLogConfig::from_headers(&mut parts.headers));
+    if app_state
+        .config()
+        .dispatcher
+        .protects_payload_logs(target_path_and_query.path())
+    {
+        debug_log_config = DebugLogConfig {
+            headers: false,
+            body: false,
+        };
+    }
     debug_log::maybe_log_headers("mapper", &parts.headers, debug_log_config);
     let client_profile_resolution =
         mapper_service_hooks::resolve_and_attach_client_profile(&mut parts);

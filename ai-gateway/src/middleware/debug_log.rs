@@ -17,12 +17,19 @@ use crate::{
 type BoxFuture<T> = Pin<Box<dyn Future<Output = T> + Send>>;
 
 #[derive(Debug, Clone, Default)]
-pub struct DebugLogLayer;
+pub struct DebugLogLayer {
+    dispatcher: Option<std::sync::Arc<crate::config::dispatcher::DispatcherConfig>>,
+}
 
 impl DebugLogLayer {
+    pub fn with_config(config: crate::config::dispatcher::DispatcherConfig) -> Self {
+        Self {
+            dispatcher: Some(std::sync::Arc::new(config)),
+        }
+    }
     #[must_use]
     pub fn new() -> Self {
-        Self
+        Self::default()
     }
 }
 
@@ -30,13 +37,17 @@ impl<S> Layer<S> for DebugLogLayer {
     type Service = DebugLogService<S>;
 
     fn layer(&self, inner: S) -> Self::Service {
-        DebugLogService { inner }
+        DebugLogService {
+            inner,
+            dispatcher: self.dispatcher.clone(),
+        }
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct DebugLogService<S> {
     inner: S,
+    dispatcher: Option<std::sync::Arc<crate::config::dispatcher::DispatcherConfig>>,
 }
 
 impl<S> Service<Request> for DebugLogService<S>
@@ -57,8 +68,28 @@ where
         let clone = self.inner.clone();
         let mut inner = std::mem::replace(&mut self.inner, clone);
 
+        let protected = self
+            .dispatcher
+            .as_ref()
+            .is_some_and(|c| c.protects_payload_logs(req.uri().path()));
+        let heartbeat_json = self
+            .dispatcher
+            .as_ref()
+            .and_then(|c| c.downstream_heartbeat.as_ref())
+            .is_some_and(|c| {
+                c.json_whitespace
+                    && c.paths.iter().any(|p| {
+                        req.uri()
+                            .path()
+                            .trim_start_matches('/')
+                            .trim_start_matches("v1/")
+                            == p
+                    })
+            });
+        let skip_body =
+            protected || heartbeat_json || crate::endpoints::media::is_media_path(req.uri().path());
         Box::pin(async move {
-            let req = prepare_request_for_debug_logging(req).await?;
+            let req = prepare_request_for_debug_logging(req, protected, skip_body).await?;
             let debug_log_config = req
                 .extensions()
                 .get::<DebugLogConfig>()
@@ -71,9 +102,19 @@ where
     }
 }
 
-async fn prepare_request_for_debug_logging(req: Request) -> Result<Request, ApiError> {
+async fn prepare_request_for_debug_logging(
+    req: Request,
+    protected: bool,
+    skip_body: bool,
+) -> Result<Request, ApiError> {
     let (mut parts, body) = req.into_parts();
-    let debug_log_config = DebugLogConfig::from_headers(&mut parts.headers);
+    let mut debug_log_config = DebugLogConfig::from_headers(&mut parts.headers);
+    if protected {
+        debug_log_config.headers = false;
+    }
+    if skip_body {
+        debug_log_config.body = false;
+    }
     parts.extensions.insert(debug_log_config);
 
     debug_log::maybe_log_headers("v1", &parts.headers, debug_log_config);

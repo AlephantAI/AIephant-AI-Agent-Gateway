@@ -46,7 +46,9 @@ impl MetaRouter {
         let service_stack = ServiceBuilder::new()
             .layer(ErrorHandlerLayer::new(app_state.clone()))
             .layer(RouterDetailsLayer::new())
-            .layer(DebugLogLayer::new())
+            .layer(DebugLogLayer::with_config(
+                app_state.config().dispatcher.clone(),
+            ))
             .layer(RoutingPrecheckLayer::new())
             .layer(AsyncRequireAuthorizationLayer::new(
                 crate::middleware::auth::AuthService::new(app_state.clone()),

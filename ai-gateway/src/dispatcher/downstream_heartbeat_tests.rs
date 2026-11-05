@@ -113,7 +113,13 @@ async fn established_sse_heartbeats_never_split_business_frames_and_emit_one_ter
 async fn delayed_failures_are_explicit_after_commit_and_uncommitted_errors_retain_status() {
     let future = Box::pin(async {
         tokio::time::sleep(Duration::from_millis(40)).await;
-        Ok(response(429, "application/json", Body::from("private")))
+        let mut response = response(429, "application/json", Body::from("private"));
+        response
+            .extensions_mut()
+            .insert(super::super::upstream_outcome::OriginalUpstreamStatus(
+                StatusCode::TOO_MANY_REQUESTS,
+            ));
+        Ok(response)
     });
     let result = respond(future, active(Mode::Json, false)).await.unwrap();
     assert_eq!(result.status(), 200);
@@ -208,4 +214,55 @@ async fn bounded_upstream_requires_terminal_event_without_reconnecting() {
         "missing terminal event is an uncertain outcome"
     );
     assert_eq!(fixture.requests().len(), 1, "must not reconnect or replay");
+}
+
+#[tokio::test]
+async fn final_review_post_commit_error_preserves_actual_upstream_status() {
+    let mut response = response(
+        400,
+        "application/json",
+        Body::from(r#"{"error":{"code":"invalid_request","message":"private"}}"#),
+    );
+    response.headers_mut().insert(
+        "x-alephant-upstream-status",
+        http::HeaderValue::from_static("201"),
+    );
+    response
+        .extensions_mut()
+        .insert(super::super::upstream_outcome::OriginalUpstreamStatus(
+            StatusCode::CREATED,
+        ));
+    let json: serde_json::Value = serde_json::from_slice(&final_json(response).await).unwrap();
+    assert_eq!(json["upstream_status"], 201);
+    assert_eq!(json["gateway_status"], 400);
+    assert_eq!(json["error"]["code"], "invalid_request");
+}
+
+#[tokio::test]
+async fn final_review_json_response_mime_type_is_case_insensitive() {
+    let body = final_json(response(
+        200,
+        "Application/JSON; charset=utf-8",
+        Body::from(r#"{"ok":true}"#),
+    ))
+    .await;
+    assert_eq!(
+        serde_json::from_slice::<serde_json::Value>(&body).unwrap()["ok"],
+        true
+    );
+}
+
+#[tokio::test]
+async fn final_review_gateway_only_errors_do_not_invent_upstream_status() {
+    let json: serde_json::Value = serde_json::from_slice(
+        &final_json(response(
+            503,
+            "application/json",
+            Body::from("gateway admission unavailable"),
+        ))
+        .await,
+    )
+    .unwrap();
+    assert!(json.get("upstream_status").is_none());
+    assert_eq!(json["gateway_status"], 503);
 }

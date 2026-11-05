@@ -49,7 +49,8 @@ pub(super) async fn dispatch_sync_with_limits(
         .await
         .map_err(InternalError::ReqwestError)?;
 
-    let mut status = response.status();
+    let original_status = response.status();
+    let mut status = original_status;
     let mut headers = response.headers().clone();
     let mut prefix = Vec::new();
     let json_response = headers
@@ -127,9 +128,14 @@ pub(super) async fn dispatch_sync_with_limits(
     } else {
         BodyReader::wrap_stream(stream, false, TfftTrigger::Never, cache_tap)
     };
-    let response = resp_builder
+    let mut response = resp_builder
         .body(user_resp_body)
         .map_err(InternalError::HttpError)?;
+    response
+        .extensions_mut()
+        .insert(super::upstream_outcome::OriginalUpstreamStatus(
+            original_status,
+        ));
     Ok((response, body_reader, tfft_rx))
 }
 

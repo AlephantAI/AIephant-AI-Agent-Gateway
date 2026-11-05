@@ -1,6 +1,9 @@
 use http::StatusCode;
 use serde_json::{Value, json};
 
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct OriginalUpstreamStatus(pub StatusCode);
+
 pub(crate) const MAX_PROBE_BYTES: usize = 64 * 1024;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

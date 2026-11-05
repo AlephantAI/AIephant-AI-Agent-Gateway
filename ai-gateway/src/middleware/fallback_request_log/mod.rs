@@ -101,6 +101,11 @@ where
         let mut inner = self.inner.clone();
         std::mem::swap(&mut self.inner, &mut inner);
 
+        let redact_payloads = self
+            .app_state
+            .config()
+            .dispatcher
+            .protects_payload_logs(req.uri().path());
         Box::pin(async move {
             match inner.call(req).await {
                 Ok(resp) => Ok(resp),
@@ -116,6 +121,7 @@ where
                             start_time,
                             start_instant,
                             &api_err,
+                            redact_payloads,
                         );
                     }
                     Err(api_err)
@@ -138,6 +144,7 @@ fn emit_fallback_log(
     start_time: chrono::DateTime<Utc>,
     start_instant: Instant,
     api_err: &ApiError,
+    redact_payloads: bool,
 ) {
     if !app_state.config().alephant.is_observability_enabled() {
         return;
@@ -193,6 +200,7 @@ fn emit_fallback_log(
     };
 
     let response_logger = LoggerService::builder()
+        .redact_payloads(redact_payloads)
         .app_state(app_state.clone())
         .auth_ctx(auth_ctx)
         .start_time(start_time)

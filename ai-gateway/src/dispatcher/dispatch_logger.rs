@@ -54,6 +54,7 @@ pub(crate) struct DispatchLogRequest<'a> {
     pub(crate) llm_kv_cache_read_enabled: bool,
     pub(crate) effective_provider: &'a InferenceProvider,
     pub(crate) log_emitted: Option<&'a RequestLogEmitted>,
+    pub(crate) redact_payloads: bool,
     pub(crate) debug_log_config: DebugLogConfig,
 }
 
@@ -144,7 +145,13 @@ impl DispatchLogger {
 
     /// Handles logging logic for both observability and metrics
     #[allow(clippy::too_many_arguments)]
-    pub(crate) fn handle(&self, request: DispatchLogRequest<'_>) {
+    pub(crate) fn handle(&self, mut request: DispatchLogRequest<'_>) {
+        if request.redact_payloads {
+            request.debug_log_config = DebugLogConfig {
+                headers: false,
+                body: false,
+            };
+        }
         emit_dispatcher_debug_request(
             &request.target_url,
             &request.headers,
@@ -188,6 +195,7 @@ impl DispatchLogger {
                     .ai_gateway_body_mapping(request.ai_gateway_body_mapping)
                     .cache_enabled(cache_enabled_for_log)
                     .cache_reference_id(request.cache_reference_id)
+                    .redact_payloads(request.redact_payloads)
                     .debug_log_config(request.debug_log_config)
                     .build();
 

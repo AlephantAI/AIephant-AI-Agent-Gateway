@@ -254,7 +254,7 @@ fn heartbeat(mode: Mode, sent: Option<&opentelemetry::metrics::Counter<u64>>) ->
     }
 }
 fn error_json(status: StatusCode) -> Bytes {
-    Bytes::from(serde_json::to_vec(&serde_json::json!({"error":{"type":"server_error","code":"upstream_request_failed","message":"The upstream request did not complete successfully."},"upstream_status":status.as_u16()})).expect("error JSON"))
+    Bytes::from(serde_json::to_vec(&serde_json::json!({"error":{"type":"server_error","code":"upstream_request_failed","message":"The upstream request did not complete successfully."},"gateway_status":status.as_u16()})).expect("error JSON"))
 }
 fn terminal_sse(status: StatusCode) -> Bytes {
     let mut bytes = b"data: ".to_vec();
@@ -310,15 +310,17 @@ fn established(mut response: Response, active: &Active) -> Response {
 }
 async fn final_json(response: Response) -> Bytes {
     let status = response.status();
+    // Typed transport metadata cannot be spoofed by an upstream response header.
+    let upstream_status = response
+        .extensions()
+        .get::<super::upstream_outcome::OriginalUpstreamStatus>()
+        .map(|s| s.0.as_u16());
     let is_json = response
         .headers()
         .get(header::CONTENT_TYPE)
         .and_then(|v| v.to_str().ok())
-        .is_some_and(|v| {
-            v.split(';')
-                .next()
-                .is_some_and(|v| v.trim() == "application/json")
-        });
+        .and_then(|v| v.parse::<mime::Mime>().ok())
+        .is_some_and(|v| v.essence_str() == "application/json" || v.suffix() == Some(mime::JSON));
     if !status.is_success() {
         if let Ok(body) = http_body_util::Limited::new(
             response.into_body(),
@@ -331,11 +333,20 @@ async fn final_json(response: Response) -> Bytes {
                 super::upstream_outcome::classify_business_failure(&body.to_bytes())
             {
                 let mut value = failure.public_body();
-                value["upstream_status"] = status.as_u16().into();
+                if let Some(upstream_status) = upstream_status {
+                    value["upstream_status"] = upstream_status.into();
+                }
+                value["gateway_status"] = status.as_u16().into();
                 return Bytes::from(serde_json::to_vec(&value).expect("classified error JSON"));
             }
         }
-        return error_json(status);
+        let mut value: serde_json::Value =
+            serde_json::from_slice(&error_json(status)).expect("error JSON");
+        if let Some(upstream_status) = upstream_status {
+            value["upstream_status"] = upstream_status.into();
+        }
+        value["gateway_status"] = status.as_u16().into();
+        return Bytes::from(serde_json::to_vec(&value).expect("error JSON"));
     }
     if !is_json {
         return error_json(StatusCode::BAD_GATEWAY);

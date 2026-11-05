@@ -294,13 +294,19 @@ async fn execute_runtime_openapi_tool(
             request,
             &options,
             &tool_execution_id,
-            OpenApiOutcomeStatus::HttpStatus(failure.status().as_u16()),
+            OpenApiOutcomeStatus::HttpStatus(status),
             Some(&plan),
             Some(status),
             Some(response_bytes.len() as u64),
             failure.public_body(),
             started,
         );
+        response.status = crate::agent::tools::types::ToolExecutionStatus::Failed;
+        response.error = Some(crate::agent::tools::types::ToolExecutionErrorEnvelope {
+            code: failure.code.clone(),
+            message: "Upstream returned a business failure".into(),
+            retryable: false,
+        });
         if let Some(metadata) = &mut response.gateway_metadata {
             metadata.failure_stage = Some("business".into());
             metadata.failure_class = Some(failure.code.clone());
@@ -884,7 +890,11 @@ mod tests {
             );
             if enabled {
                 assert_eq!(response.status, ToolExecutionStatus::Failed);
-                assert!(!response.billing.billable);
+                assert!(
+                    response.billing.billable,
+                    "business classification must preserve the original successful call cost"
+                );
+                assert_eq!(response.cost.amount_micros, target.rate_card.fixed_micros);
                 assert_eq!(response.error.as_ref().unwrap().code, "invalid_request");
                 assert_eq!(
                     response

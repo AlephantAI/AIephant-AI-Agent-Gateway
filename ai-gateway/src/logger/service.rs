@@ -673,6 +673,8 @@ pub struct LoggerService {
     agent_ctx: Option<AgentContext>,
     #[builder(default)]
     ai_gateway_body_mapping: Option<String>,
+    #[builder(default)]
+    redact_payloads: bool,
     #[builder(default = DebugLogConfig::from_env())]
     debug_log_config: DebugLogConfig,
 }
@@ -701,6 +703,27 @@ impl LoggerService {
     #[tracing::instrument(skip_all)]
     #[allow(clippy::cast_precision_loss, clippy::too_many_lines)]
     pub async fn log(mut self) -> Result<(), LoggerError> {
+        if self.redact_payloads {
+            let omit_request = self.request_headers.contains_key("alephant-omit-request");
+            let omit_response = self.request_headers.contains_key("alephant-omit-response");
+            self.request_headers.clear();
+            if omit_request {
+                self.request_headers
+                    .insert("alephant-omit-request", http::HeaderValue::from_static(""));
+            }
+            if omit_response {
+                self.request_headers
+                    .insert("alephant-omit-response", http::HeaderValue::from_static(""));
+            }
+            self.session_ctx = None;
+            self.prompt_ctx = None;
+            self.prompt_header_for_request_log = None;
+            self.agent_ctx = None;
+            self.debug_log_config = DebugLogConfig {
+                headers: false,
+                body: false,
+            };
+        }
         tracing::trace!("logging request");
         let model = self
             .mapper_ctx
@@ -741,6 +764,18 @@ impl LoggerService {
         let resp_body_len = response_body.len();
         let usage_counts =
             usage_counts_from_response_body_for_log(self.mapper_ctx.is_stream, &response_body);
+        // Sizes and real usage are measured from the original bytes above. Only the storage/observer view is redacted.
+        let response_body = if self.redact_payloads {
+            let (request, response) = crate::logger::body_storage::protected_log_view(
+                &self.request_body,
+                &response_body,
+                self.mapper_ctx.is_stream,
+            );
+            self.request_body = request;
+            response
+        } else {
+            response_body
+        };
         let origin_prompt_tokens = self
             .prompt_compression_tokens
             .as_ref()

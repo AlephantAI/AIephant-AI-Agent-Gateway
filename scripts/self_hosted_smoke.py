@@ -117,7 +117,7 @@ def main():
                     body["box"]["r"] = -1
             elif self.path.endswith("chat/completions"):
                 prompt = request["messages"][-1]["content"]
-                if prompt in ("invalid-request","delayed-invalid-request"):
+                if prompt in ("invalid-request","delayed-invalid-request","delayed-created-invalid-request"):
                     body = {"success": False, "error": {"code": "invalid_request", "message": "private user input"}}
                 elif prompt == "rate-limit":
                     body = {"success": False, "error": {"code": "rate_limit_exceeded", "message": "private provider credential"}}
@@ -133,7 +133,7 @@ def main():
                 body = ({"success": False, "error": {"code": "invalid_request", "message": "private-value"}}
                         if request.get("query") == "invalid-request" else {"result": "document-found"})
             data = json.dumps(body).encode()
-            self.send_response(200)
+            self.send_response(201 if self.path.endswith("chat/completions") and request["messages"][-1]["content"]=="delayed-created-invalid-request" else 200)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(data)))
             self.end_headers()
@@ -304,7 +304,12 @@ def main():
                     assert first==b"\n" and elapsed<0.7,(first,elapsed)
                     assert json.loads(body)["choices"][0]["message"]["content"]=="local-ok"
                     status,body,first,elapsed=delayed("delayed-invalid-request")
-                    assert status==200 and "error" in json.loads(body),(status,body)
+                    assert status==200 and json.loads(body)["error"]["code"]=="invalid_request",(status,body)
+                    assert json.loads(body)["upstream_status"]==200
+                    assert json.loads(body)["gateway_status"]==400
+                    status,body,first,elapsed=delayed("delayed-created-invalid-request")
+                    assert status==200 and json.loads(body)["upstream_status"]==201,(status,body)
+                    assert json.loads(body)["gateway_status"]==400
                     status,body,first,elapsed=delayed("delayed-stream",True)
                     assert first==b":" and elapsed<0.7,(first,elapsed)
                     assert body.count(b"data: [DONE]")==1,body
@@ -320,6 +325,13 @@ def main():
                     with openai.OpenAI(base_url=f"http://127.0.0.1:{proxy.server_port}/v1",api_key=gateway_key,max_retries=0,http_client=httpx.Client(trust_env=False)) as client:
                         chunks=list(client.chat.completions.create(model="openai/gpt-4o",messages=[{"role":"user","content":"delayed-stream"}],stream=True))
                         assert "".join(c.choices[0].delta.content or "" for c in chunks)=="local-ok"
+                        before=len(observed)
+                        try:
+                            list(client.chat.completions.create(model="openai/gpt-4o",messages=[{"role":"user","content":"delayed-stream-fail"}],stream=True))
+                            raise AssertionError("post-commit stream error was presented as success")
+                        except openai.APIError as error:
+                            assert error.code=="upstream_request_failed",error
+                        assert len(observed)==before+1,"failed streams must not be replayed"
                     before=time.monotonic()
                     status,body=call("/v1/audio/speech",{"model":"openai/tts-1","voice":"alloy","input":"delayed-audio"})
                     assert status==200 and body==b"RIFF\x00\xfflocal-audio\r\n"
@@ -349,9 +361,13 @@ def main():
                     status,body=call("/v1/images/edits",image_form(png(2)),extra_headers={"Content-Type":"multipart/form-data; boundary=b"})
                     assert status==200,(status,body)
                     assert observed[-1][3]["x-product"]=="alephant"
-                    status,body=call("/v1/images/edits",image_form(png(2),b"bad-response"),extra_headers={"Content-Type":"multipart/form-data; boundary=b","Alephant-Cache-Enabled":"true"})
+                    status,body=call("/v1/images/edits",image_form(png(2),b"bad-response"),extra_headers={"Content-Type":"Multipart/Form-Data; boundary=b","Alephant-Cache-Enabled":"true"})
                     assert status==502,(status,body)
                     assert json.loads(body)["error"]["code"]=="box_out_of_range"
+                    assert call("/v1/audio/speech",{"model":"openai/tts-1","voice":"alloy","input":"private-log-input-sentinel"},extra_headers={"Experiment-Mode":"true","X-Business-Header":"private-log-header-sentinel","Alephant-Debug-Headers":"true","Alephant-Debug-Body":"true"})[0]==200
+                    time.sleep(0.1)
+                    assert "private-log-input-sentinel" not in logs.read_text(),"validation payload leaked into diagnostic logs"
+                    assert "private-log-header-sentinel" not in logs.read_text(),"business header value leaked into diagnostic logs"
                     print("PASS: production required/strict headers, fixed safe header, actual PNG decode and bounds, successful response validation")
                     return
                 if args.image_only:
@@ -360,7 +376,7 @@ def main():
                     with openai.OpenAI(base_url=f"http://127.0.0.1:{gateway_port}/v1", api_key=gateway_key,
                                        max_retries=0, http_client=httpx.Client(trust_env=False)) as client:
                         for images in [[("a.png", b"PNG\x00\xffa", "image/png")],
-                                       [("a.png", b"PNG\x00\xffa", "image/png"), ("b.png", b"PNG\x01\xffb", "image/png")]]:
+                                       [("a.png", b"PNG\x00\xffa", "image/png"), ("照片.png", b"PNG\x01\xffb", "image/png")]]:
                             response = client.images.edit(model="openai/gpt-image-1", image=images, mask=("mask.png", b"MASK\x00\xff", "image/png"), prompt="edit locally", response_format="b64_json")
                             assert response.data[0].b64_json == "bG9jYWw="
                             parts=observed[-1][2]["__parts"]
@@ -390,10 +406,10 @@ def main():
                         assert response.read() == b"RIFF\x00\xfflocal-audio\r\n"
                         assert response.response.headers["content-type"] == "audio/wav"
                         assert observed[-1][2]["model"] == "tts-1"
-                        transcript = client.audio.transcriptions.create(model="openai/whisper-1", file=("sample.wav", b"RIFF\x00\xff\r\ndata", "audio/wav"), response_format="text", prompt="hello")
+                        transcript = client.audio.transcriptions.create(model="openai/whisper-1", file=("录音.wav", b"RIFF\x00\xff\r\ndata", "audio/wav"), response_format="text", prompt="hello")
                         assert transcript == "hello transcript\n", transcript
                         request = observed[-1][2]
-                        assert request["file"] == ("sample.wav", b"RIFF\x00\xff\r\ndata"), request
+                        assert request["file"] == ("录音.wav", b"RIFF\x00\xff\r\ndata"), request
                         assert request["model"][1] == b"whisper-1"
                         assert request["response_format"][1] == b"text"
                         assert observed[-1][1] == "Bearer " + upstream_key
