@@ -38,6 +38,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--binary", type=Path, default=Path("target/debug/ai-gateway"))
     parser.add_argument("--rate-limit-only", action="store_true", help="verify shared workspace quotas")
+    parser.add_argument("--validation-only", action="store_true", help="verify header/image/box rules on the production media path")
     parser.add_argument("--image-only", action="store_true", help="verify multipart image edits with the OpenAI SDK")
     parser.add_argument("--audio-only", action="store_true", help="verify raw audio endpoints with the OpenAI SDK")
     parser.add_argument("--redis", action="store_true", help="test two gateway processes with temporary Redis")
@@ -64,7 +65,7 @@ def main():
                     request["__parts"] = [(part.get_param("name", header="content-disposition"), part.get_filename(), part.get_payload(decode=True)) for part in message.iter_parts()]
             else:
                 request = json.loads(raw)
-            observed.append((self.path, self.headers.get("Authorization"), request))
+            observed.append((self.path, self.headers.get("Authorization"), request, {k.lower():v for k,v in self.headers.items()}))
             if self.path.endswith("audio/speech") and request.get("input") == "provider-failure":
                 data = b'{"error":{"code":"provider_failure","message":"failed"}}'
                 self.send_response(503)
@@ -90,7 +91,9 @@ def main():
                 self.wfile.write(data)
                 return
             if self.path.endswith("images/edits"):
-                body = {"created": 1, "data": [{"b64_json": "bG9jYWw="}]}
+                body = {"created": 1, "data": [{"b64_json": "bG9jYWw="}], "box":{"l":0,"t":0,"r":1,"b":1}, "usage":{"input_tokens":17}}
+                if request.get("prompt", (None,b""))[1] == b"bad-response":
+                    body["box"]["r"] = -1
             elif self.path.endswith("chat/completions"):
                 prompt = request["messages"][-1]["content"]
                 if prompt == "invalid-request":
@@ -131,6 +134,12 @@ def main():
         profile = profile.replace("https-only: true", "https-only: false")
         profile = profile.replace("block-loopback: true", "block-loopback: false")
         profile = profile.replace("level: warn", "level: info,ai_gateway::dispatcher=debug")
+        if args.validation_only:
+            image_rule={"kind":"image","select":{"pointer":"/multipart/image","each":"array_item"},"data_pointer":"/data_base64","encoding":"base64","formats":["png","jpeg"],"max_decoded_bytes":65536,"width":{"min":1,"max":4},"height":{"min":1,"max":4}}
+            box_rule={"kind":"bounding_box","select":{"pointer":"/box"},"fields":{"left":"/l","top":"/t","right":"/r","bottom":"/b"},"min":0,"max":1}
+            rules=[{"provider":"openai","path":"v1/audio/speech","validation":{"version":2,"request_checks":[{"kind":"header","name":"Experiment-Mode","required":True,"allowed_values":["true"]}]}},
+                   {"provider":"openai","path":"v1/images/edits","validation":{"version":1,"request_checks":[image_rule],"response_checks":[box_rule]},"request-contract":{"version":1,"inputs":[],"mappings":[],"fixed_headers":{"X-Product":"alephant"}}}]
+            profile=profile.replace("  business-error-checks:", "  validation-rules: " + json.dumps(rules) + "\n  business-error-checks:")
         if args.image_only:
             profile = profile.replace("allowed-models: [openai/gpt-4o]", "allowed-models: [openai/gpt-4o, openai/gpt-image-1]\n      blocked-models: [openai/denied]")
         if args.audio_only:
@@ -236,6 +245,34 @@ def main():
                 if secondary_process is not None:
                     wait_for_gateway(secondary_process, secondary_port)
                 payload = {"model": "openai/gpt-4o", "messages": [{"role": "user", "content": "hello"}]}
+                if args.validation_only:
+                    import struct
+                    import zlib
+                    speech={"model":"openai/tts-1","voice":"alloy","input":"hello"}
+                    before=len(observed)
+                    assert call("/v1/audio/speech",speech)[0]==400, "required header must be checked before upstream dispatch"
+                    assert len(observed)==before
+                    assert call("/v1/audio/speech",speech,extra_headers={"Experiment-Mode":"TRUE"})[0]==400
+                    assert call("/v1/audio/speech",speech,extra_headers={"Experiment-Mode":"true"})[1]==b"RIFF\x00\xfflocal-audio\r\n"
+                    def png(width):
+                        def chunk(kind,data):
+                            return struct.pack(">I",len(data))+kind+data+struct.pack(">I",zlib.crc32(kind+data)&0xffffffff)
+                        return b"\x89PNG\r\n\x1a\n"+chunk(b"IHDR",struct.pack(">IIBBBBB",width,2,8,2,0,0,0))+chunk(b"IDAT",zlib.compress((b"\x00"+b"\x00"*(width*3))*2))+chunk(b"IEND",b"")
+                    def image_form(image,prompt=b"edit"):
+                        return b'--b\r\nContent-Disposition: form-data; name="model"\r\n\r\nopenai/gpt-image-1\r\n--b\r\nContent-Disposition: form-data; name="prompt"\r\n\r\n'+prompt+b'\r\n--b\r\nContent-Disposition: form-data; name="image"; filename="a.png"\r\nContent-Type: image/png\r\n\r\n'+image+b'\r\n--b--\r\n'
+                    for image in [b"fake",png(5),png(2)[:-8]]:
+                        before=len(observed)
+                        status,body=call("/v1/images/edits",image_form(image),extra_headers={"Content-Type":"multipart/form-data; boundary=b"})
+                        assert status in (400,413,415),(status,body)
+                        assert len(observed)==before
+                    status,body=call("/v1/images/edits",image_form(png(2)),extra_headers={"Content-Type":"multipart/form-data; boundary=b"})
+                    assert status==200,(status,body)
+                    assert observed[-1][3]["x-product"]=="alephant"
+                    status,body=call("/v1/images/edits",image_form(png(2),b"bad-response"),extra_headers={"Content-Type":"multipart/form-data; boundary=b","Alephant-Cache-Enabled":"true"})
+                    assert status==502,(status,body)
+                    assert json.loads(body)["error"]["code"]=="box_out_of_range"
+                    print("PASS: production required/strict headers, fixed safe header, actual PNG decode and bounds, successful response validation")
+                    return
                 if args.image_only:
                     import openai
                     import httpx

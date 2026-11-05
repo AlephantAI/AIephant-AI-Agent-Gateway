@@ -51,6 +51,7 @@ pub mod store;
 pub mod tests;
 pub mod types;
 pub mod utils;
+pub mod validation;
 pub mod virtual_key;
 pub mod x402;
 

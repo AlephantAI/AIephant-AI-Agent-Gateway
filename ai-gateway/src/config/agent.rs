@@ -190,6 +190,10 @@ pub struct AgentToolTargetConfig {
     pub input_schema: serde_json::Value,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub detect_business_errors: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub validation: Option<serde_json::Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub request_contract: Option<serde_json::Value>,
     pub rate_card: AgentToolRateCardConfig,
     pub allowlist: AgentToolAllowlistConfig,
 }
@@ -210,6 +214,8 @@ impl Default for AgentToolTargetConfig {
             timeout_ms: None,
             input_schema: serde_json::json!({ "type": "object" }),
             detect_business_errors: false,
+            validation: None,
+            request_contract: None,
             rate_card: AgentToolRateCardConfig::default(),
             allowlist: AgentToolAllowlistConfig::default(),
         }

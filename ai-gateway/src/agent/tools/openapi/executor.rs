@@ -82,7 +82,7 @@ async fn execute_runtime_openapi_tool(
         .unwrap_or_else(|| format!("exec_{}", uuid::Uuid::new_v4().simple()));
 
     let started = Instant::now();
-    let plan = match build_request_plan(method, target, &request.arguments) {
+    let mut plan = match build_request_plan(method, target, &request.arguments) {
         Ok(plan) => plan,
         Err(_) => {
             return Ok(openapi_response(
@@ -138,6 +138,54 @@ async fn execute_runtime_openapi_tool(
         ));
     }
 
+    let mut validation = None;
+    if let Some(policy) = crate::validation::ValidationPolicy::for_route(
+        target.validation.as_ref(),
+        target.request_contract.as_ref(),
+    )
+    .map_err(|_| ToolExecutionErrorKind::ToolTargetUnavailable)?
+    {
+        let mut headers = http::HeaderMap::new();
+        for (name, value) in &plan.headers {
+            headers.append(
+                http::HeaderName::from_bytes(name.as_bytes())
+                    .map_err(|_| ToolExecutionErrorKind::ToolTargetUnavailable)?,
+                http::HeaderValue::from_str(value)
+                    .map_err(|_| ToolExecutionErrorKind::ToolTargetUnavailable)?,
+            );
+        }
+        let body = bytes::Bytes::from(
+            plan.body
+                .as_ref()
+                .map(serde_json::to_vec)
+                .transpose()
+                .map_err(|_| ToolExecutionErrorKind::ToolTargetUnavailable)?
+                .unwrap_or_default(),
+        );
+        match crate::validation::prepare_policy(policy, &mut headers, body).await {
+            Ok(prepared) => {
+                plan.headers = headers
+                    .iter()
+                    .map(|(n, v)| (n.to_string(), v.to_str().unwrap_or_default().to_string()))
+                    .collect();
+                validation = Some(prepared);
+            }
+            Err(error) => {
+                return Ok(validation_failure(
+                    target,
+                    request,
+                    &options,
+                    &tool_execution_id,
+                    &plan,
+                    None,
+                    None,
+                    serde_json::Value::Null,
+                    validation_code(&error),
+                    started,
+                ));
+            }
+        }
+    }
     let client = openapi_client(options.timeout_ms, egress_policy)
         .map_err(|_| ToolExecutionErrorKind::ToolTargetUnavailable)?;
     let dispatched = dispatch_request(&client, &plan).await;
@@ -208,6 +256,34 @@ async fn execute_runtime_openapi_tool(
         }
     };
 
+    if let Some(prepared) = &validation {
+        if let Err(error) = crate::validation::response(
+            prepared,
+            http::StatusCode::from_u16(status).expect("upstream HTTP status"),
+            bytes::Bytes::copy_from_slice(&response_bytes),
+        )
+        .await
+        {
+            let usage = serde_json::from_slice::<serde_json::Value>(&response_bytes)
+                .ok()
+                .and_then(|v| v.get("usage").cloned());
+            let output = usage
+                .map(|v| serde_json::json!({"usage":v}))
+                .unwrap_or(serde_json::Value::Null);
+            return Ok(validation_failure(
+                target,
+                request,
+                &options,
+                &tool_execution_id,
+                &plan,
+                Some(status),
+                Some(response_bytes.len() as u64),
+                output,
+                error.code,
+                started,
+            ));
+        }
+    }
     if target.detect_business_errors
         && (200..=299).contains(&status)
         && let Some(failure) =
@@ -346,6 +422,8 @@ fn runtime_target_from_static(
         path_template: parsed.path().to_string(),
         max_response_bytes: 0,
         detect_business_errors: target.detect_business_errors,
+        validation: target.validation.clone(),
+        request_contract: target.request_contract.clone(),
         ..RuntimeOpenApiTarget::default()
     };
 
@@ -644,6 +722,63 @@ fn openapi_response_with_output(
     }
 }
 
+fn validation_code(error: &crate::error::api::ApiError) -> &'static str {
+    match error {
+        crate::error::api::ApiError::InvalidRequest(
+            crate::error::invalid_req::InvalidRequestError::PayloadValidation { code, .. },
+        ) => code,
+        _ => "invalid_payload",
+    }
+}
+#[allow(clippy::too_many_arguments)]
+fn validation_failure(
+    target: &RuntimeOpenApiTarget,
+    request: &ToolCallRequest,
+    options: &OpenApiExecutionOptions,
+    id: &str,
+    plan: &OpenApiRequestPlan,
+    status: Option<u16>,
+    response_bytes: Option<u64>,
+    output: serde_json::Value,
+    code: &str,
+    started: Instant,
+) -> ToolCallResponse {
+    // A successful upstream call already happened: preserve its existing actual cost/billing decision.
+    let outcome = status
+        .map(OpenApiOutcomeStatus::HttpStatus)
+        .unwrap_or(OpenApiOutcomeStatus::SchemaInvalid);
+    let mut response = openapi_response_with_output(
+        target,
+        request,
+        options,
+        id,
+        outcome,
+        Some(plan),
+        status,
+        response_bytes,
+        output,
+        started,
+    );
+    response.status = crate::agent::tools::types::ToolExecutionStatus::Failed;
+    response.error = Some(crate::agent::tools::types::ToolExecutionErrorEnvelope {
+        code: code.into(),
+        message: "Payload validation failed".into(),
+        retryable: false,
+    });
+    if let Some(meta) = &mut response.gateway_metadata {
+        meta.failure_class = Some(code.into());
+        meta.failure_stage = Some(
+            if status.is_some() {
+                "response_validation"
+            } else {
+                "request_validation"
+            }
+            .into(),
+        );
+    }
+    response
+}
+
 fn non_empty(value: String) -> Option<String> {
     if value.is_empty() { None } else { Some(value) }
 }
@@ -669,6 +804,59 @@ mod tests {
     const DEFAULT_TIMEOUT_MS: u64 = 8_000;
     const MAX_REQUEST_BYTES: usize = 65_536;
     const MAX_RESPONSE_BYTES: usize = 65_536;
+
+    #[tokio::test]
+    async fn validation_rejects_tool_before_dispatch_and_keeps_cost_after_bad_success() {
+        let _test_guard = crate::validation::TEST_MEDIA_LOCK.lock().await;
+        let mut target = static_target("http://127.0.0.1:1/tool".into());
+        target.validation = Some(
+            serde_json::json!({"version":2,"request_checks":[{"kind":"header","name":"Experiment-Mode","required":true,"allowed_values":["true"]}]}),
+        );
+        let blocked = execute_openapi_tool(
+            &target,
+            &request(serde_json::json!({})),
+            &test_egress_policy(),
+            DEFAULT_TIMEOUT_MS,
+            MAX_REQUEST_BYTES,
+            MAX_RESPONSE_BYTES,
+        )
+        .await
+        .unwrap();
+        assert_eq!(blocked.error.as_ref().unwrap().code, "invalid_header");
+        assert_eq!(
+            blocked.gateway_metadata.as_ref().unwrap().executed,
+            Some(false)
+        );
+        let fixture = OpenApiHttpFixture::start(FixtureResponse {
+            status: 200,
+            content_type: "application/json",
+            body: r#"{"box":{"l":1,"t":0,"r":0,"b":1},"usage":{"input_tokens":17}}"#,
+            delay: None,
+            location: None,
+        })
+        .unwrap();
+        let mut target = static_target(fixture.url("/tool"));
+        target.validation = Some(
+            serde_json::json!({"version":1,"response_checks":[{"kind":"bounding_box","select":{"pointer":"/box"},"fields":{"left":"/l","top":"/t","right":"/r","bottom":"/b"},"min":0,"max":1}]}),
+        );
+        let failed = execute_openapi_tool(
+            &target,
+            &request(serde_json::json!({})),
+            &test_egress_policy(),
+            DEFAULT_TIMEOUT_MS,
+            MAX_REQUEST_BYTES,
+            MAX_RESPONSE_BYTES,
+        )
+        .await
+        .unwrap();
+        assert_eq!(failed.status, ToolExecutionStatus::Failed);
+        assert_eq!(failed.error.unwrap().code, "invalid_box_order");
+        assert_eq!(failed.gateway_metadata.unwrap().http_status, Some(200));
+        assert_eq!(failed.cost.amount_micros, target.rate_card.fixed_micros);
+        assert!(failed.billing.billable);
+        assert_eq!(failed.output["usage"]["input_tokens"], 17);
+        assert!(!failed.output.to_string().contains("box"));
+    }
 
     #[tokio::test]
     async fn configured_business_errors_fail_tool_calls_without_rewriting_original_http_status() {

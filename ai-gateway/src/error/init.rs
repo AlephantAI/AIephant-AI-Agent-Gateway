@@ -10,6 +10,8 @@ use crate::{
 /// Errors that can occur during initialization.
 #[derive(Debug, Error, Display)]
 pub enum InitError {
+    /// Invalid payload validation configuration: {0}
+    InvalidPayloadValidation(String),
     /// Default router not found
     DefaultRouterNotFound,
     /// Failed to read TLS certificate: {0}

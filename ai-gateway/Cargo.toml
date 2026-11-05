@@ -9,6 +9,10 @@ description = "A high-performance LLM proxy router."
 homepage = "https://docs.alephant.ai/ai-gateway"
 
 [dependencies]
+anyhow = { workspace = true }
+png = "=0.18.1"
+zune-core = "=0.5.3"
+zune-jpeg = "=0.5.15"
 aes-gcm = "0.10"
 anthropic-ai-sdk = { workspace = true }
 sha2 = { workspace = true }
@@ -108,6 +112,7 @@ jsonschema = { workspace = true }
 tonic-build = { workspace = true }
 
 [dev-dependencies]
+image = { version = "=0.25.10", default-features = false, features = ["png", "jpeg"] }
 cargo-husky = { workspace = true, features = ["user-hooks"] }
 pretty_assertions = { workspace = true }
 

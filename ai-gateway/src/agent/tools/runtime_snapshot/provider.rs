@@ -143,6 +143,8 @@ fn runtime_tool(
             method: target.method.clone(),
             openapi: crate::agent::tools::openapi::types::RuntimeOpenApiTarget {
                 detect_business_errors: target.detect_business_errors,
+                validation: target.validation.clone(),
+                request_contract: target.request_contract.clone(),
                 service_slug: target
                     .service_slug
                     .clone()

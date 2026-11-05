@@ -11,6 +11,17 @@ pub struct BusinessErrorCheck {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq, Hash)]
+#[serde(deny_unknown_fields, rename_all = "kebab-case")]
+pub struct EndpointValidation {
+    pub provider: InferenceProvider,
+    pub path: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub validation: Option<serde_json::Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub request_contract: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq, Hash)]
 pub struct DispatcherConfig {
     #[serde(default = "default_timeout", with = "humantime_serde")]
     pub timeout: Duration,
@@ -22,6 +33,8 @@ pub struct DispatcherConfig {
         alias = "business_error_checks"
     )]
     pub business_error_checks: Vec<BusinessErrorCheck>,
+    #[serde(default, rename = "validation-rules", alias = "validation_rules")]
+    pub validation_rules: Vec<EndpointValidation>,
 }
 
 impl DispatcherConfig {
@@ -43,6 +56,7 @@ impl Default for DispatcherConfig {
             timeout: default_timeout(),
             connection_timeout: default_connection_timeout(),
             business_error_checks: Vec::new(),
+            validation_rules: Vec::new(),
         }
     }
 }
@@ -85,6 +99,22 @@ mod tests {
         assert!(
             !DispatcherConfig::default()
                 .checks_business_errors(&InferenceProvider::OpenAI, "/v1/chat/completions")
+        );
+    }
+}
+
+#[cfg(test)]
+mod validation_config_tests {
+    #[test]
+    fn invalid_endpoint_validation_must_fail_startup_instead_of_being_ignored() {
+        let dispatcher: super::DispatcherConfig = serde_yml::from_str("validation-rules:\n  - provider: openai\n    path: v1/audio/speech\n    validation:\n      version: 999\n").unwrap();
+        let config = crate::config::Config {
+            dispatcher,
+            ..crate::config::Config::default()
+        };
+        assert!(
+            config.validate().is_err(),
+            "invalid validation policy must not silently disappear"
         );
     }
 }

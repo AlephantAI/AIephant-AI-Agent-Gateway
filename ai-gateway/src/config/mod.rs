@@ -367,6 +367,7 @@ impl Config {
     }
 
     pub fn validate(&self) -> Result<(), InitError> {
+        crate::validation::validate_config(self)?;
         self::identity_rate_limit::validate_identity_rate_limit(self)?;
         let router_id_regex = Regex::new(ROUTER_ID_REGEX).expect("always valid if tests pass");
         for (router_id, router_config) in self.routers.as_ref() {

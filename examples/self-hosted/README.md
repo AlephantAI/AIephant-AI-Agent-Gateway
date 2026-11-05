@@ -92,3 +92,37 @@ python3 scripts/self_hosted_smoke.py --image-only
 ```
 
 [OpenAI image edit reference](https://developers.openai.com/api/reference/resources/images/methods/edit).
+
+## Optional payload validation
+
+`dispatcher.validation-rules` selects an exact provider and mapped `v1/...` path (without query). Each entry accepts `validation` and/or `request-contract` JSON/YAML objects. Static OpenAPI tool targets accept the same two fields; runtime snapshots preserve them. Invalid rules fail startup. No rule means no decoder, extra body buffering or media admission.
+
+```yaml
+dispatcher:
+  validation-rules:
+    - provider: openai
+      path: v1/audio/speech
+      validation:
+        version: 2
+        request_checks:
+          - kind: header
+            name: Experiment-Mode
+            required: true
+            allowed_values: ["true", "false"]
+            min_length: 4
+            max_length: 5
+```
+
+Headers reject duplicates and compare exact UTF-8 wire values. To compile strict boolean inputs and fixed business headers, use `request-contract: {version: 1, inputs: [...], mappings: [...], fixed_headers: {...}}`. A header input declares `location: header`, `name`, `type: string|boolean`, boolean `required`, `nullable: false`, optional `enum_values`, `min_length`/`max_length`, and an identity `header:Name` mapping. Boolean wire values are exactly `true`/`false`. Fixed/dynamic conflicts fail configuration. Credential, host, hop, cookie, forwarded and Alephant control headers cannot be declared or replaced. Existing credential sanitization still runs before authentication is applied. Only the header portion of this contract is executed; tool body schemas remain owned by the existing tool schema validator.
+
+Media rules use JSON pointers and `select.each: single|object_value|array_item`, with optional discriminator `where`, `value_pointer`, `required` and `min_items`. `kind: image` validates selected base64 fields with `data_pointer`, `encoding: base64`, `formats: [png, jpeg]`, `max_decoded_bytes`, and `width`/`height: {min, max}`. Optional format declarations, forbidden fields and reference constraints are supported. PNG/JPEG are fully decoded; fake headers, corrupt data, oversize dimensions and disallowed animation fail. Multipart uploads are projected for validation only as `/multipart/<field-name>/<index>/{filename,data_base64}`; the outgoing upload stays intact. For example select `/multipart/image` with `each: array_item`, then use `/data_base64`.
+
+`kind: bounding_box` declares coordinate field pointers, finite `min`/`max`, corners or `origin_size`, and optional confidence bounds. Response rules can declare a `request_selector` with matching collection kind to require the same request/response keys or indices. Checks never rewrite payloads. Response checks require non-streaming results; only successful upstream responses are validated. Request errors return 400/413/415; unavailable admission returns 503; an invalid successful model/media response returns 502. Tools report a failed envelope with the original upstream status and safe error code. Completed upstream cost/billing and available usage facts are preserved; validation does not manufacture refunds.
+
+At most four media validations hold admission across request, upstream call and response. Each phase shares a 64 MiB decoded-image budget, with pixel/frame and reference-work limits. Blocking decoder jobs retain their admission on caller cancellation. Header-only rules do not occupy media admission or parse bodies. Validation's JSON response buffer is capped at 32 MiB; request and Tools limits remain their existing smaller bounds. Response validation disables successful-response caches for that request. Errors contain codes without header values, images, asset content or decoder diagnostics.
+
+```sh
+python3 scripts/self_hosted_smoke.py --validation-only
+```
+
+The pure validators and nine image/box regression scenarios are adapted from `openmodels-gateway` (source baseline `42e793a`, Apache-2.0 package metadata). PNG `0.18.1`, zune-core `0.5.3` and zune-jpeg `0.5.15` are pinned; the `image` crate is only a fixture encoder in tests. No source database-contract loader, commercial rules or billing engine is included.

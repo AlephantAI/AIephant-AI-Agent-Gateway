@@ -275,7 +275,7 @@ impl Dispatcher {
             self.app_state.config().agent.forward_agent_headers_upstream,
         );
         let method = req.method().clone();
-        let headers = req.headers().clone();
+        let mut headers = req.headers().clone();
         let mut extensions_snapshot = req.extensions().clone();
         let log_emitted_marker = extensions_snapshot.get::<RequestLogEmitted>().cloned();
         let vk_policy = req.extensions().get::<VkPolicy>().cloned();
@@ -419,6 +419,23 @@ impl Dispatcher {
             auth_ctx,
         )?;
 
+        let validation = crate::validation::prepare_endpoint(
+            self.app_state.config(),
+            &self.provider,
+            extracted_path_and_query.as_str(),
+            &mut headers,
+            req_body_bytes.clone(),
+            mapper_ctx.is_stream,
+        )
+        .await?;
+        // Configured business headers remain subject to the existing credential/internal-header boundary.
+        UpstreamAuthApplier::sanitize_headers_with_agent_forwarding(
+            &mut headers,
+            self.app_state.config().agent.forward_agent_headers_upstream,
+        );
+        let validate_response = validation
+            .as_ref()
+            .is_some_and(|v| v.policy.has_response_checks());
         let llm_cache_settings =
             match alephant_llm_kv_cache::CacheSettings::parse(&headers_for_llm_cache) {
                 Err(msg) => {
@@ -429,6 +446,7 @@ impl Dispatcher {
             };
 
         let llm_kv_read_ok = !is_media
+            && !validate_response
             && llm_cache_settings.should_read
             && auth_ctx.is_some()
             && req_ctx.llm_kv_cache_read_allowed;
@@ -625,10 +643,12 @@ impl Dispatcher {
         }
 
         let llm_kv_write_enabled = !is_media
+            && !validate_response
             && llm_cache_settings.should_write
             && auth_ctx.is_some()
             && req_ctx.llm_kv_cache_write_allowed;
-        let semantic_write_enabled = !is_media && self.app_state.semantic_cache().is_some();
+        let semantic_write_enabled =
+            !is_media && !validate_response && self.app_state.semantic_cache().is_some();
         let (cache_tap_tx, cache_save_rx) = if llm_kv_write_enabled || semantic_write_enabled {
             let (tx, rx) = mpsc::unbounded_channel();
             (Some(tx), Some(rx))
@@ -894,7 +914,7 @@ impl Dispatcher {
             debug_log_config,
         });
 
-        Ok(client_response)
+        crate::validation::check_endpoint_response(validation.as_ref(), client_response).await
     }
 
     // ... existing methods ...

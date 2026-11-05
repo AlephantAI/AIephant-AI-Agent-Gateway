@@ -20,6 +20,10 @@ pub struct RuntimeOpenApiTarget {
     pub request_body_mapping: Option<OpenApiBodyMapping>,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub detect_business_errors: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub validation: Option<serde_json::Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub request_contract: Option<serde_json::Value>,
 }
 
 impl RuntimeOpenApiTarget {

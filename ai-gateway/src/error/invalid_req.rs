@@ -26,6 +26,11 @@ pub struct TooManyRequestsError {
 #[derive(Debug, Error, Display, strum::AsRefStr)]
 #[ignore_extra_doc_attributes]
 pub enum InvalidRequestError {
+    /// Payload validation failed: {code}
+    PayloadValidation {
+        status: StatusCode,
+        code: &'static str,
+    },
     /// {message}
     MediaRequest {
         status: StatusCode,
@@ -90,6 +95,25 @@ impl IntoResponse for InvalidRequestError {
         debug!(error = %self, "Invalid request");
         let message = self.to_string();
         match self {
+            Self::PayloadValidation { status, code } => (
+                status,
+                Json(ErrorResponse {
+                    error: ErrorDetails {
+                        message: "Payload validation failed".into(),
+                        r#type: Some(
+                            if status.is_server_error() {
+                                "server_error"
+                            } else {
+                                INVALID_REQUEST_ERROR_TYPE
+                            }
+                            .into(),
+                        ),
+                        param: None,
+                        code: Some(code.into()),
+                    },
+                }),
+            )
+                .into_response(),
             Self::MediaRequest { status, .. } => (
                 status,
                 Json(ErrorResponse {
@@ -330,7 +354,8 @@ impl From<&InvalidRequestError> for InvalidRequestErrorMetric {
             | InvalidRequestError::RouterIdNotFound(_)
             | InvalidRequestError::MissingRouterId
             | InvalidRequestError::InvalidRequestHeader(_) => Self::NotFound,
-            InvalidRequestError::MediaRequest { .. }
+            InvalidRequestError::PayloadValidation { .. }
+            | InvalidRequestError::MediaRequest { .. }
             | InvalidRequestError::InvalidRequest(_)
             | InvalidRequestError::UnsupportedEndpoint(_)
             | InvalidRequestError::InvalidLargeContextHandler(_)
