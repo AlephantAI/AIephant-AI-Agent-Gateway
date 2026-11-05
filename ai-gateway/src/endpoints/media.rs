@@ -16,7 +16,7 @@ pub(crate) fn invalid(status: StatusCode, message: &'static str) -> ApiError {
 pub(crate) fn is_media_path(path: &str) -> bool {
     matches!(
         path.trim_start_matches('/').trim_start_matches("v1/"),
-        "audio/speech" | "audio/transcriptions"
+        "audio/speech" | "audio/transcriptions" | "images/edits"
     )
 }
 pub(crate) fn supported(provider: &InferenceProvider) -> bool {
@@ -83,6 +83,36 @@ pub(crate) fn prepare(
                 ));
             }
             (v["model"].as_str().unwrap().to_string(), None)
+        }
+        "images/edits" => {
+            let form = super::multipart::Multipart::parse(body.clone(), content_type)?;
+            form.validate_singletons(&["image", "image[]"])?;
+            form.unique_text("prompt")?;
+            let count = form.file_count("image") + form.file_count("image[]");
+            if count == 0 || count > 16 {
+                return Err(invalid(
+                    StatusCode::BAD_REQUEST,
+                    "one to sixteen nonempty image files are required",
+                ));
+            }
+            if form.parts.iter().any(|p| {
+                matches!(p.name.as_str(), "image" | "image[]" | "mask")
+                    && (p.filename.is_none() || p.body.is_empty())
+            }) {
+                return Err(invalid(
+                    StatusCode::BAD_REQUEST,
+                    "image and mask must be nonempty files",
+                ));
+            }
+            if form.parts.iter().any(|p| p.name == "stream")
+                && form.unique_text("stream")? != "false"
+            {
+                return Err(invalid(
+                    StatusCode::BAD_REQUEST,
+                    "streaming image edits are not supported",
+                ));
+            }
+            (form.unique_text("model")?.to_string(), Some(form))
         }
         "audio/transcriptions" => {
             let form = super::multipart::Multipart::parse(body.clone(), content_type)?;

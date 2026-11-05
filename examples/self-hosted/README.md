@@ -80,3 +80,15 @@ python3 scripts/self_hosted_smoke.py --audio-only
 ```
 
 API references: [speech](https://developers.openai.com/api/reference/resources/audio/subresources/speech/methods/create), [transcriptions](https://developers.openai.com/api/reference/resources/audio/subresources/transcriptions/methods/create).
+
+## Image edits
+
+`POST /v1/images/edits` uses the same authenticated raw media pipeline. Send multipart with a unique `model`, nonempty `prompt`, 1–16 nonempty `image`/`image[]` file parts, and an optional single `mask` file. Other upstream parameters pass through; the model's matching provider prefix is the only changed byte range. The same 1 MiB total upload, 128-part and 8 KiB part-header limits apply. Duplicate singleton fields are rejected. Streaming edits are rejected; non-streaming upstream JSON (including base64/URL and real usage fields) passes through unchanged.
+
+OpenAI and configured OpenAI-compatible protocols are supported; the upstream still decides accepted model, image format, dimensions and parameter combinations unless explicit validation rules are configured. Original `images/generations` handling remains separate. There are no media retries or cache writes.
+
+```sh
+python3 scripts/self_hosted_smoke.py --image-only
+```
+
+[OpenAI image edit reference](https://developers.openai.com/api/reference/resources/images/methods/edit).

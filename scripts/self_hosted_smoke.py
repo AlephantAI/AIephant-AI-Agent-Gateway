@@ -250,6 +250,17 @@ def main():
                             assert observed[-1][2]["mask"] == ("mask.png", b"MASK\x00\xff")
                             assert observed[-1][2]["model"][1] == b"gpt-image-1"
                             assert observed[-1][1] == "Bearer " + upstream_key
+                    def image_form(fields):
+                        return b"".join(b'--b\r\nContent-Disposition: form-data; name="' + name.encode() + b'"' +
+                            (b'; filename="image.png"' if name in ("image", "image[]", "mask") else b'') + b"\r\n\r\n" + value + b"\r\n" for name, value in fields) + b"--b--\r\n"
+                    valid=[("model",b"openai/gpt-image-1"),("prompt",b"edit"),("image",b"PNG\x00\xff")]
+                    for fields in [valid[:2], valid[:1]+[("prompt",b" ")]+valid[2:], valid+[("model",b"other")],
+                                   valid+[("mask",b"a"),("mask",b"b")], valid+[("stream",b"true")]]:
+                        before=len(observed)
+                        status, body=call("/v1/images/edits",image_form(fields),extra_headers={"Content-Type":"multipart/form-data; boundary=b"})
+                        assert status==400, (status,body)
+                        assert len(observed)==before
+                    assert call("/v1/images/edits",image_form([(n,b"openai/denied" if n=="model" else v) for n,v in valid]),extra_headers={"Content-Type":"multipart/form-data; boundary=b"})[0]==403
                     print("PASS: OpenAI SDK single/multiple image edits, mask and binary preservation")
                     return
                 if args.audio_only:

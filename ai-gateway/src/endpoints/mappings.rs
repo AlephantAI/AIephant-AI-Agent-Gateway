@@ -16,6 +16,7 @@ impl From<OpenAI> for Anthropic {
             OpenAI::ChatCompletions(_) => Self::messages(),
             OpenAI::Completions(_)
             | OpenAI::Embeddings(_)
+            | OpenAI::ImageEdits(_)
             | OpenAI::ImageGenerations(_)
             | OpenAI::AudioSpeech(_)
             | OpenAI::AudioTranscriptions(_)
@@ -43,6 +44,7 @@ impl From<OpenAI> for Google {
             OpenAI::ChatCompletions(_) => Self::generate_contents(),
             OpenAI::Completions(_)
             | OpenAI::Embeddings(_)
+            | OpenAI::ImageEdits(_)
             | OpenAI::ImageGenerations(_)
             | OpenAI::AudioSpeech(_)
             | OpenAI::AudioTranscriptions(_)
@@ -59,6 +61,7 @@ impl From<OpenAI> for Ollama {
             OpenAI::ChatCompletions(_) => Self::chat_completions(),
             OpenAI::Completions(_)
             | OpenAI::Embeddings(_)
+            | OpenAI::ImageEdits(_)
             | OpenAI::ImageGenerations(_)
             | OpenAI::AudioSpeech(_)
             | OpenAI::AudioTranscriptions(_)
@@ -82,6 +85,7 @@ impl From<OpenAI> for Bedrock {
             OpenAI::ChatCompletions(_) => Self::converse(),
             OpenAI::Completions(_)
             | OpenAI::Embeddings(_)
+            | OpenAI::ImageEdits(_)
             | OpenAI::ImageGenerations(_)
             | OpenAI::AudioSpeech(_)
             | OpenAI::AudioTranscriptions(_)

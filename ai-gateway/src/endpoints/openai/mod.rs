@@ -1,3 +1,5 @@
+pub mod image_edits;
+pub use image_edits::ImageEdits;
 pub mod audio_speech;
 pub mod audio_transcriptions;
 pub use audio_speech::AudioSpeech;
@@ -24,6 +26,7 @@ pub enum OpenAI {
     Completions(Completions),
     Embeddings(Embeddings),
     ImageGenerations(ImageGenerations),
+    ImageEdits(ImageEdits),
     Responses(Responses),
     AudioSpeech(AudioSpeech),
     AudioTranscriptions(AudioTranscriptions),
@@ -37,6 +40,7 @@ impl OpenAI {
             Self::Completions(_) => Completions::PATH,
             Self::Embeddings(_) => Embeddings::PATH,
             Self::ImageGenerations(_) => ImageGenerations::PATH,
+            Self::ImageEdits(_) => ImageEdits::PATH,
             Self::Responses(_) => Responses::PATH,
             Self::AudioSpeech(_) => AudioSpeech::PATH,
             Self::AudioTranscriptions(_) => AudioTranscriptions::PATH,
@@ -75,7 +79,7 @@ impl OpenAI {
                 EndpointType::Chat
             }
             Self::Embeddings(_) => EndpointType::Embeddings,
-            Self::ImageGenerations(_) => EndpointType::Image,
+            Self::ImageGenerations(_) | Self::ImageEdits(_) => EndpointType::Image,
             Self::AudioSpeech(_) | Self::AudioTranscriptions(_) => EndpointType::Audio,
         }
     }
@@ -89,6 +93,7 @@ impl TryFrom<&EndpointRoute> for OpenAI {
             EndpointRoute::ChatCompletions => Ok(Self::ChatCompletions(ChatCompletions)),
             EndpointRoute::Completions => Ok(Self::Completions(Completions)),
             EndpointRoute::Embeddings => Ok(Self::Embeddings(Embeddings)),
+            EndpointRoute::ImageEdits => Ok(Self::ImageEdits(ImageEdits)),
             EndpointRoute::ImageGenerations => Ok(Self::ImageGenerations(ImageGenerations)),
             EndpointRoute::AudioSpeech => Ok(Self::AudioSpeech(AudioSpeech)),
             EndpointRoute::AudioTranscriptions => {

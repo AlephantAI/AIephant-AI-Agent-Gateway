@@ -171,6 +171,7 @@ pub enum UnifiedApi {
     Completions,
     Embeddings,
     ImageGenerations,
+    ImageEdits,
     AudioSpeech,
     AudioTranscriptions,
     Responses,
@@ -185,6 +186,7 @@ impl TryFrom<&str> for UnifiedApi {
             "chat/completions" => Ok(Self::ChatCompletions),
             "completions" => Ok(Self::Completions),
             "embeddings" => Ok(Self::Embeddings),
+            "images/edits" => Ok(Self::ImageEdits),
             "images/generations" => Ok(Self::ImageGenerations),
             "responses" => Ok(Self::Responses),
             "messages" => Ok(Self::Messages),
@@ -404,6 +406,9 @@ impl Future for ResponseFuture {
                         }
                         UnifiedApi::Completions => ApiEndpoint::OpenAI(OpenAI::completions()),
                         UnifiedApi::Embeddings => ApiEndpoint::OpenAI(OpenAI::embeddings()),
+                        UnifiedApi::ImageEdits => ApiEndpoint::OpenAI(OpenAI::ImageEdits(
+                            crate::endpoints::openai::ImageEdits,
+                        )),
                         UnifiedApi::ImageGenerations => {
                             ApiEndpoint::OpenAI(OpenAI::image_generations())
                         }

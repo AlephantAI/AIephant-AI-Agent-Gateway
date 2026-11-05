@@ -58,6 +58,7 @@ define_endpoints! {
     (Completions, "completions"),
     (Embeddings, "embeddings"),
     (ImageGenerations, "images/generations"),
+    (ImageEdits, "images/edits"),
     (AudioSpeech, "audio/speech"),
     (AudioTranscriptions, "audio/transcriptions"),
     (Responses, "responses"),
