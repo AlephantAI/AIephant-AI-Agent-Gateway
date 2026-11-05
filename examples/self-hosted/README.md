@@ -57,3 +57,11 @@ python3 scripts/self_hosted_smoke.py --rate-limit-only
 # Requires redis-server; starts and cleans up its own temporary Redis and two gateways.
 python3 scripts/self_hosted_smoke.py --rate-limit-only --redis
 ```
+
+## MCP versions
+
+Streamable HTTP tool targets accept negotiated `2025-03-26`, `2025-06-18` and `2025-11-25` versions. The client keeps its existing `2025-06-18` initial offer for deployment compatibility; a server may select another supported version. The selected version is used for initialized notifications, calls and cached sessions. Unknown versions, expired sessions and invalid session IDs are rejected before cache reuse. Cache identities retain workspace, key, target revision and authentication revision isolation.
+
+Coverage concerns the tools client lifecycle and JSON/SSE result transport, including RPC errors, `isError`, interrupted streams and timeouts. It does not advertise sampling, elicitation, tasks or subscriptions. An uncertain tool result is not replayed; the existing explicit cached-session 404 reinitialization remains in place.
+
+Protocol references: [March lifecycle](https://modelcontextprotocol.io/specification/2025-03-26/basic/lifecycle), [November lifecycle](https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle), [Streamable HTTP](https://modelcontextprotocol.io/specification/2025-11-25/basic/transports).

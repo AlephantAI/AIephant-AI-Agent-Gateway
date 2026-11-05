@@ -79,6 +79,115 @@ mod tests {
     const MAX_RESPONSE_BYTES: usize = 65_536;
 
     #[tokio::test]
+    async fn negotiated_versions_cover_json_sse_errors_and_cached_headers_without_replay() {
+        for version in ["2025-03-26", "2025-06-18", "2025-11-25"] {
+            for mode in [
+                "json",
+                "sse",
+                "rpc-error",
+                "tool-error",
+                "disconnect",
+                "timeout",
+            ] {
+                let initialize = response_json(serde_json::json!({
+                    "jsonrpc": "2.0", "id": "init_exec-1", "result": {
+                        "protocolVersion": version, "capabilities": {"tools": {}},
+                        "serverInfo": {"name": "version-fixture", "version": "1"}
+                    }
+                }))
+                .header(
+                    HeaderName::from_static("mcp-session-id"),
+                    HeaderValue::from_static("version-session"),
+                );
+                let result = serde_json::json!({"content":[{"type":"text", "text":"ok"}], "isError": mode == "tool-error"});
+                let call = match mode {
+                    "sse" => sse_response(&[
+                        &serde_json::json!({"jsonrpc":"2.0", "id":"exec-1", "result":result})
+                            .to_string(),
+                    ]),
+                    "rpc-error" => json_rpc_error_response(-32602, "invalid input"),
+                    "disconnect" => sse_raw_response("data: {"),
+                    "timeout" => sse_raw_response("")
+                        .hold_open_after_body(std::time::Duration::from_millis(150)),
+                    _ => tool_result_response(result),
+                };
+                let fixture = StreamableFixture::start(vec![
+                    initialize,
+                    status_response(StatusCode::ACCEPTED),
+                    call,
+                    tool_result_response(serde_json::json!({"content":[]})),
+                ])
+                .expect("loopback fixture");
+                let target = test_streamable_target(fixture.url());
+                let mut ctx = test_context(&target);
+                ctx.mcp_sse_idle_timeout_ms = 30;
+                let cache = InMemoryMcpSessionCache::default();
+                let response = execute_mcp_streamable_http_tool_with_cache(
+                    &ctx,
+                    &target,
+                    &test_request(),
+                    &test_egress_policy(),
+                    DEFAULT_TIMEOUT_MS,
+                    MAX_RESPONSE_BYTES,
+                    &cache,
+                )
+                .await
+                .expect("tool envelope");
+                let completed = matches!(mode, "json" | "sse" | "tool-error");
+                assert_eq!(
+                    response.status == ToolExecutionStatus::Completed,
+                    completed,
+                    "{version}/{mode}"
+                );
+                assert_eq!(
+                    response
+                        .gateway_metadata
+                        .as_ref()
+                        .unwrap()
+                        .protocol_version
+                        .as_deref(),
+                    Some(version)
+                );
+                let requests = fixture.requests();
+                assert_eq!(requests.len(), 3, "no replay for {version}/{mode}");
+                assert_eq!(requests[0].body_json()["method"], "initialize");
+                assert_eq!(
+                    requests[1].body_json()["method"],
+                    "notifications/initialized"
+                );
+                for req in &requests[1..] {
+                    assert_eq!(req.headers["mcp-protocol-version"], version);
+                }
+                assert_eq!(
+                    cache
+                        .load(&session_key(&ctx))
+                        .await
+                        .unwrap()
+                        .negotiated_protocol_version,
+                    version
+                );
+                if completed {
+                    let cached = execute_mcp_streamable_http_tool_with_cache(
+                        &ctx,
+                        &target,
+                        &test_request(),
+                        &test_egress_policy(),
+                        DEFAULT_TIMEOUT_MS,
+                        MAX_RESPONSE_BYTES,
+                        &cache,
+                    )
+                    .await
+                    .unwrap();
+                    assert!(cached.gateway_metadata.unwrap().cache_hit);
+                    let requests = fixture.requests();
+                    assert_eq!(requests.len(), 4);
+                    assert_eq!(requests[3].headers["mcp-protocol-version"], version);
+                }
+            }
+        }
+    }
+
+    #[tokio::test]
     async fn streamable_http_initializes_sends_initialized_and_calls_tool_json() {
         let Some(fixture) = StreamableFixture::start(vec![
             initialize_response("session-1"),

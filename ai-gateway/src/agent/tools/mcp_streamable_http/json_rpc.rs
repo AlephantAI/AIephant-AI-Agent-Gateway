@@ -2,7 +2,8 @@ use serde::{Deserialize, Serialize};
 
 pub const JSON_RPC_VERSION: &str = "2.0";
 pub const CLIENT_PROTOCOL_VERSION: &str = "2025-06-18";
-pub const SUPPORTED_PROTOCOL_VERSIONS: &[&str] = &[CLIENT_PROTOCOL_VERSION];
+pub const SUPPORTED_PROTOCOL_VERSIONS: &[&str] =
+    &["2025-03-26", CLIENT_PROTOCOL_VERSION, "2025-11-25"];
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct McpJsonRpcRequest {

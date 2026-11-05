@@ -118,7 +118,14 @@ pub async fn release_session_lock(
 }
 
 pub fn should_evict_session(ctx: &ToolExecutionContext, session: &McpStreamableSession) -> bool {
-    session.target_hash != ctx.target_hash || session.auth_revision != ctx.auth_revision
+    session.target_hash != ctx.target_hash
+        || session.auth_revision != ctx.auth_revision
+        || session.expires_at <= Utc::now()
+        || validate_session_id(&session.session_id).is_err()
+        || super::json_rpc::validate_supported_protocol_version(
+            &session.negotiated_protocol_version,
+        )
+        .is_err()
 }
 
 pub fn session_lock_ttl_secs_for_timeout(ctx: &ToolExecutionContext, timeout_ms: u64) -> u64 {
@@ -333,6 +340,29 @@ impl McpSessionCache for InMemoryMcpSessionCache {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn cached_session_requires_supported_protocol_valid_id_and_live_expiry() {
+        use crate::agent::tools::mcp_streamable_http::test_support::{
+            test_context, test_session_for_ctx, test_streamable_target,
+        };
+        let ctx = test_context(&test_streamable_target("http://127.0.0.1:1/mcp"));
+        let valid = test_session_for_ctx(&ctx, "valid");
+        for version in ["2025-03-26", "2025-06-18", "2025-11-25"] {
+            let mut cached = valid.clone();
+            cached.negotiated_protocol_version = version.into();
+            assert!(!should_evict_session(&ctx, &cached));
+        }
+        let mut unknown = valid.clone();
+        unknown.negotiated_protocol_version = "2099-01-01".into();
+        assert!(should_evict_session(&ctx, &unknown));
+        let mut expired = valid.clone();
+        expired.expires_at = Utc::now() - chrono::Duration::seconds(1);
+        assert!(should_evict_session(&ctx, &expired));
+        let mut invalid = valid;
+        invalid.session_id = "bad\r\nid".into();
+        assert!(should_evict_session(&ctx, &invalid));
+    }
 
     #[test]
     fn session_key_uses_isolated_billing_and_auth_dimensions() {
